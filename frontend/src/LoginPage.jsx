@@ -13,10 +13,10 @@ import {
 import { motion } from 'framer-motion';
 
 import schoolLogo from './assets/logo-bk.png';
-// import doanLogo from './assets/logo-doan.png';
+import doanLogo from './assets/logo-doan.png';
 
 const SCHOOL_LOGO_SRC = schoolLogo;
-const DOAN_LOGO_SRC = '';
+const DOAN_LOGO_SRC = doanLogo;
 
 const containerVariants = {
   hidden: { opacity: 0 },

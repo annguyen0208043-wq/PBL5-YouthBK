@@ -1,12 +1,14 @@
 import React from 'react';
-// Import file giao diện bạn vừa tạo (đảm bảo file LoginPage.jsx nằm cùng thư mục src)
-import LoginPage from './LoginPage'; 
+
+import LoginPage from './LoginPage';
+import PersonalProfilePage from './PersonalProfilePage';
+import RegisterPage from './Register';
 
 function App() {
-  return (
-    // Gọi component ra để hiển thị
-    <LoginPage />
-  );
+  // return <LoginPage />;
+
+  // return <RegisterPage />;
+  return <PersonalProfilePage />;
 }
 
 export default App;
