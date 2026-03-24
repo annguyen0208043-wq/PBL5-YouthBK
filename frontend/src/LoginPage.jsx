@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import axios from 'axios';
 import {
   BookOpen,
   Building2,
@@ -86,8 +88,35 @@ const DoanLogo = () => (
   </div>
 );
 
+const API_URL = 'http://localhost:3000/api/auth';
+
 const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!email || !password) {
+      setError('Vui lòng nhập đầy đủ thông tin');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await axios.post(`${API_URL}/login`, { email, password });
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+      navigate('/profile');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Đăng nhập thất bại');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#edf5fb] px-4 py-6 sm:px-6 lg:px-8">
@@ -229,11 +258,22 @@ const LoginPage = () => {
                 <p className="mt-2 text-lg text-slate-500">Vui lòng đăng nhập để bắt đầu</p>
               </div>
 
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 font-medium"
+                >
+                  {error}
+                </motion.div>
+              )}
+
               <motion.form
                 variants={containerVariants}
                 initial="hidden"
                 animate="show"
                 className="mt-8 space-y-5"
+                onSubmit={handleLogin}
               >
                 <motion.div variants={itemVariants}>
                   <div className="relative">
@@ -242,6 +282,8 @@ const LoginPage = () => {
                     </div>
                     <input
                       type="text"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       className="block w-full rounded-2xl border border-[#9db1ca] bg-white py-4 pl-12 pr-4 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-[#2f80ed] focus:ring-4 focus:ring-[#2f80ed]/10"
                       placeholder="Mã số sinh viên hoặc Email trường"
                     />
@@ -255,6 +297,8 @@ const LoginPage = () => {
                     </div>
                     <input
                       type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
                       className="password-input block w-full rounded-2xl border border-[#d6e0eb] bg-white py-4 pl-12 pr-12 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-[#2f80ed] focus:ring-4 focus:ring-[#2f80ed]/10"
                       placeholder="Mật khẩu"
                     />
@@ -288,9 +332,10 @@ const LoginPage = () => {
                 <motion.div variants={itemVariants}>
                   <button
                     type="submit"
-                    className="w-full rounded-2xl bg-[#1747a6] px-4 py-4 text-base font-bold uppercase tracking-[0.04em] text-white shadow-[0_12px_24px_rgba(23,71,166,0.25)] transition-all hover:bg-[#205fd8]"
+                    disabled={loading}
+                    className="w-full rounded-2xl bg-[#1747a6] px-4 py-4 text-base font-bold uppercase tracking-[0.04em] text-white shadow-[0_12px_24px_rgba(23,71,166,0.25)] transition-all hover:bg-[#205fd8] disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Đăng nhập
+                    {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
                   </button>
                 </motion.div>
               </motion.form>
@@ -302,9 +347,9 @@ const LoginPage = () => {
                 className="mt-6 text-center text-lg text-slate-700"
               >
                 Chưa có tài khoản?{' '}
-                <a href="#" className="font-bold text-[#1f5dcc] hover:underline">
+                <Link to="/register" className="font-bold text-[#1f5dcc] hover:underline">
                   Đăng ký ngay.
-                </a>
+                </Link>
               </motion.p>
             </div>
 

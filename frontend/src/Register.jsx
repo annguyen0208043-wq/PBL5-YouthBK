@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import axios from 'axios';
 import {
   BadgeCheck,
   BookOpen,
@@ -214,9 +216,107 @@ const PosterPanel = () => (
   </section>
 );
 
+const API_URL = 'http://localhost:3000/api/auth';
+
 const RegisterPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [studentId, setStudentId] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('Sinh viên');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [agree, setAgree] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const navigate = useNavigate();
+
+  const validateStudentId = (value) => {
+    if (value && !/^\d+$/.test(value)) return 'Mã số sinh viên chỉ được chứa số';
+    return '';
+  };
+
+  const validatePhone = (value) => {
+    if (value && !/^\d+$/.test(value)) return 'Số điện thoại chỉ được chứa số';
+    if (value && (value.length < 9 || value.length > 11)) return 'Số điện thoại phải từ 9-11 chữ số';
+    return '';
+  };
+
+  const validateEmail = (value) => {
+    if (!value) return '';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value)) return 'Email không đúng định dạng (VD: sv@dut.udn.vn)';
+    return '';
+  };
+
+  const validatePassword = (value) => {
+    if (!value) return '';
+    if (value.length < 6) return 'Mật khẩu phải có ít nhất 6 ký tự';
+    if (!/[a-z]/.test(value)) return 'Mật khẩu phải chứa ít nhất 1 chữ thường';
+    if (!/[A-Z]/.test(value)) return 'Mật khẩu phải chứa ít nhất 1 chữ in hoa';
+    return '';
+  };
+
+  const validateConfirmPassword = (value) => {
+    if (!value) return '';
+    if (value !== password) return 'Mật khẩu xác nhận không khớp';
+    return '';
+  };
+
+  const handleFieldChange = (field, value, setter, validator) => {
+    setter(value);
+    if (validator) {
+      const err = validator(value);
+      setFieldErrors((prev) => ({ ...prev, [field]: err }));
+    }
+  };
+
+  const FieldError = ({ field }) => {
+    if (!fieldErrors[field]) return null;
+    return (
+      <p className="mt-1.5 text-xs font-medium text-red-500 pl-1">{fieldErrors[field]}</p>
+    );
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    // Validate tất cả trường
+    const errors = {
+      studentId: validateStudentId(studentId),
+      phone: validatePhone(phone),
+      email: validateEmail(email),
+      password: validatePassword(password),
+      confirmPassword: validateConfirmPassword(confirmPassword),
+    };
+    setFieldErrors(errors);
+
+    // Kiểm tra có lỗi validate không
+    const hasFieldErrors = Object.values(errors).some((e) => e !== '');
+    if (hasFieldErrors) return;
+
+    if (!fullName || !email || !password || !confirmPassword) {
+      setError('Vui lòng nhập đầy đủ thông tin bắt buộc');
+      return;
+    }
+    if (!agree) {
+      setError('Vui lòng đồng ý với điều khoản sử dụng');
+      return;
+    }
+    setLoading(true);
+    try {
+      await axios.post(`${API_URL}/register`, { fullName, studentId, phone, email, role, password });
+      navigate('/login');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Đăng ký thất bại');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#edf5fb] px-4 py-6 sm:px-6 lg:px-8">
@@ -246,11 +346,22 @@ const RegisterPage = () => {
                 <p className="mt-2 text-lg text-slate-500">Đăng ký thành viên mới cho hệ thống</p>
               </div>
 
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 font-medium"
+                >
+                  {error}
+                </motion.div>
+              )}
+
               <motion.form
                 variants={containerVariants}
                 initial="hidden"
                 animate="show"
                 className="mt-8 space-y-4"
+                onSubmit={handleRegister}
               >
                 <motion.div variants={itemVariants}>
                   <label className="mb-2 block text-sm font-semibold text-slate-700">Họ và tên</label>
@@ -260,6 +371,8 @@ const RegisterPage = () => {
                     </div>
                     <input
                       type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
                       className="block w-full rounded-2xl border border-[#d6e0eb] bg-white py-3.5 pl-12 pr-4 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-[#2f80ed] focus:ring-4 focus:ring-[#2f80ed]/10"
                       placeholder="Nhập họ và tên đầy đủ"
                     />
@@ -275,10 +388,13 @@ const RegisterPage = () => {
                       </div>
                       <input
                         type="text"
-                        className="block w-full rounded-2xl border border-[#d6e0eb] bg-white py-3.5 pl-12 pr-4 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-[#2f80ed] focus:ring-4 focus:ring-[#2f80ed]/10"
+                        value={studentId}
+                        onChange={(e) => handleFieldChange('studentId', e.target.value, setStudentId, validateStudentId)}
+                        className={`block w-full rounded-2xl border ${fieldErrors.studentId ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10' : 'border-[#d6e0eb] focus:border-[#2f80ed] focus:ring-[#2f80ed]/10'} bg-white py-3.5 pl-12 pr-4 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-4`}
                         placeholder="Ví dụ: 102210001"
                       />
                     </div>
+                    <FieldError field="studentId" />
                   </div>
 
                   <div>
@@ -289,10 +405,13 @@ const RegisterPage = () => {
                       </div>
                       <input
                         type="tel"
-                        className="block w-full rounded-2xl border border-[#d6e0eb] bg-white py-3.5 pl-12 pr-4 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-[#2f80ed] focus:ring-4 focus:ring-[#2f80ed]/10"
+                        value={phone}
+                        onChange={(e) => handleFieldChange('phone', e.target.value, setPhone, validatePhone)}
+                        className={`block w-full rounded-2xl border ${fieldErrors.phone ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10' : 'border-[#d6e0eb] focus:border-[#2f80ed] focus:ring-[#2f80ed]/10'} bg-white py-3.5 pl-12 pr-4 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-4`}
                         placeholder="Nhập số điện thoại"
                       />
                     </div>
+                    <FieldError field="phone" />
                   </div>
                 </motion.div>
 
@@ -304,15 +423,22 @@ const RegisterPage = () => {
                     </div>
                     <input
                       type="email"
-                      className="block w-full rounded-2xl border border-[#d6e0eb] bg-white py-3.5 pl-12 pr-4 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-[#2f80ed] focus:ring-4 focus:ring-[#2f80ed]/10"
+                      value={email}
+                      onChange={(e) => handleFieldChange('email', e.target.value, setEmail, validateEmail)}
+                      className={`block w-full rounded-2xl border ${fieldErrors.email ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10' : 'border-[#d6e0eb] focus:border-[#2f80ed] focus:ring-[#2f80ed]/10'} bg-white py-3.5 pl-12 pr-4 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-4`}
                       placeholder="sv@dut.udn.vn"
                     />
                   </div>
+                  <FieldError field="email" />
                 </motion.div>
 
                 <motion.div variants={itemVariants}>
                   <label className="mb-2 block text-sm font-semibold text-slate-700">Vai trò</label>
-                  <select className="block w-full rounded-2xl border border-[#d6e0eb] bg-white px-4 py-3.5 text-base text-slate-800 outline-none transition-all focus:border-[#2f80ed] focus:ring-4 focus:ring-[#2f80ed]/10">
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="block w-full rounded-2xl border border-[#d6e0eb] bg-white px-4 py-3.5 text-base text-slate-800 outline-none transition-all focus:border-[#2f80ed] focus:ring-4 focus:ring-[#2f80ed]/10"
+                  >
                     {roleOptions.map((role) => (
                       <option key={role} value={role}>
                         {role}
@@ -330,7 +456,9 @@ const RegisterPage = () => {
                       </div>
                       <input
                         type={showPassword ? 'text' : 'password'}
-                        className="password-input block w-full rounded-2xl border border-[#d6e0eb] bg-white py-3.5 pl-12 pr-12 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-[#2f80ed] focus:ring-4 focus:ring-[#2f80ed]/10"
+                        value={password}
+                        onChange={(e) => handleFieldChange('password', e.target.value, setPassword, validatePassword)}
+                        className={`password-input block w-full rounded-2xl border ${fieldErrors.password ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10' : 'border-[#d6e0eb] focus:border-[#2f80ed] focus:ring-[#2f80ed]/10'} bg-white py-3.5 pl-12 pr-12 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-4`}
                         placeholder="Tạo mật khẩu"
                       />
                       <button
@@ -342,6 +470,7 @@ const RegisterPage = () => {
                         {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
+                    <FieldError field="password" />
                   </div>
 
                   <div>
@@ -352,7 +481,9 @@ const RegisterPage = () => {
                       </div>
                       <input
                         type={showConfirmPassword ? 'text' : 'password'}
-                        className="password-input block w-full rounded-2xl border border-[#d6e0eb] bg-white py-3.5 pl-12 pr-12 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-[#2f80ed] focus:ring-4 focus:ring-[#2f80ed]/10"
+                        value={confirmPassword}
+                        onChange={(e) => handleFieldChange('confirmPassword', e.target.value, setConfirmPassword, validateConfirmPassword)}
+                        className={`password-input block w-full rounded-2xl border ${fieldErrors.confirmPassword ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10' : 'border-[#d6e0eb] focus:border-[#2f80ed] focus:ring-[#2f80ed]/10'} bg-white py-3.5 pl-12 pr-12 text-base text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:ring-4`}
                         placeholder="Xác nhận mật khẩu"
                       />
                       <button
@@ -364,6 +495,7 @@ const RegisterPage = () => {
                         {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
+                    <FieldError field="confirmPassword" />
                   </div>
                 </motion.div>
 
@@ -371,6 +503,8 @@ const RegisterPage = () => {
                   <label className="flex items-start gap-3">
                     <input
                       type="checkbox"
+                      checked={agree}
+                      onChange={(e) => setAgree(e.target.checked)}
                       className="mt-1 h-4 w-4 rounded border-slate-300 text-[#1f5dcc] focus:ring-[#1f5dcc]"
                     />
                     <span>
@@ -383,9 +517,10 @@ const RegisterPage = () => {
                 <motion.div variants={itemVariants}>
                   <button
                     type="submit"
-                    className="w-full rounded-2xl bg-[#1747a6] px-4 py-4 text-base font-bold uppercase tracking-[0.04em] text-white shadow-[0_12px_24px_rgba(23,71,166,0.25)] transition-all hover:bg-[#205fd8]"
+                    disabled={loading}
+                    className="w-full rounded-2xl bg-[#1747a6] px-4 py-4 text-base font-bold uppercase tracking-[0.04em] text-white shadow-[0_12px_24px_rgba(23,71,166,0.25)] transition-all hover:bg-[#205fd8] disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Đăng ký tài khoản
+                    {loading ? 'Đang đăng ký...' : 'Đăng ký tài khoản'}
                   </button>
                 </motion.div>
               </motion.form>
@@ -397,9 +532,9 @@ const RegisterPage = () => {
                 className="mt-6 text-center text-lg text-slate-700"
               >
                 Đã có tài khoản?{' '}
-                <a href="#" className="font-bold text-[#1f5dcc] hover:underline">
+                <Link to="/login" className="font-bold text-[#1f5dcc] hover:underline">
                   Đăng nhập ngay.
-                </a>
+                </Link>
               </motion.p>
             </div>
           </motion.div>

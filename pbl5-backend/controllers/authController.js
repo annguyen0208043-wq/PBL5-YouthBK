@@ -1,4 +1,4 @@
-﻿const bcrypt = require('bcryptjs');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 
@@ -11,9 +11,9 @@ const generateToken = (user) => {
 
 const register = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email và password là bắt buộc' });
+    const { fullName, studentId, phone, email, role, password } = req.body;
+    if (!fullName || !email || !password) {
+      return res.status(400).json({ message: 'Họ tên, email và password là bắt buộc' });
     }
 
     const existing = await User.findOne({ where: { email } });
@@ -21,11 +21,29 @@ const register = async (req, res) => {
       return res.status(409).json({ message: 'Email đã tồn tại' });
     }
 
+    if (studentId) {
+      const existingStudent = await User.findOne({ where: { studentId } });
+      if (existingStudent) {
+        return res.status(409).json({ message: 'Mã số sinh viên đã tồn tại' });
+      }
+    }
+
     const hashed = await bcrypt.hash(password, 12);
-    const user = await User.create({ email, password: hashed });
+    const user = await User.create({
+      fullName,
+      studentId: studentId || null,
+      phone: phone || null,
+      email,
+      role: role || 'Sinh viên',
+      password: hashed,
+    });
 
     const token = generateToken(user);
-    return res.status(201).json({ message: 'Đăng ký thành công', user: { id: user.id, email: user.email }, token });
+    return res.status(201).json({
+      message: 'Đăng ký thành công',
+      user: { id: user.id, fullName: user.fullName, email: user.email, studentId: user.studentId, phone: user.phone, role: user.role },
+      token,
+    });
   } catch (err) {
     console.error('register error:', err);
     return res.status(500).json({ message: 'Lỗi server', error: err.message });
@@ -50,7 +68,11 @@ const login = async (req, res) => {
     }
 
     const token = generateToken(user);
-    return res.status(200).json({ message: 'Đăng nhập thành công', user: { id: user.id, email: user.email }, token });
+    return res.status(200).json({
+      message: 'Đăng nhập thành công',
+      user: { id: user.id, fullName: user.fullName, email: user.email, studentId: user.studentId, phone: user.phone, role: user.role },
+      token,
+    });
   } catch (err) {
     console.error('login error:', err);
     return res.status(500).json({ message: 'Lỗi server', error: err.message });
