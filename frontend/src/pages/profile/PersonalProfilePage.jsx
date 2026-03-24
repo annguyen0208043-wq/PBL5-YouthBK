@@ -1,5 +1,6 @@
 import React from 'react';
 import { Save, ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
@@ -39,6 +40,9 @@ function ProfileLayout({ activeView, onChangeView, children, title, subtitle, ro
                 <span className="font-semibold">{item.label}</span>
               </button>
             ))}
+            <Link to="/student/events" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Sự kiện dành cho tôi
+            </Link>
           </nav>
 
           <div className="mt-auto rounded-[24px] border border-white/10 bg-white/10 p-4">
@@ -46,6 +50,7 @@ function ProfileLayout({ activeView, onChangeView, children, title, subtitle, ro
             <ul className="mt-3 space-y-2 text-sm text-blue-50/90">
               <li>Xem thông tin cá nhân</li>
               <li>Cập nhật hồ sơ</li>
+              <li>Đăng ký tham gia sự kiện</li>
               <li>Kiểm tra trạng thái tài khoản</li>
               <li>Lưu thay đổi an toàn</li>
             </ul>
@@ -192,6 +197,20 @@ export default function PersonalProfilePage({ activeView = 'profile', onChangeVi
             </div>
           </div>
 
+          <div className="mt-5 rounded-[24px] border border-[#dce8f5] bg-[#f8fbff] p-4">
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Chức năng sinh viên</p>
+            <h4 className="mt-2 text-lg font-black text-[#132b57]">Đăng ký hoạt động Đoàn - Hội</h4>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Truy cập danh sách sự kiện đang mở để đăng ký tham gia, theo dõi chỉ tiêu còn lại và quản lý các hoạt động bạn đã chọn.
+            </p>
+            <Link
+              to="/student/events"
+              className="mt-4 inline-flex rounded-2xl bg-[#1747a6] px-4 py-3 font-bold text-white transition-all hover:bg-[#205fd8]"
+            >
+              Mở danh sách sự kiện
+            </Link>
+          </div>
+
           <div className="mt-6 flex flex-wrap gap-3">
             <button className="flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white">
               <Save className="h-5 w-5" />
@@ -204,4 +223,3 @@ export default function PersonalProfilePage({ activeView = 'profile', onChangeVi
     </ProfileLayout>
   );
 }
-

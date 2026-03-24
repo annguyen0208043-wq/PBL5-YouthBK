@@ -37,13 +37,6 @@ export const studentCards = [
   { icon: GraduationCap, label: 'Kết nối sinh viên' },
 ];
 
-export const registerRoleOptions = [
-  'Sinh viên',
-  'Bí thư / Lớp trưởng',
-  'Cán bộ Đoàn - Hội',
-  'Giảng viên phụ trách',
-];
-
 export const authPosterDecor = {
   buildingIcon: Building2,
   footerIcon: Users,

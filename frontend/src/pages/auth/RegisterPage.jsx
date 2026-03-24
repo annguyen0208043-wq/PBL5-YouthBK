@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 
 import AuthShowcase from '../../components/auth/AuthShowcase';
 import { BachKhoaLogo, DoanLogo } from '../../components/auth/AuthLogos';
-import { authContainerVariants, authItemVariants, registerRoleOptions } from '../../shared/auth/authData';
+import { authContainerVariants, authItemVariants } from '../../shared/auth/authData';
 
 const API_URL = 'http://localhost:3000/api/auth';
 
@@ -17,7 +17,7 @@ export default function RegisterPage() {
   const [studentId, setStudentId] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('Sinh viên');
+  const role = 'Sinh viên';
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [agree, setAgree] = useState(false);
@@ -218,18 +218,13 @@ export default function RegisterPage() {
                 </motion.div>
 
                 <motion.div variants={authItemVariants}>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Vai trò</label>
-                  <select
-                    value={role}
-                    onChange={(event) => setRole(event.target.value)}
-                    className="block w-full rounded-2xl border border-[#d6e0eb] bg-white px-4 py-3.5 text-base text-slate-800 outline-none transition-all focus:border-[#2f80ed] focus:ring-4 focus:ring-[#2f80ed]/10"
-                  >
-                    {registerRoleOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">Vai trò tài khoản</label>
+                  <div className="rounded-2xl border border-[#d6e0eb] bg-slate-50 px-4 py-3.5 text-base font-semibold text-slate-700">
+                    Sinh viên
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    Tài khoản cán bộ Đoàn - Hội, lớp trưởng hoặc quản trị viên sẽ do nhà trường hoặc quản trị hệ thống cấp riêng.
+                  </p>
                 </motion.div>
 
                 <motion.div variants={authItemVariants} className="grid gap-4 sm:grid-cols-2">
@@ -326,4 +321,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-
