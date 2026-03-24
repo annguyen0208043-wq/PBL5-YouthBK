@@ -1,58 +1,12 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock3, Filter, MapPin, Search, Sparkles, Ticket } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
-
-const initialEvents = [
-  {
-    id: 'cdx-thang-3',
-    title: 'Chiến dịch Chủ nhật xanh tháng 3',
-    organizer: 'Liên chi Đoàn Khoa Công nghệ thông tin',
-    time: '07:00 - 11:00, 30/03/2026',
-    location: 'Khuôn viên KTX phía Tây',
-    status: 'Đang mở đăng ký',
-    category: 'Tình nguyện',
-    points: '5 điểm rèn luyện',
-    slots: 120,
-    registered: 86,
-    tags: ['Ngoài trời', 'Điểm danh QR', 'Có minh chứng'],
-    description: 'Hoạt động vệ sinh khuôn viên, phân loại rác và tuyên truyền bảo vệ môi trường cho sinh viên.',
-    accent: 'from-emerald-400 via-cyan-400 to-blue-500',
-  },
-  {
-    id: 'tap-huan-can-bo',
-    title: 'Tập huấn cán bộ lớp học kỳ II',
-    organizer: 'Đoàn trường Bách Khoa',
-    time: '18:30 - 20:30, 02/04/2026',
-    location: 'Hội trường S',
-    status: 'Đang mở đăng ký',
-    category: 'Kỹ năng',
-    points: '3 điểm rèn luyện',
-    slots: 200,
-    registered: 140,
-    tags: ['Kỹ năng', 'Có chứng nhận'],
-    description: 'Tập huấn kỹ năng điều phối lớp, truyền thông nội bộ và quản lý hoạt động tập thể.',
-    accent: 'from-blue-500 via-indigo-500 to-violet-500',
-  },
-  {
-    id: 'hien-mau-nhan-dao',
-    title: 'Ngày hội hiến máu nhân đạo',
-    organizer: 'Đoàn trường phối hợp Hội Chữ thập đỏ',
-    time: '07:30 - 16:30, 10/04/2026',
-    location: 'Sảnh nhà A',
-    status: 'Sắp diễn ra',
-    category: 'Cộng đồng',
-    points: '8 điểm rèn luyện',
-    slots: 250,
-    registered: 220,
-    tags: ['Giấy chứng nhận', 'Ưu tiên sinh viên năm cuối'],
-    description: 'Chương trình hiến máu định kỳ nhằm lan tỏa tinh thần sẻ chia và trách nhiệm cộng đồng.',
-    accent: 'from-rose-400 via-orange-400 to-amber-400',
-  },
-];
+import { defaultRegisteredEventIds, STORAGE_REGISTERED_EVENTS_KEY, studentEvents } from '../../shared/student/studentData';
+import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
 
 function tagTone(tag) {
   const tones = {
@@ -97,17 +51,42 @@ function EventStatus({ value }) {
   return <span className={`rounded-full px-3 py-1 text-xs font-bold ${tone}`}>{value}</span>;
 }
 
+function getInitialRegisteredEvents() {
+  if (typeof window === 'undefined') {
+    return defaultRegisteredEventIds;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(STORAGE_REGISTERED_EVENTS_KEY);
+    return rawValue ? JSON.parse(rawValue) : defaultRegisteredEventIds;
+  } catch {
+    return defaultRegisteredEventIds;
+  }
+}
+
 export default function StudentEventsPage() {
+  const user = getStoredUserProfile();
+  const userInitials = getUserInitials(user.fullName);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('Tất cả');
-  const [registeredIds, setRegisteredIds] = useState(['tap-huan-can-bo']);
+  const [registeredIds, setRegisteredIds] = useState(getInitialRegisteredEvents);
   const [feedback, setFeedback] = useState('');
   const toastTimerRef = useRef(null);
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_REGISTERED_EVENTS_KEY, JSON.stringify(registeredIds));
+  }, [registeredIds]);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+  }, []);
 
   const filters = ['Tất cả', 'Đang mở đăng ký', 'Đã đăng ký', 'Sắp diễn ra'];
 
   const visibleEvents = useMemo(() => {
-    return initialEvents
+    return studentEvents
       .map((event) => ({
         ...event,
         enrolled: registeredIds.includes(event.id),
@@ -152,21 +131,40 @@ export default function StudentEventsPage() {
             </div>
           </div>
 
+          <div className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-14 w-14 rounded-2xl border border-white/25 object-cover" />
+              ) : (
+                <div className="profile-user-avatar flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 text-lg font-black text-white">
+                  {userInitials}
+                </div>
+              )}
+              <div className="profile-user-meta">
+                <p className="profile-user-name text-base font-bold text-white">{user.fullName}</p>
+                <p className="profile-user-subtitle text-sm text-blue-100/85">MSSV: {user.studentId}</p>
+              </div>
+            </div>
+          </div>
+
           <div className="mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
-            <p className="text-xs uppercase tracking-[0.28em] text-blue-100">Chức năng sinh viên</p>
-            <p className="mt-2 text-xl font-bold">Đăng ký sự kiện</p>
-            <p className="mt-2 text-sm text-blue-50/85">Theo dõi hoạt động đang mở, đăng ký tham gia và quản lý suất của bạn.</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-blue-100">Quản lý tham gia</p>
+            <p className="mt-2 text-xl font-bold">Sự kiện của tôi</p>
+            <p className="mt-2 text-sm text-blue-50/85">Theo dõi hoạt động đang mở, đăng ký tham gia và kiểm tra trạng thái của bạn.</p>
           </div>
 
           <nav className="space-y-2">
             <Link to="/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Hồ sơ cá nhân
             </Link>
-            <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Sự kiện dành cho tôi</div>
+            <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Sự kiện của tôi</div>
+            <Link to="/student/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Lịch sử hoạt động
+            </Link>
           </nav>
 
           <div className="mt-auto rounded-[24px] border border-white/10 bg-white/10 p-4">
-            <p className="text-sm font-semibold">Quy trình nhanh</p>
+            <p className="text-sm font-semibold">Cách sử dụng nhanh</p>
             <ul className="mt-3 space-y-2 text-sm text-blue-50/90">
               <li>Xem danh sách sự kiện đang mở</li>
               <li>Đọc thông tin và chỉ tiêu đăng ký</li>
@@ -178,9 +176,28 @@ export default function StudentEventsPage() {
 
         <main className="flex-1">
           <div className="border-b border-[#dce9f6] bg-white/80 px-5 py-4 backdrop-blur-md sm:px-8">
-            <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#1f5dcc]">BK-Youth Student</p>
-            <h1 className="mt-2 text-3xl font-black text-[#132b57]">Sự kiện dành cho sinh viên</h1>
-            <p className="mt-1 text-slate-500">Khám phá hoạt động nổi bật và đăng ký tham gia trực tiếp trên hệ thống.</p>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#1f5dcc]">BK-Youth Student</p>
+                <h1 className="mt-2 text-3xl font-black text-[#132b57]">Sự kiện dành cho sinh viên</h1>
+                <p className="mt-1 text-slate-500">Khám phá hoạt động nổi bật và đăng ký tham gia trực tiếp trên hệ thống.</p>
+              </div>
+              <div className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3">
+                <div className="flex items-center gap-3">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
+                  ) : (
+                    <div className="profile-user-avatar flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#1747a6,#4ba3ff)] text-sm font-black text-white">
+                      {userInitials}
+                    </div>
+                  )}
+                  <div className="profile-user-meta">
+                    <p className="profile-user-name font-bold text-[#132b57]">{user.fullName}</p>
+                    <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="p-5 sm:p-8">
@@ -240,13 +257,20 @@ export default function StudentEventsPage() {
                     <Sparkles className="h-6 w-6" />
                   </motion.div>
                   <div>
-                    <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Trạng thái của bạn</p>
+                    <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Tình trạng hiện tại</p>
                     <h2 className="mt-1 text-2xl font-black text-[#132b57]">{registeredIds.length} sự kiện đã đăng ký</h2>
                   </div>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-600">
-                  Bạn có thể theo dõi các sự kiện đã đăng ký và hủy đăng ký nếu hoạt động vẫn còn trong thời gian cho phép.
+                  Bạn có thể theo dõi các sự kiện đã đăng ký và chuyển sang lịch sử hoạt động để xem tiến trình tham gia.
                 </p>
+                <Link
+                  to="/student/history"
+                  className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-[#f8fbff] px-4 py-3 text-sm font-bold text-[#1747a6] transition-all hover:bg-[#eef6ff]"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  Xem lịch sử hoạt động
+                </Link>
               </motion.div>
             </div>
 

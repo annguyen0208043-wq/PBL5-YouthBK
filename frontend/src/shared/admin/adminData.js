@@ -1,0 +1,95 @@
+export const adminSummaryCards = [
+  {
+    id: 'pending-events',
+    label: 'Sự kiện chờ duyệt',
+    value: '12',
+    tone: 'bg-amber-100 text-amber-700',
+  },
+  {
+    id: 'active-accounts',
+    label: 'Tài khoản đang hoạt động',
+    value: '1,284',
+    tone: 'bg-emerald-100 text-emerald-700',
+  },
+  {
+    id: 'today-notices',
+    label: 'Thông báo hôm nay',
+    value: '08',
+    tone: 'bg-blue-100 text-blue-700',
+  },
+];
+
+export const pendingEvents = [
+  {
+    id: 'lc-cntt-01',
+    title: 'Ngày hội Kỹ năng số cho sinh viên năm nhất',
+    unit: 'Liên chi Đoàn Khoa Công nghệ thông tin',
+    time: '08:00 - 11:30, 06/04/2026',
+    location: 'Hội trường F',
+    status: 'Chờ duyệt',
+    category: 'Kỹ năng',
+    description: 'Chương trình tập huấn kỹ năng số, an toàn thông tin cơ bản và cộng tác trực tuyến cho sinh viên năm nhất.',
+    plan: 'Có kế hoạch tổ chức, poster truyền thông và timeline chi tiết.',
+  },
+  {
+    id: 'lc-co-khi-02',
+    title: 'Hành trình xanh làm sạch khuôn viên',
+    unit: 'Liên chi Đoàn Khoa Cơ khí',
+    time: '07:00 - 10:30, 09/04/2026',
+    location: 'Khu B - sân trung tâm',
+    status: 'Chờ duyệt',
+    category: 'Tình nguyện',
+    description: 'Hoạt động vệ sinh khuôn viên, phân loại rác và tuyên truyền bảo vệ môi trường cho sinh viên.',
+    plan: 'Có phân công đầu việc theo ca, khu vực phụ trách và phương án truyền thông.',
+  },
+  {
+    id: 'lc-dien-03',
+    title: 'Diễn đàn sáng tạo trẻ Bách Khoa',
+    unit: 'Liên chi Đoàn Khoa Điện',
+    time: '18:30 - 21:00, 12/04/2026',
+    location: 'Phòng hội thảo A3',
+    status: 'Chờ duyệt',
+    category: 'Học thuật',
+    description: 'Diễn đàn chia sẻ ý tưởng sáng tạo, mô hình nghiên cứu và kết nối sinh viên đam mê công nghệ.',
+    plan: 'Đã đính kèm kịch bản chương trình, danh sách diễn giả và dự toán kinh phí.',
+  },
+];
+
+export const userAccounts = [
+  {
+    id: 'u001',
+    fullName: 'Nguyễn Đỗ Thắng',
+    email: 'nguyendothang@sv.dut.udn.vn',
+    studentId: '102230046',
+    role: 'Sinh viên',
+    faculty: 'CNTT',
+    status: 'Hoạt động',
+  },
+  {
+    id: 'u002',
+    fullName: 'Trần Minh Quân',
+    email: 'tranminhquan@sv.dut.udn.vn',
+    studentId: '102220115',
+    role: 'Liên chi Đoàn',
+    faculty: 'Cơ khí',
+    status: 'Hoạt động',
+  },
+  {
+    id: 'u003',
+    fullName: 'Lê Thu Hà',
+    email: 'lethuha@dut.udn.vn',
+    studentId: 'CB001',
+    role: 'Đoàn trường',
+    faculty: 'Văn phòng Đoàn',
+    status: 'Hoạt động',
+  },
+  {
+    id: 'u004',
+    fullName: 'Phạm Gia Hưng',
+    email: 'phamgiahung@sv.dut.udn.vn',
+    studentId: '102210087',
+    role: 'Sinh viên',
+    faculty: 'Điện',
+    status: 'Tạm khóa',
+  },
+];

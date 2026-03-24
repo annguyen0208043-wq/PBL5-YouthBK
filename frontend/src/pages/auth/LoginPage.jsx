@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import AuthShowcase from '../../components/auth/AuthShowcase';
 import { BachKhoaLogo, DoanLogo } from '../../components/auth/AuthLogos';
 import { authContainerVariants, authItemVariants } from '../../shared/auth/authData';
+import { isAdminRole } from '../../shared/user/session';
 
 const API_URL = 'http://localhost:3000/api/auth';
 
@@ -32,7 +33,7 @@ export default function LoginPage() {
       const response = await axios.post(`${API_URL}/login`, { email, password });
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
-      navigate('/profile');
+      navigate(isAdminRole(response.data.user?.role) ? '/admin' : '/profile');
     } catch (err) {
       setError(err.response?.data?.message || 'Đăng nhập thất bại');
     } finally {
@@ -165,4 +166,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
