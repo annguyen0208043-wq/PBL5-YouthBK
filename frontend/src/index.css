@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "./styles/auth.css";
+@import "./styles/profile.css";
 
 .password-input::-ms-reveal,
 .password-input::-ms-clear {

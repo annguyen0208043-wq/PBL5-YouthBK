@@ -1,0 +1,17 @@
+.profile-page {
+  min-height: 100vh;
+  background: #edf5fb;
+}
+
+.profile-shell {
+  min-height: calc(100vh - 2rem);
+}
+
+.profile-card {
+  box-shadow: 0 24px 60px rgba(37, 99, 235, 0.12);
+}
+
+.profile-panel {
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+

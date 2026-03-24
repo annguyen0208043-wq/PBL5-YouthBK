@@ -1,0 +1,23 @@
+.auth-page {
+  min-height: 100vh;
+  background: #edf5fb;
+}
+
+.auth-shell {
+  min-height: calc(100vh - 3rem);
+}
+
+.auth-card {
+  box-shadow: 0 22px 45px rgba(15, 23, 42, 0.1);
+}
+
+.auth-error {
+  border: 1px solid rgb(254 202 202);
+  background: rgb(254 242 242);
+  color: rgb(220 38 38);
+}
+
+.auth-section-bg {
+  background: linear-gradient(180deg, #eef6fd 0%, #f8fbff 100%);
+}
+
