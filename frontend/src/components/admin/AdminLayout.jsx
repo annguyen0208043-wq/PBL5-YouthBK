@@ -1,15 +1,37 @@
 import React from 'react';
-import { BarChart3, CheckCheck, Shield, Users } from 'lucide-react';
+import { BarChart3, BellRing, CalendarPlus2, CheckCheck, FileClock, Settings2, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
 
-const navItems = [
-  { to: '/admin', label: 'Tổng quan', icon: BarChart3 },
-  { to: '/admin/event-approvals', label: 'Duyệt sự kiện', icon: CheckCheck },
-  { to: '/admin/users', label: 'Quản lý tài khoản', icon: Users },
+const navSections = [
+  {
+    title: 'Điều hành',
+    items: [{ to: '/admin', label: 'Tổng quan', icon: BarChart3 }],
+  },
+  {
+    title: 'Quản lý sự kiện',
+    items: [
+      { to: '/admin/events/create', label: 'Tạo sự kiện', icon: CalendarPlus2 },
+      { to: '/admin/event-approvals', label: 'Duyệt sự kiện', icon: CheckCheck },
+    ],
+  },
+  {
+    title: 'Quản lý người dùng',
+    items: [
+      { to: '/admin/users', label: 'Tài khoản', icon: Users },
+      { to: '/admin/notifications', label: 'Thông báo', icon: BellRing },
+    ],
+  },
+  {
+    title: 'Vận hành hệ thống',
+    items: [
+      { to: '/admin/settings', label: 'Cấu hình hệ thống', icon: Settings2 },
+      { to: '/admin/audit-logs', label: 'Nhật ký hoạt động', icon: FileClock },
+    ],
+  },
 ];
 
 export default function AdminLayout({ title, subtitle, currentPath, children }) {
@@ -19,7 +41,7 @@ export default function AdminLayout({ title, subtitle, currentPath, children }) 
   return (
     <div className="profile-page p-4 sm:p-6">
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className="hidden w-[300px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#0f3276_0%,#1849a6_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
+        <aside className="hidden w-[340px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#0f3276_0%,#1849a6_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
@@ -45,37 +67,26 @@ export default function AdminLayout({ title, subtitle, currentPath, children }) 
             </div>
           </div>
 
-          <div className="mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
-            <p className="text-xs uppercase tracking-[0.28em] text-blue-100">Quyền quản trị</p>
-            <p className="mt-2 text-xl font-bold">Điều phối toàn hệ thống</p>
-            <p className="mt-2 text-sm text-blue-50/85">Phê duyệt sự kiện, quản lý tài khoản và theo dõi hoạt động của toàn trường.</p>
-          </div>
-
-          <nav className="space-y-2">
-            {navItems.map(({ to, label, icon: Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                className={`flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all ${
-                  currentPath === to ? 'bg-white text-[#123d94] shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-                <span>{label}</span>
-              </Link>
+          <div className="admin-sidebar-nav">
+            {navSections.map((section) => (
+              <div key={section.title} className="mb-5">
+                <p className="mb-2 px-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-100/85">{section.title}</p>
+                <div className="space-y-2">
+                  {section.items.map(({ to, label, icon: Icon }) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      className={`admin-sidebar-link flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all ${
+                        currentPath === to ? 'bg-white text-[#123d94] shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" />
+                      <span className="admin-sidebar-link-label">{label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
             ))}
-          </nav>
-
-          <div className="mt-auto rounded-[24px] border border-white/10 bg-white/10 p-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-2xl bg-white/10 p-3">
-                <Shield className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-semibold">Gợi ý quản trị</p>
-                <p className="mt-2 text-sm text-blue-50/90">Ưu tiên xử lý các sự kiện chờ duyệt trong ngày và kiểm tra tài khoản mới được cấp quyền.</p>
-              </div>
-            </div>
           </div>
         </aside>
 

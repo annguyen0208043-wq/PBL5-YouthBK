@@ -93,3 +93,84 @@ export const userAccounts = [
     status: 'Tạm khóa',
   },
 ];
+
+export const adminNotifications = [
+  {
+    id: 'noti-01',
+    title: 'Nhắc bổ sung hồ sơ sự kiện',
+    audience: 'Liên chi Đoàn Khoa Cơ khí',
+    channel: 'Thông báo hệ thống',
+    sentAt: '14/04/2026 08:30',
+    status: 'Đã gửi',
+  },
+  {
+    id: 'noti-02',
+    title: 'Cập nhật lịch kiểm tra điểm danh QR',
+    audience: 'Toàn bộ cán bộ Đoàn - Hội',
+    channel: 'Email nội bộ',
+    sentAt: '14/04/2026 10:00',
+    status: 'Đã lên lịch',
+  },
+  {
+    id: 'noti-03',
+    title: 'Mở đợt đánh giá sự kiện tháng 4',
+    audience: 'Sinh viên toàn trường',
+    channel: 'Thông báo hệ thống',
+    sentAt: '14/04/2026 11:20',
+    status: 'Đã gửi',
+  },
+];
+
+export const systemSettings = [
+  {
+    id: 'semester',
+    label: 'Học kỳ đang áp dụng',
+    value: 'Học kỳ 2 năm học 2025 - 2026',
+    description: 'Dùng để gắn dữ liệu điểm rèn luyện, lịch đăng ký và báo cáo thống kê.',
+  },
+  {
+    id: 'event-window',
+    label: 'Khoảng mở đăng ký sự kiện',
+    value: 'Từ 7 ngày trước khi sự kiện diễn ra',
+    description: 'Giới hạn thời điểm sinh viên được phép nhìn thấy và đăng ký hoạt động.',
+  },
+  {
+    id: 'attendance-radius',
+    label: 'Bán kính điểm danh QR',
+    value: '150 mét',
+    description: 'Áp dụng cho hoạt động yêu cầu định vị khi check-in.',
+  },
+  {
+    id: 'evidence-deadline',
+    label: 'Hạn nộp minh chứng',
+    value: '48 giờ sau khi sự kiện kết thúc',
+    description: 'Quy định thời hạn hệ thống cho phép nộp minh chứng tham gia.',
+  },
+];
+
+export const auditLogs = [
+  {
+    id: 'log-01',
+    actor: 'Lê Thu Hà',
+    role: 'Đoàn trường',
+    action: 'Duyệt sự kiện "Ngày hội Kỹ năng số cho sinh viên năm nhất"',
+    time: '14/04/2026 09:05',
+    level: 'Cao',
+  },
+  {
+    id: 'log-02',
+    actor: 'Lê Thu Hà',
+    role: 'Đoàn trường',
+    action: 'Cấp quyền Liên chi Đoàn cho tài khoản Trần Minh Quân',
+    time: '14/04/2026 09:30',
+    level: 'Cao',
+  },
+  {
+    id: 'log-03',
+    actor: 'Nguyễn Văn Dũng',
+    role: 'Quản trị viên',
+    action: 'Cập nhật cấu hình hạn nộp minh chứng',
+    time: '14/04/2026 10:15',
+    level: 'Trung bình',
+  },
+];

@@ -1,10 +1,22 @@
 import React from 'react';
-import { ArrowRight, Bell, CheckCheck, ShieldAlert, Users } from 'lucide-react';
+import { ArrowRight, Bell, CalendarClock, CheckCheck, ShieldAlert, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 import AdminLayout from '../../components/admin/AdminLayout';
 import { adminSummaryCards, pendingEvents, userAccounts } from '../../shared/admin/adminData';
+
+const summaryIcons = {
+  'pending-events': CalendarClock,
+  'active-accounts': Users,
+  'today-notices': Bell,
+};
+
+const summaryUnits = {
+  'pending-events': 'sự kiện',
+  'active-accounts': 'tài khoản',
+  'today-notices': 'thông báo',
+};
 
 export default function AdminDashboardPage() {
   const activeAccounts = userAccounts.filter((item) => item.status === 'Hoạt động').length;
@@ -19,11 +31,22 @@ export default function AdminDashboardPage() {
         <section className="space-y-5">
           <div className="grid gap-4 md:grid-cols-3">
             {adminSummaryCards.map((card) => (
-              <motion.div key={card.id} whileHover={{ y: -4 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5">
-                <p className="text-sm text-slate-500">{card.label}</p>
-                <div className="mt-3 flex items-center justify-between">
-                  <h2 className="text-3xl font-black text-[#132b57]">{card.value}</h2>
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${card.tone}`}>Hôm nay</span>
+              <motion.div key={card.id} whileHover={{ y: -4 }} className="admin-summary-card profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5">
+                <div className="flex items-start gap-3">
+                  <div className="admin-summary-icon rounded-2xl bg-[#f4f8ff] p-3 text-[#1747a6]">
+                    {(() => {
+                      const Icon = summaryIcons[card.id] || Bell;
+                      return <Icon className="h-5 w-5" />;
+                    })()}
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <p className="admin-summary-label text-sm text-slate-500">{card.label}</p>
+                  <div className="mt-3 flex items-end gap-2">
+                    <h2 className="text-4xl font-black tracking-tight text-[#132b57]">{card.value}</h2>
+                    <span className="pb-1 text-sm font-semibold text-slate-400">{summaryUnits[card.id]}</span>
+                  </div>
                 </div>
               </motion.div>
             ))}

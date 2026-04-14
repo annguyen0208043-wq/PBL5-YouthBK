@@ -71,3 +71,35 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.admin-sidebar-nav {
+  margin-bottom: 1.5rem;
+}
+
+.admin-sidebar-link {
+  min-height: 56px;
+}
+
+.admin-sidebar-link-label {
+  flex: 1;
+  line-height: 1.35;
+}
+
+.admin-sidebar-tip {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.admin-summary-card {
+  min-height: 176px;
+}
+
+.admin-summary-label {
+  min-height: 48px;
+  max-width: 180px;
+  line-height: 1.45;
+  text-wrap: balance;
+}
+
+.admin-summary-icon {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
