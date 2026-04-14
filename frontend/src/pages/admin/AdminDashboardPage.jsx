@@ -72,7 +72,7 @@ export default function AdminDashboardPage() {
                       <p className="text-lg font-black text-[#132b57]">{event.title}</p>
                       <p className="mt-1 text-sm text-slate-500">{event.unit}</p>
                     </div>
-                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">{event.status}</span>
+                    <span className="whitespace-nowrap rounded-full bg-amber-100 px-4 py-1.5 text-xs font-bold text-amber-700">{event.status}</span>
                   </div>
                   <p className="mt-3 text-sm text-slate-600">{event.time} • {event.location}</p>
                 </div>
