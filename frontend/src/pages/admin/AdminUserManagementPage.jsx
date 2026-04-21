@@ -10,6 +10,7 @@ function statusTone(status) {
 
 const ROLE_OPTIONS = ['Sinh viên', 'Liên chi Đoàn', 'Đoàn trường'];
 const FACULTY_OPTIONS = ['CNTT', 'Cơ khí', 'Điện', 'Xây dựng', 'Kinh tế', 'Khác'];
+const CUSTOM_FACULTY_VALUE = '__custom_faculty__';
 
 export default function AdminUserManagementPage() {
   const [users, setUsers] = useState([]);
@@ -32,6 +33,7 @@ export default function AdminUserManagementPage() {
     role: 'Sinh viên',
     password: ''
   });
+  const [customFaculty, setCustomFaculty] = useState('');
   const [editFormData, setEditFormData] = useState({
     fullName: '',
     email: '',
@@ -39,6 +41,7 @@ export default function AdminUserManagementPage() {
     faculty: '',
     role: 'Sinh viên'
   });
+  const [editCustomFaculty, setEditCustomFaculty] = useState('');
 
   const roles = ['Tất cả', 'Sinh viên', 'Liên chi Đoàn', 'Đoàn trường'];
 
@@ -161,6 +164,11 @@ export default function AdminUserManagementPage() {
 
   const handleCreateFormChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === 'faculty' && value !== CUSTOM_FACULTY_VALUE) {
+      setCustomFaculty('');
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -169,6 +177,11 @@ export default function AdminUserManagementPage() {
 
   const handleEditFormChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === 'faculty' && value !== CUSTOM_FACULTY_VALUE) {
+      setEditCustomFaculty('');
+    }
+
     setEditFormData(prev => ({
       ...prev,
       [name]: value
@@ -201,7 +214,7 @@ export default function AdminUserManagementPage() {
           studentId: formData.studentId || null,
           email: formData.email,
           phone: formData.phone || null,
-          faculty: formData.faculty || null,
+          faculty: formData.faculty === CUSTOM_FACULTY_VALUE ? (customFaculty.trim() || null) : (formData.faculty || null),
           role: formData.role,
           password: formData.password,
           status: 'Hoạt động'
@@ -227,6 +240,7 @@ export default function AdminUserManagementPage() {
         role: 'Sinh viên',
         password: ''
       });
+      setCustomFaculty('');
       setShowCreateForm(false);
       setTimeout(() => setNotice(''), 3000);
     } catch (err) {
@@ -239,13 +253,17 @@ export default function AdminUserManagementPage() {
   const handleOpenEditForm = () => {
     const selected = users.find(u => u.id === selectedUserId);
     if (selected) {
+      const selectedFaculty = selected.faculty || '';
+      const isPresetFaculty = FACULTY_OPTIONS.includes(selectedFaculty);
+
       setEditFormData({
         fullName: selected.fullName,
         email: selected.email,
         phone: selected.phone || '',
-        faculty: selected.faculty || '',
+        faculty: selectedFaculty ? (isPresetFaculty ? selectedFaculty : CUSTOM_FACULTY_VALUE) : '',
         role: selected.role
       });
+      setEditCustomFaculty(selectedFaculty && !isPresetFaculty ? selectedFaculty : '');
       setShowEditForm(true);
     }
   };
@@ -269,7 +287,7 @@ export default function AdminUserManagementPage() {
           fullName: editFormData.fullName,
           email: editFormData.email,
           phone: editFormData.phone || null,
-          faculty: editFormData.faculty || null,
+          faculty: editFormData.faculty === CUSTOM_FACULTY_VALUE ? (editCustomFaculty.trim() || null) : (editFormData.faculty || null),
           role: editFormData.role
         })
       });
@@ -282,6 +300,7 @@ export default function AdminUserManagementPage() {
       const data = await response.json();
       setUsers(users.map(u => u.id === selectedUserId ? data.user : u));
       setNotice('✅ Cập nhật tài khoản thành công!');
+      setEditCustomFaculty('');
       setShowEditForm(false);
       setTimeout(() => setNotice(''), 3000);
     } catch (err) {
@@ -562,8 +581,21 @@ export default function AdminUserManagementPage() {
                       {FACULTY_OPTIONS.map(f => (
                         <option key={f} value={f}>{f}</option>
                       ))}
+                      <option value={CUSTOM_FACULTY_VALUE}>Nhập thêm...</option>
                     </select>
                   </label>
+
+                  {formData.faculty === CUSTOM_FACULTY_VALUE && (
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-slate-700">Nhập khoa / phòng ban</span>
+                      <input
+                        value={customFaculty}
+                        onChange={(e) => setCustomFaculty(e.target.value)}
+                        className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
+                        placeholder="Nhập tên khoa hoặc phòng ban"
+                      />
+                    </label>
+                  )}
 
                   <label className="block">
                     <span className="mb-2 block text-sm font-semibold text-slate-700">Vai trò</span>
@@ -671,8 +703,21 @@ export default function AdminUserManagementPage() {
                       {FACULTY_OPTIONS.map(f => (
                         <option key={f} value={f}>{f}</option>
                       ))}
+                      <option value={CUSTOM_FACULTY_VALUE}>Nhập thêm...</option>
                     </select>
                   </label>
+
+                  {editFormData.faculty === CUSTOM_FACULTY_VALUE && (
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-slate-700">Nhập khoa / phòng ban</span>
+                      <input
+                        value={editCustomFaculty}
+                        onChange={(e) => setEditCustomFaculty(e.target.value)}
+                        className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
+                        placeholder="Nhập tên khoa hoặc phòng ban"
+                      />
+                    </label>
+                  )}
 
                   <label className="block">
                     <span className="mb-2 block text-sm font-semibold text-slate-700">Vai trò</span>
