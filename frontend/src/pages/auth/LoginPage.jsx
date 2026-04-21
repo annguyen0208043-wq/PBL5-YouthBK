@@ -33,7 +33,22 @@ export default function LoginPage() {
       const response = await axios.post(`${API_URL}/login`, { email, password });
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
-      navigate(isAdminRole(response.data.user?.role) ? '/admin' : '/profile');
+      const userRole = (response.data.user?.role || '').trim().toLowerCase();
+
+      if (userRole === 'đoàn trường' || userRole === 'doan truong') {
+        navigate('/doantruong');
+      } else if (userRole === 'liên chi đoàn' || userRole === 'lien chi doan') {
+        navigate('/lienchidoan');
+      } else if (
+        userRole === 'sinh viên' ||
+        userRole === 'sinh vien' ||
+        userRole === 'ban cán sự' ||
+        userRole === 'ban can su'
+      ) {
+        navigate('/sinhvien');
+      } else {
+        navigate(isAdminRole(response.data.user?.role) ? '/admin' : '/profile');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Đăng nhập thất bại');
     } finally {

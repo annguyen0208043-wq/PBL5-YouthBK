@@ -28,6 +28,9 @@ export default function App() {
       <Route path="/admin/settings" element={<AdminSystemSettingsPage />} />
       <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
       <Route path="/profile" element={<PersonalProfilePage />} />
+      <Route path="/sinhvien" element={<PersonalProfilePage />} />
+      <Route path="/doantruong" element={<AdminDashboardPage />} />
+      <Route path="/lienchidoan" element={<AdminDashboardPage />} />
       <Route path="/student/events" element={<StudentEventsPage />} />
       <Route path="/student/history" element={<StudentActivityHistoryPage />} />
     </Routes>

@@ -79,4 +79,43 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { register, login };
+const createUserByAdmin = async (req, res) => {
+  try {
+    const { fullName, studentId, phone, email, role, password } = req.body;
+    if (!fullName || !email || !password || !role) {
+      return res.status(400).json({ message: 'Họ tên, email, role và password là bắt buộc' });
+    }
+
+    const existing = await User.findOne({ where: { email } });
+    if (existing) {
+      return res.status(409).json({ message: 'Email đã tồn tại' });
+    }
+
+    if (studentId) {
+      const existingStudent = await User.findOne({ where: { studentId } });
+      if (existingStudent) {
+        return res.status(409).json({ message: 'Mã số sinh viên/Mã cán bộ đã tồn tại' });
+      }
+    }
+
+    const hashed = await bcrypt.hash(password, 12);
+    const user = await User.create({
+      fullName,
+      studentId: studentId || null,
+      phone: phone || null,
+      email,
+      role: role,
+      password: hashed,
+    });
+
+    return res.status(201).json({
+      message: 'Tạo tài khoản thành công',
+      user: { id: user.id, fullName: user.fullName, email: user.email, studentId: user.studentId, phone: user.phone, role: user.role },
+    });
+  } catch (err) {
+    console.error('createUserByAdmin error:', err);
+    return res.status(500).json({ message: 'Lỗi server', error: err.message });
+  }
+};
+
+module.exports = { register, login, createUserByAdmin };

@@ -13,9 +13,17 @@ const User = sequelize.define('User', {
   email: { type: DataTypes.STRING, allowNull: false, unique: true },
   role: { type: DataTypes.STRING, allowNull: false, defaultValue: 'Sinh viên' },
   password: { type: DataTypes.STRING, allowNull: false },
+  status: { type: DataTypes.STRING, allowNull: false, defaultValue: 'Hoạt động' },
+  faculty: { type: DataTypes.STRING, allowNull: true },
 }, {
   tableName: 'users',
-  timestamps: true,
+  timestamps: false,
 });
+
+User.associate = (models) => {
+  User.hasMany(models.Event, { foreignKey: 'createdBy', as: 'events' });
+  User.hasMany(models.Notification, { foreignKey: 'createdBy', as: 'sentNotifications' });
+  User.hasMany(models.NotificationRecipient, { foreignKey: 'userId', as: 'receivedNotifications' });
+};
 
 module.exports = User;
