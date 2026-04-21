@@ -1,12 +1,34 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, CheckCircle2, Clock3, Filter, MapPin, Search, Sparkles, Ticket } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock3, Filter, MapPin, Navigation, QrCode, Search, Sparkles, Ticket, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
-import { defaultRegisteredEventIds, STORAGE_REGISTERED_EVENTS_KEY, studentEvents } from '../../shared/student/studentData';
+import { defaultRegisteredEventIds, STORAGE_ATTENDANCE_CHECKINS_KEY, STORAGE_ATTENDANCE_WINDOW_KEY, STORAGE_REGISTERED_EVENTS_KEY, studentEvents } from '../../shared/student/studentData';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
+
+const EARTH_RADIUS_METERS = 6371000;
+
+function toRadians(value) {
+  return (value * Math.PI) / 180;
+}
+
+function calculateDistanceMeters(pointA, pointB) {
+  const dLat = toRadians(pointB.lat - pointA.lat);
+  const dLng = toRadians(pointB.lng - pointA.lng);
+
+  const lat1 = toRadians(pointA.lat);
+  const lat2 = toRadians(pointB.lat);
+
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+
+  const a = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return EARTH_RADIUS_METERS * c;
+}
 
 function tagTone(tag) {
   const tones = {
@@ -64,23 +86,142 @@ function getInitialRegisteredEvents() {
   }
 }
 
+function getInitialAttendanceCheckins() {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(STORAGE_ATTENDANCE_CHECKINS_KEY);
+    return rawValue ? JSON.parse(rawValue) : {};
+  } catch {
+    return {};
+  }
+}
+
+function getInitialAttendanceWindowConfig() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(STORAGE_ATTENDANCE_WINDOW_KEY);
+    return rawValue ? JSON.parse(rawValue) : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseEventTimeRange(timeLabel) {
+  const pattern = /^(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2}),\s*(\d{2})\/(\d{2})\/(\d{4})$/;
+  const match = timeLabel.match(pattern);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, startClock, endClock, day, month, year] = match;
+  const [startHour, startMinute] = startClock.split(':').map(Number);
+  const [endHour, endMinute] = endClock.split(':').map(Number);
+
+  const startAt = new Date(Number(year), Number(month) - 1, Number(day), startHour, startMinute);
+  const endAt = new Date(Number(year), Number(month) - 1, Number(day), endHour, endMinute);
+
+  if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+    return null;
+  }
+
+  return { startAt, endAt };
+}
+
+function buildAttendanceGate(event, attendanceWindowConfig) {
+  const now = new Date();
+  const eventRange = parseEventTimeRange(event.time);
+  const isEventInProgress = eventRange ? now >= eventRange.startAt && now <= eventRange.endAt : false;
+
+  const isAdminWindowEnabled = Boolean(attendanceWindowConfig?.enabled);
+  const adminStartAt = attendanceWindowConfig?.startAt ? new Date(attendanceWindowConfig.startAt) : null;
+  const adminEndAt = attendanceWindowConfig?.endAt ? new Date(attendanceWindowConfig.endAt) : null;
+  const hasValidAdminRange =
+    adminStartAt instanceof Date &&
+    adminEndAt instanceof Date &&
+    !Number.isNaN(adminStartAt.getTime()) &&
+    !Number.isNaN(adminEndAt.getTime()) &&
+    adminStartAt < adminEndAt;
+  const isAdminWindowActive = isAdminWindowEnabled && hasValidAdminRange && now >= adminStartAt && now <= adminEndAt;
+
+  if (isEventInProgress || isAdminWindowActive) {
+    return {
+      canCheckIn: true,
+      message: isEventInProgress ? 'Sự kiện đang diễn ra: có thể điểm danh.' : 'Admin đang mở cửa sổ điểm danh.',
+    };
+  }
+
+  if (isAdminWindowEnabled && !hasValidAdminRange) {
+    return {
+      canCheckIn: false,
+      message: 'Khung giờ điểm danh do admin cấu hình chưa hợp lệ.',
+    };
+  }
+
+  return {
+    canCheckIn: false,
+    message: 'Chỉ điểm danh khi sự kiện đang diễn ra hoặc admin mở thời gian điểm danh.',
+  };
+}
+
 export default function StudentEventsPage() {
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('Tất cả');
   const [registeredIds, setRegisteredIds] = useState(getInitialRegisteredEvents);
+  const [attendanceCheckins, setAttendanceCheckins] = useState(getInitialAttendanceCheckins);
+  const [openedAttendanceEventId, setOpenedAttendanceEventId] = useState('');
+  const [isCheckingGps, setIsCheckingGps] = useState(false);
+  const [qrInput, setQrInput] = useState('');
+  const [isScanningQr, setIsScanningQr] = useState(false);
+  const [attendanceWindowConfig, setAttendanceWindowConfig] = useState(getInitialAttendanceWindowConfig);
   const [feedback, setFeedback] = useState('');
   const toastTimerRef = useRef(null);
+  const qrVideoRef = useRef(null);
+  const qrStreamRef = useRef(null);
+  const qrDetectorRef = useRef(null);
+  const qrLoopFrameRef = useRef(null);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_REGISTERED_EVENTS_KEY, JSON.stringify(registeredIds));
   }, [registeredIds]);
 
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_ATTENDANCE_CHECKINS_KEY, JSON.stringify(attendanceCheckins));
+  }, [attendanceCheckins]);
+
   useEffect(() => () => {
     if (toastTimerRef.current) {
       window.clearTimeout(toastTimerRef.current);
     }
+    if (qrLoopFrameRef.current) {
+      window.cancelAnimationFrame(qrLoopFrameRef.current);
+    }
+    if (qrStreamRef.current) {
+      qrStreamRef.current.getTracks().forEach((track) => track.stop());
+      qrStreamRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    const syncAttendanceWindowConfig = () => {
+      setAttendanceWindowConfig(getInitialAttendanceWindowConfig());
+    };
+
+    window.addEventListener('focus', syncAttendanceWindowConfig);
+    window.addEventListener('storage', syncAttendanceWindowConfig);
+
+    return () => {
+      window.removeEventListener('focus', syncAttendanceWindowConfig);
+      window.removeEventListener('storage', syncAttendanceWindowConfig);
+    };
   }, []);
 
   const filters = ['Tất cả', 'Đang mở đăng ký', 'Đã đăng ký', 'Sắp diễn ra'];
@@ -90,6 +231,8 @@ export default function StudentEventsPage() {
       .map((event) => ({
         ...event,
         enrolled: registeredIds.includes(event.id),
+        attendance: attendanceCheckins[event.id] || null,
+        attendanceGate: buildAttendanceGate(event, attendanceWindowConfig),
       }))
       .filter((event) => {
         const normalizedSearch = search.trim().toLowerCase();
@@ -106,7 +249,159 @@ export default function StudentEventsPage() {
 
         return matchesSearch && matchesFilter;
       });
-  }, [activeFilter, registeredIds, search]);
+  }, [activeFilter, registeredIds, search, attendanceCheckins, attendanceWindowConfig]);
+
+  const stopQrScanner = () => {
+    if (qrLoopFrameRef.current) {
+      window.cancelAnimationFrame(qrLoopFrameRef.current);
+      qrLoopFrameRef.current = null;
+    }
+    if (qrStreamRef.current) {
+      qrStreamRef.current.getTracks().forEach((track) => track.stop());
+      qrStreamRef.current = null;
+    }
+    setIsScanningQr(false);
+  };
+
+  const startQrScanner = async () => {
+    const BarcodeDetectorConstructor = window.BarcodeDetector;
+    if (!BarcodeDetectorConstructor || !navigator.mediaDevices?.getUserMedia) {
+      setFeedback('Trình duyệt chưa hỗ trợ quét camera. Vui lòng nhập mã QR thủ công.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+
+      qrStreamRef.current = stream;
+      if (qrVideoRef.current) {
+        qrVideoRef.current.srcObject = stream;
+        await qrVideoRef.current.play();
+      }
+
+      qrDetectorRef.current = new BarcodeDetectorConstructor({ formats: ['qr_code'] });
+      setIsScanningQr(true);
+
+      const scanFrame = async () => {
+        if (!qrVideoRef.current || !qrDetectorRef.current) {
+          return;
+        }
+
+        try {
+          const barcodes = await qrDetectorRef.current.detect(qrVideoRef.current);
+          if (barcodes.length > 0 && barcodes[0].rawValue) {
+            setQrInput(barcodes[0].rawValue);
+            stopQrScanner();
+            return;
+          }
+        } catch {
+          // No-op: keep scanning next frame.
+        }
+
+        qrLoopFrameRef.current = window.requestAnimationFrame(scanFrame);
+      };
+
+      qrLoopFrameRef.current = window.requestAnimationFrame(scanFrame);
+    } catch {
+      setFeedback('Không thể truy cập camera. Hãy kiểm tra quyền camera trên trình duyệt.');
+      stopQrScanner();
+    }
+  };
+
+  const saveAttendanceState = (eventId, payload) => {
+    setAttendanceCheckins((current) => ({
+      ...current,
+      [eventId]: {
+        ...(current[eventId] || {}),
+        ...payload,
+      },
+    }));
+  };
+
+  const verifyEventGps = (event) => {
+    if (!event.attendanceGate.canCheckIn) {
+      setFeedback(event.attendanceGate.message);
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setFeedback('Thiết bị không hỗ trợ định vị GPS.');
+      return;
+    }
+
+    setIsCheckingGps(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const userPoint = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        const gpsCenter = event.attendanceConfig.gpsCenter;
+        const distanceMeters = calculateDistanceMeters(userPoint, gpsCenter);
+        const isAllowed = distanceMeters <= event.attendanceConfig.allowedRadiusMeters;
+
+        saveAttendanceState(event.id, {
+          gpsVerified: isAllowed,
+          lastDistanceMeters: Math.round(distanceMeters),
+          lastGpsCheckAt: new Date().toISOString(),
+        });
+
+        setFeedback(
+          isAllowed
+            ? `GPS hợp lệ: bạn cách điểm danh ${Math.round(distanceMeters)}m.`
+            : `Bạn đang ở ngoài phạm vi 100m (${Math.round(distanceMeters)}m).`,
+        );
+        setIsCheckingGps(false);
+      },
+      () => {
+        setFeedback('Không lấy được vị trí. Vui lòng bật GPS và cho phép quyền truy cập vị trí.');
+        setIsCheckingGps(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0,
+      },
+    );
+  };
+
+  const verifyQrForEvent = (event) => {
+    const checkinState = attendanceCheckins[event.id] || {};
+    const submittedValue = qrInput.trim();
+
+    if (!event.attendanceGate.canCheckIn) {
+      setFeedback(event.attendanceGate.message);
+      return;
+    }
+
+    if (!checkinState.gpsVerified) {
+      setFeedback('Cần xác minh GPS trong phạm vi 100m trước khi quét QR.');
+      return;
+    }
+
+    if (!submittedValue) {
+      setFeedback('Vui lòng nhập hoặc quét mã QR.');
+      return;
+    }
+
+    if (submittedValue !== event.attendanceConfig.qrValue) {
+      saveAttendanceState(event.id, { qrVerified: false });
+      setFeedback('Mã QR không hợp lệ cho sự kiện này.');
+      return;
+    }
+
+    saveAttendanceState(event.id, {
+      qrVerified: true,
+      checkedInAt: new Date().toISOString(),
+    });
+    setFeedback(`Điểm danh thành công cho sự kiện: ${event.title}`);
+    setQrInput('');
+    setOpenedAttendanceEventId('');
+  };
 
   const toggleRegistration = (eventId, eventTitle) => {
     const isEnrolled = registeredIds.includes(eventId);
@@ -116,6 +411,25 @@ export default function StudentEventsPage() {
       window.clearTimeout(toastTimerRef.current);
     }
     toastTimerRef.current = window.setTimeout(() => setFeedback(''), 2200);
+  };
+
+  const toggleAttendancePanel = (eventId) => {
+    const selectedEvent = visibleEvents.find((event) => event.id === eventId);
+    if (selectedEvent && !selectedEvent.attendanceGate.canCheckIn) {
+      setFeedback(selectedEvent.attendanceGate.message);
+      return;
+    }
+
+    if (openedAttendanceEventId === eventId) {
+      setOpenedAttendanceEventId('');
+      setQrInput('');
+      stopQrScanner();
+      return;
+    }
+
+    setOpenedAttendanceEventId(eventId);
+    setQrInput('');
+    stopQrScanner();
   };
 
   return (
@@ -279,6 +593,9 @@ export default function StudentEventsPage() {
                 const usedSlots = event.enrolled ? event.registered + 1 : event.registered;
                 const displayStatus = event.enrolled ? 'Đã đăng ký' : event.status;
                 const progress = Math.min((usedSlots / event.slots) * 100, 100);
+                const checkinState = event.attendance || {};
+                const isCheckedIn = Boolean(checkinState.gpsVerified && checkinState.qrVerified && checkinState.checkedInAt);
+                const showAttendancePanel = openedAttendanceEventId === event.id;
 
                 return (
                   <motion.article
@@ -365,13 +682,126 @@ export default function StudentEventsPage() {
                             type="button"
                             whileHover={{ scale: 1.01 }}
                             whileTap={{ scale: 0.98 }}
-                            className="rounded-2xl border border-[#dce8f5] bg-white px-4 py-3 font-semibold text-slate-600 transition-all hover:bg-[#f7fbff]"
+                            onClick={() => toggleAttendancePanel(event.id)}
+                            disabled={!event.enrolled}
+                            className="rounded-2xl border border-[#dce8f5] bg-white px-4 py-3 font-semibold text-slate-600 transition-all hover:bg-[#f7fbff] disabled:cursor-not-allowed disabled:opacity-70"
                           >
-                            Xem chi tiết
+                            <span className="inline-flex items-center gap-2">
+                              <QrCode className="h-4 w-4" />
+                              {!event.enrolled ? 'Đăng ký trước khi điểm danh' : 'Điểm danh GPS + QR'}
+                            </span>
                           </motion.button>
                         </div>
                       </div>
                     </div>
+
+                    <AnimatePresence>
+                      {showAttendancePanel && event.enrolled && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 18 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 18 }}
+                          className="mt-5 rounded-[24px] border border-[#dce8f5] bg-[#f8fbff] p-4"
+                        >
+                          <div className="flex flex-col gap-4">
+                            <div className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${event.attendanceGate.canCheckIn ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                              {event.attendanceGate.message}
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <h3 className="text-lg font-black text-[#132b57]">Điểm danh sự kiện</h3>
+                              {isCheckedIn ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  Đã điểm danh
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
+                                  <Clock3 className="h-4 w-4" />
+                                  Chờ điểm danh
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <div className="rounded-2xl border border-[#dce8f5] bg-white p-4">
+                                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Bước 1 - GPS</p>
+                                <p className="mt-2 text-sm text-slate-600">
+                                  Yêu cầu trong phạm vi {event.attendanceConfig.allowedRadiusMeters}m quanh điểm tổ chức.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => verifyEventGps(event)}
+                                  disabled={isCheckingGps || !event.attendanceGate.canCheckIn}
+                                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#1747a6] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                                >
+                                  <Navigation className="h-4 w-4" />
+                                  {isCheckingGps ? 'Đang kiểm tra GPS...' : 'Xác minh vị trí'}
+                                </button>
+                                {typeof checkinState.lastDistanceMeters === 'number' && (
+                                  <p className="mt-3 text-xs text-slate-500">
+                                    Khoảng cách gần nhất: {checkinState.lastDistanceMeters}m
+                                  </p>
+                                )}
+                                <p className={`mt-2 text-sm font-semibold ${checkinState.gpsVerified ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                  {checkinState.gpsVerified ? 'GPS hợp lệ' : 'GPS chưa hợp lệ'}
+                                </p>
+                              </div>
+
+                              <div className="rounded-2xl border border-[#dce8f5] bg-white p-4">
+                                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Bước 2 - QR</p>
+                                <p className="mt-2 text-sm text-slate-600">Nhập mã QR hoặc dùng camera để quét mã của sự kiện.</p>
+                                <div className="mt-3 flex gap-2">
+                                  <input
+                                    value={qrInput}
+                                    onChange={(inputEvent) => setQrInput(inputEvent.target.value)}
+                                    placeholder="Ví dụ: BKYOUTH-...-2026"
+                                    className="w-full rounded-xl border border-[#dce8f5] bg-[#f8fbff] px-3 py-2 text-sm outline-none focus:border-[#1f5dcc]"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={isScanningQr ? stopQrScanner : startQrScanner}
+                                    disabled={!event.attendanceGate.canCheckIn}
+                                    className="rounded-xl border border-[#dce8f5] bg-white px-3 py-2 text-sm font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-70"
+                                  >
+                                    {isScanningQr ? 'Tắt camera' : 'Quét'}
+                                  </button>
+                                </div>
+                                {isScanningQr && (
+                                  <div className="mt-3 overflow-hidden rounded-xl border border-[#dce8f5] bg-black">
+                                    <video ref={qrVideoRef} className="h-44 w-full object-cover" muted playsInline />
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => verifyQrForEvent(event)}
+                                  disabled={!event.attendanceGate.canCheckIn}
+                                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                                >
+                                  <QrCode className="h-4 w-4" />
+                                  Xác nhận mã QR
+                                </button>
+                                <p className={`mt-2 text-sm font-semibold ${checkinState.qrVerified ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                  {checkinState.qrVerified ? 'QR hợp lệ' : 'QR chưa hợp lệ'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {isCheckedIn && (
+                              <p className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                                <CheckCircle2 className="h-4 w-4" />
+                                Hoàn tất điểm danh lúc {new Date(checkinState.checkedInAt).toLocaleString('vi-VN')}
+                              </p>
+                            )}
+                            {!isCheckedIn && (
+                              <p className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
+                                <XCircle className="h-4 w-4" />
+                                Cần hoàn thành đủ 2 bước GPS + QR để điểm danh thành công.
+                              </p>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </motion.article>
                 );
               })}

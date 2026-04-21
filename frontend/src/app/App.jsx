@@ -10,6 +10,7 @@ import AdminEventApprovalPage from '../pages/admin/AdminEventApprovalPage';
 import AdminNotificationsPage from '../pages/admin/AdminNotificationsPage';
 import AdminSystemSettingsPage from '../pages/admin/AdminSystemSettingsPage';
 import AdminUserManagementPage from '../pages/admin/AdminUserManagementPage';
+import AdminCertificateApprovalPage from '../pages/admin/AdminCertificateApprovalPage';
 import PersonalProfilePage from '../pages/profile/PersonalProfilePage';
 import StudentActivityHistoryPage from '../pages/student/StudentActivityHistoryPage';
 import StudentEventsPage from '../pages/student/StudentEventsPage';
@@ -23,6 +24,7 @@ export default function App() {
       <Route path="/admin" element={<AdminDashboardPage />} />
       <Route path="/admin/events/create" element={<AdminCreateEventPage />} />
       <Route path="/admin/event-approvals" element={<AdminEventApprovalPage />} />
+      <Route path="/admin/certificates" element={<AdminCertificateApprovalPage />} />
       <Route path="/admin/users" element={<AdminUserManagementPage />} />
       <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
       <Route path="/admin/settings" element={<AdminSystemSettingsPage />} />

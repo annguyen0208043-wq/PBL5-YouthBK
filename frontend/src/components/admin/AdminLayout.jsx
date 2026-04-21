@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, BellRing, CalendarPlus2, CheckCheck, FileClock, Settings2, Users } from 'lucide-react';
+import { Award, BarChart3, BellRing, CalendarPlus2, CheckCheck, FileClock, Settings2, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import schoolLogo from '../../assets/logo-bk.png';
@@ -16,6 +16,7 @@ const navSections = [
     items: [
       { to: '/admin/events/create', label: 'Tạo sự kiện', icon: CalendarPlus2 },
       { to: '/admin/event-approvals', label: 'Duyệt sự kiện', icon: CheckCheck },
+      { to: '/admin/certificates', label: 'Duyệt chứng nhận', icon: Award },
     ],
   },
   {
