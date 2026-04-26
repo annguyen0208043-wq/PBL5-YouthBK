@@ -70,7 +70,7 @@ export default function AdminNotificationsPage() {
                   <p className="text-lg font-black text-[#132b57]">{item.title}</p>
                   <p className="mt-1 text-sm text-slate-500">{item.audience}</p>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusTone(item.status)}`}>{item.status}</span>
+                <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-none ${statusTone(item.status)}`}>{item.status}</span>
               </div>
               <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-600">
                 <span className="rounded-full bg-[#f6faff] px-3 py-1 font-semibold text-[#1747a6]">{item.channel}</span>

@@ -47,7 +47,7 @@ export default function AdminEventApprovalPage() {
                   <p className="text-lg font-black text-[#132b57]">{event.title}</p>
                   <p className="mt-1 text-sm text-slate-500">{event.unit}</p>
                 </div>
-                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">{event.status}</span>
+                <span className="inline-flex whitespace-nowrap rounded-full bg-amber-100 px-3 py-1 text-xs font-bold leading-none text-amber-700">{event.status}</span>
               </div>
               <p className="mt-3 text-sm text-slate-600">{event.time}</p>
             </motion.button>
@@ -63,7 +63,7 @@ export default function AdminEventApprovalPage() {
                   <h2 className="mt-2 text-3xl font-black text-[#132b57]">{selectedEvent.title}</h2>
                   <p className="mt-2 text-sm text-slate-500">{selectedEvent.unit}</p>
                 </div>
-                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">{selectedEvent.category}</span>
+                <span className="inline-flex whitespace-nowrap rounded-full bg-amber-100 px-3 py-1 text-xs font-bold leading-none text-amber-700">{selectedEvent.category}</span>
               </div>
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2">

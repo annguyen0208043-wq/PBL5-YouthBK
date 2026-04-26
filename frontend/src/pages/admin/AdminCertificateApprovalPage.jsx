@@ -72,7 +72,7 @@ export default function AdminCertificateApprovalPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <h3 className="text-lg font-black text-[#132b57]">{request.activityTitle}</h3>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusTone(request.status)}`}>{statusLabel(request.status)}</span>
+                <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-none ${statusTone(request.status)}`}>{statusLabel(request.status)}</span>
               </div>
               <p className="mt-2 text-sm text-slate-500">Yêu cầu: {new Date(request.requestedAt).toLocaleString('vi-VN')}</p>
             </motion.button>
@@ -87,7 +87,7 @@ export default function AdminCertificateApprovalPage() {
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Hồ sơ chứng nhận</p>
                   <h2 className="mt-2 text-3xl font-black text-[#132b57]">{selectedRequest.activityTitle}</h2>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusTone(selectedRequest.status)}`}>{statusLabel(selectedRequest.status)}</span>
+                <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-none ${statusTone(selectedRequest.status)}`}>{statusLabel(selectedRequest.status)}</span>
               </div>
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2">

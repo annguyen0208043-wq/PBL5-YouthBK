@@ -93,7 +93,7 @@ export default function AdminUserManagementPage() {
                 </div>
                 <p className="text-sm text-slate-600">{user.faculty}</p>
                 <div className="flex items-center justify-between gap-3">
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusTone(user.status)}`}>{user.status}</span>
+                  <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-none ${statusTone(user.status)}`}>{user.status}</span>
                 </div>
               </div>
             ))}

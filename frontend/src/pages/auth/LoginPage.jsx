@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import AuthShowcase from '../../components/auth/AuthShowcase';
 import { BachKhoaLogo, DoanLogo } from '../../components/auth/AuthLogos';
 import { authContainerVariants, authItemVariants } from '../../shared/auth/authData';
-import { isAdminRole } from '../../shared/user/session';
+import { isAdminRole, isLienChiRole } from '../../shared/user/session';
 
 const API_URL = 'http://localhost:3000/api/auth';
 
@@ -33,7 +33,13 @@ export default function LoginPage() {
       const response = await axios.post(`${API_URL}/login`, { email, password });
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
-      navigate(isAdminRole(response.data.user?.role) ? '/admin' : '/profile');
+      if (isAdminRole(response.data.user?.role)) {
+        navigate('/admin');
+      } else if (isLienChiRole(response.data.user?.role)) {
+        navigate('/lien-chi');
+      } else {
+        navigate('/profile');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Đăng nhập thất bại');
     } finally {

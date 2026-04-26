@@ -27,7 +27,7 @@ export default function AdminAuditLogsPage() {
                   <p className="text-lg font-black text-[#132b57]">{item.action}</p>
                   <p className="mt-1 text-sm text-slate-500">{item.actor} • {item.role}</p>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelTone(item.level)}`}>{item.level}</span>
+                <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-none ${levelTone(item.level)}`}>{item.level}</span>
               </div>
               <p className="mt-3 text-sm text-slate-600">{item.time}</p>
             </motion.div>
