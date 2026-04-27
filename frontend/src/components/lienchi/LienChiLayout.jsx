@@ -1,5 +1,5 @@
 import React from 'react';
-import { Award, BarChart3, BellRing, CalendarPlus2, CheckCheck, FileClock, Settings2, Users } from 'lucide-react';
+import { BadgeCheck, CalendarPlus2, ClipboardList, FilePenLine, LayoutDashboard, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import schoolLogo from '../../assets/logo-bk.png';
@@ -9,33 +9,23 @@ import { getStoredUserProfile, getUserInitials } from '../../shared/user/session
 const navSections = [
   {
     title: 'Điều hành',
-    items: [{ to: '/admin', label: 'Tổng quan', icon: BarChart3 }],
+    items: [{ to: '/lien-chi', label: 'Tổng quan', icon: LayoutDashboard }],
   },
   {
     title: 'Quản lý sự kiện',
     items: [
-      { to: '/admin/events/create', label: 'Tạo sự kiện', icon: CalendarPlus2 },
-      { to: '/admin/event-approvals', label: 'Duyệt sự kiện', icon: CheckCheck },
-      { to: '/admin/certificates', label: 'Duyệt chứng nhận', icon: Award },
+      { to: '/lien-chi/events/create', label: 'Tạo sự kiện', icon: CalendarPlus2 },
+      { to: '/lien-chi/events/manage', label: 'Sự kiện của tôi', icon: FilePenLine },
+      { to: '/lien-chi/registrations', label: 'Người đăng ký', icon: ClipboardList },
     ],
   },
   {
-    title: 'Quản lý người dùng',
-    items: [
-      { to: '/admin/users', label: 'Tài khoản', icon: Users },
-      { to: '/admin/notifications', label: 'Thông báo', icon: BellRing },
-    ],
-  },
-  {
-    title: 'Vận hành hệ thống',
-    items: [
-      { to: '/admin/settings', label: 'Cấu hình hệ thống', icon: Settings2 },
-      { to: '/admin/audit-logs', label: 'Nhật ký hoạt động', icon: FileClock },
-    ],
+    title: 'Xử lý hồ sơ',
+    items: [{ to: '/lien-chi/evidences', label: 'Duyệt minh chứng', icon: BadgeCheck }],
   },
 ];
 
-export default function AdminLayout({ title, subtitle, currentPath, children }) {
+export default function LienChiLayout({ title, subtitle, currentPath, children }) {
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
 
@@ -48,7 +38,7 @@ export default function AdminLayout({ title, subtitle, currentPath, children }) 
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
             <div>
               <p className="text-xs uppercase tracking-[0.25em] text-blue-100">BK-Youth</p>
-              <p className="text-sm font-semibold">Quản trị Đoàn trường</p>
+              <p className="text-sm font-semibold">Liên chi Đoàn</p>
             </div>
           </div>
 
@@ -63,7 +53,21 @@ export default function AdminLayout({ title, subtitle, currentPath, children }) 
               )}
               <div className="profile-user-meta">
                 <p className="profile-user-name text-base font-bold text-white">{user.fullName}</p>
-                <p className="profile-user-subtitle text-sm text-blue-100/85">{user.role || 'Đoàn trường'}</p>
+                <p className="profile-user-subtitle text-sm text-blue-100/85">{user.role || 'Liên chi Đoàn'}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
+            <div className="flex items-start gap-3">
+              <div className="rounded-2xl bg-white/10 p-3 text-white">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Phạm vi nghiệp vụ</p>
+                <p className="mt-2 text-sm leading-6 text-blue-50/90">
+                  Khởi tạo sự kiện, quản lý người đăng ký và duyệt minh chứng cho sinh viên thuộc khoa.
+                </p>
               </div>
             </div>
           </div>
@@ -93,7 +97,7 @@ export default function AdminLayout({ title, subtitle, currentPath, children }) 
 
         <main className="flex-1">
           <div className="border-b border-[#dce9f6] bg-white/80 px-5 py-4 backdrop-blur-md sm:px-8">
-            <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#1f5dcc]">BK-Youth Admin</p>
+            <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#1f5dcc]">BK-Youth Faculty Union</p>
             <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h1 className="text-3xl font-black text-[#132b57]">{title}</h1>
@@ -110,7 +114,7 @@ export default function AdminLayout({ title, subtitle, currentPath, children }) 
                   )}
                   <div className="profile-user-meta">
                     <p className="profile-user-name font-bold text-[#132b57]">{user.fullName}</p>
-                    <p className="profile-user-subtitle text-sm text-slate-500">{user.role || 'Đoàn trường'}</p>
+                    <p className="profile-user-subtitle text-sm text-slate-500">{user.faculty || 'Văn phòng Liên chi'}</p>
                   </div>
                 </div>
               </div>

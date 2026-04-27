@@ -61,4 +61,9 @@ export function isAdminRole(role) {
   return ['đoàn trường', 'doan truong', 'admin', 'quản trị viên', 'quan tri vien'].includes(normalizedRole);
 }
 
+export function isLienChiRole(role) {
+  const normalizedRole = (role || '').trim().toLowerCase();
+  return ['lien chi doan', 'lien chi'].includes(normalizedRole);
+}
+
 export const defaultUserProfile = DEFAULT_USER;

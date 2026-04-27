@@ -314,7 +314,7 @@ export default function AdminUserManagementPage() {
     <AdminLayout
       currentPath="/admin/users"
       title="Quản lý tài khoản"
-      subtitle="Theo dõi trạng thái tài khoản, phân quyền và kiểm soát người dùng toàn hệ thống."
+      subtitle="Theo dõi trạng thái tài khoản, cấp quyền đúng đối tượng và kiểm soát người dùng toàn hệ thống."
     >
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -368,15 +368,16 @@ export default function AdminUserManagementPage() {
           </div>
 
           {notice && (
-            <div className={`rounded-[24px] border px-4 py-3 text-sm font-semibold ${
-              notice.startsWith('✅')
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border-red-200 bg-red-50 text-red-700'
-            }`}>
+            <div
+              className={`rounded-[24px] border px-4 py-3 text-sm font-semibold ${
+                notice.startsWith('✅')
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-red-200 bg-red-50 text-red-700'
+              }`}
+            >
               {notice}
             </div>
-          )}
-
+          )}  
           <div className="profile-panel overflow-hidden rounded-[28px] border border-[#dce8f5] bg-white">
             <div className="grid grid-cols-[1.3fr_1.1fr_0.9fr_0.7fr_0.8fr] gap-4 border-b border-[#e7eff8] px-5 py-4 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
               <span>Người dùng</span>

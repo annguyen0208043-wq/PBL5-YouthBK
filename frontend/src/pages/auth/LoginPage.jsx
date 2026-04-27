@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import AuthShowcase from '../../components/auth/AuthShowcase';
 import { BachKhoaLogo, DoanLogo } from '../../components/auth/AuthLogos';
 import { authContainerVariants, authItemVariants } from '../../shared/auth/authData';
-import { isAdminRole } from '../../shared/user/session';
+import { isAdminRole, isLienChiRole } from '../../shared/user/session';
 
 const API_URL = 'http://localhost:3000/api/auth';
 
