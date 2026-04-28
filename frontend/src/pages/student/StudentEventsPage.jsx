@@ -475,6 +475,9 @@ export default function StudentEventsPage() {
             <Link to="/student/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Lịch sử hoạt động
             </Link>
+            <Link to="/student/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Chat sinh viên
+            </Link>
           </nav>
 
           <div className="mt-auto rounded-[24px] border border-white/10 bg-white/10 p-4">
@@ -584,6 +587,12 @@ export default function StudentEventsPage() {
                 >
                   <CalendarDays className="h-4 w-4" />
                   Xem lịch sử hoạt động
+                </Link>
+                <Link
+                  to="/student/chat"
+                  className="mt-3 inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-[#f7fbff]"
+                >
+                  Trao đổi với sinh viên khác
                 </Link>
               </motion.div>
             </div>

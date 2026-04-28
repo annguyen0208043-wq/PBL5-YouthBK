@@ -18,6 +18,7 @@ import LienChiManagedEventsPage from '../pages/lienchi/LienChiManagedEventsPage'
 import LienChiRegistrationsPage from '../pages/lienchi/LienChiRegistrationsPage';
 import PersonalProfilePage from '../pages/profile/PersonalProfilePage';
 import StudentActivityHistoryPage from '../pages/student/StudentActivityHistoryPage';
+import StudentChatPage from '../pages/student/StudentChatPage';
 import StudentEventsPage from '../pages/student/StudentEventsPage';
 
 export default function App() {
@@ -43,6 +44,7 @@ export default function App() {
       <Route path="/sinhvien" element={<PersonalProfilePage />} />
       <Route path="/doantruong" element={<AdminDashboardPage />} />
       <Route path="/lienchidoan" element={<AdminDashboardPage />} />
+      <Route path="/student/chat" element={<StudentChatPage />} />
       <Route path="/student/events" element={<StudentEventsPage />} />
       <Route path="/student/history" element={<StudentActivityHistoryPage />} />
     </Routes>

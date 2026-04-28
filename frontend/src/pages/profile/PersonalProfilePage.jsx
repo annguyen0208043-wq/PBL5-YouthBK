@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarRange, Save, ShieldCheck } from 'lucide-react';
+import { CalendarRange, MessageCircleMore, Save, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import schoolLogo from '../../assets/logo-bk.png';
@@ -94,6 +94,9 @@ function ProfileLayout({ activeView, onChangeView, children, title, subtitle, ro
             </Link>
             <Link to="/student/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Lịch sử hoạt động
+            </Link>
+            <Link to="/student/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Chat sinh viên
             </Link>
           </nav>
 
@@ -290,6 +293,21 @@ export default function PersonalProfilePage({ activeView = 'profile', onChangeVi
             >
               <CalendarRange className="h-5 w-5" />
               Xem lịch sử hoạt động
+            </Link>
+          </div>
+
+          <div className="mt-4 rounded-[24px] border border-[#dce8f5] bg-white p-4">
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Kết nối sinh viên</p>
+            <h4 className="mt-2 text-lg font-black text-[#132b57]">Chat và trao đổi nhóm</h4>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Trao đổi với bạn học, nhóm hoạt động và các kênh nội bộ sinh viên ngay trong hệ thống.
+            </p>
+            <Link
+              to="/student/chat"
+              className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-[#eef6ff] px-4 py-3 font-bold text-[#1747a6] transition-all hover:bg-[#e4f0ff]"
+            >
+              <MessageCircleMore className="h-5 w-5" />
+              Mở chat sinh viên
             </Link>
           </div>
 

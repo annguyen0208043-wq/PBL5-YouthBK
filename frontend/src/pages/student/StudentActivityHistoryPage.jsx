@@ -194,6 +194,9 @@ export default function StudentActivityHistoryPage() {
             <Link to="/student/events" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Sự kiện của tôi
             </Link>
+            <Link to="/student/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Chat sinh viên
+            </Link>
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Lịch sử hoạt động</div>
           </nav>
 
@@ -408,6 +411,12 @@ export default function StudentActivityHistoryPage() {
                 className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]"
               >
                 Hồ sơ cá nhân
+              </Link>
+              <Link
+                to="/student/chat"
+                className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]"
+              >
+                Chat sinh viên
               </Link>
             </div>
           </div>
