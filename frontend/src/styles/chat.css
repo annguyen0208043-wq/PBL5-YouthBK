@@ -1,0 +1,206 @@
+/* ====================================================
+   CHAT PAGE STYLES — BK-Youth Student Chat
+   ==================================================== */
+
+/* Global chat page wrapper */
+.chat-page {
+  min-height: 100vh;
+  background: #edf5fb;
+}
+
+.chat-shell {
+  min-height: calc(100vh - 2rem);
+  box-shadow: 0 24px 60px rgba(37, 99, 235, 0.12);
+}
+
+/* ---- Sidebar ---- */
+.chat-sidebar {
+  background: linear-gradient(180deg, #113b90 0%, #1958c2 100%);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* ---- Thread list ---- */
+.chat-thread-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(37, 99, 235, 0.18) transparent;
+  overflow-y: auto;
+  flex: 1 1 0%;
+}
+
+.chat-thread-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.chat-thread-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-thread-list::-webkit-scrollbar-thumb {
+  background: rgba(37, 99, 235, 0.18);
+  border-radius: 10px;
+}
+
+/* ---- Message area ---- */
+.chat-messages-area {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(37, 99, 235, 0.14) transparent;
+  overflow-y: auto;
+  flex: 1 1 0%;
+  scroll-behavior: smooth;
+}
+
+.chat-messages-area::-webkit-scrollbar {
+  width: 5px;
+}
+
+.chat-messages-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages-area::-webkit-scrollbar-thumb {
+  background: rgba(37, 99, 235, 0.14);
+  border-radius: 10px;
+}
+
+/* ---- Bubbles ---- */
+.chat-bubble {
+  position: relative;
+  word-break: break-word;
+}
+
+.chat-bubble-mine {
+  background: linear-gradient(135deg, #1747a6 0%, #2563eb 100%);
+  color: #fff;
+  border-radius: 24px 24px 6px 24px;
+  box-shadow: 0 4px 14px rgba(23, 71, 166, 0.22);
+}
+
+.chat-bubble-other {
+  background: #fff;
+  color: #334155;
+  border-radius: 24px 24px 24px 6px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+
+/* ---- Typing indicator ---- */
+.chat-typing-indicator span {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin: 0 1.5px;
+  border-radius: 50%;
+  background: #94a3b8;
+  animation: chat-typing-bounce 1.4s infinite ease-in-out both;
+}
+
+.chat-typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+.chat-typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+.chat-typing-indicator span:nth-child(3) { animation-delay: 0s; }
+
+@keyframes chat-typing-bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+/* ---- Date divider ---- */
+.chat-date-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 24px 0 16px;
+}
+
+.chat-date-divider::before,
+.chat-date-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #dce9f6, transparent);
+}
+
+.chat-date-divider span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+/* ---- Composer ---- */
+.chat-composer textarea {
+  resize: none;
+  line-height: 1.65;
+  scrollbar-width: none;
+}
+
+.chat-composer textarea::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- Unread badge pulse ---- */
+.chat-unread-badge {
+  animation: chat-unread-pulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes chat-unread-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(23, 71, 166, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(23, 71, 166, 0); }
+}
+
+/* ---- Online dot ---- */
+.chat-online-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
+}
+
+/* ---- New conversation modal ---- */
+.chat-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-modal {
+  background: #fff;
+  border-radius: 28px;
+  box-shadow: 0 32px 80px rgba(15, 23, 42, 0.18);
+  max-width: 520px;
+  width: calc(100% - 40px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+/* ---- Empty state ---- */
+.chat-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+/* ---- Loading skeleton ---- */
+.chat-skeleton {
+  background: linear-gradient(90deg, #e5eef8 25%, #f0f6fc 50%, #e5eef8 75%);
+  background-size: 200% 100%;
+  animation: chat-shimmer 1.5s ease-in-out infinite;
+  border-radius: 16px;
+}
+
+@keyframes chat-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

@@ -8,7 +8,7 @@ import AuthShowcase from '../../components/auth/AuthShowcase';
 import { BachKhoaLogo, DoanLogo } from '../../components/auth/AuthLogos';
 import { authContainerVariants, authItemVariants } from '../../shared/auth/authData';
 
-const API_URL = 'http://localhost:3000/api/auth';
+const API_URL = 'http://localhost:5000/api/auth';
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
