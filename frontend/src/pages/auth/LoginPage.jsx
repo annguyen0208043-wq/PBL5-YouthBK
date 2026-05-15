@@ -36,9 +36,9 @@ export default function LoginPage() {
       const userRole = (response.data.user?.role || '').trim().toLowerCase();
 
       if (userRole === 'đoàn trường' || userRole === 'doan truong') {
-        navigate('/doantruong');
+        navigate('/admin');
       } else if (userRole === 'liên chi đoàn' || userRole === 'lien chi doan') {
-        navigate('/lienchidoan');
+        navigate('/lien-chi');
       } else if (
         userRole === 'sinh viên' ||
         userRole === 'sinh vien' ||
@@ -47,7 +47,7 @@ export default function LoginPage() {
       ) {
         navigate('/sinhvien');
       } else {
-        navigate(isAdminRole(response.data.user?.role) ? '/admin' : '/profile');
+        navigate('/sinhvien');
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Đăng nhập thất bại');

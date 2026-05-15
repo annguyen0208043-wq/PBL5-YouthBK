@@ -1,6 +1,6 @@
 import React from 'react';
-import { BadgeCheck, CalendarPlus2, ClipboardList, FilePenLine, LayoutDashboard, ShieldCheck } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { BadgeCheck, CalendarPlus2, ClipboardList, FilePenLine, LayoutDashboard, ShieldCheck, LogOut } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
@@ -26,8 +26,18 @@ const navSections = [
 ];
 
 export default function LienChiLayout({ title, subtitle, currentPath, children }) {
+  const navigate = useNavigate();
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
+
+  const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    
+    // Redirect to login
+    navigate('/login');
+  };
 
   return (
     <div className="profile-page p-4 sm:p-6">
@@ -92,6 +102,16 @@ export default function LienChiLayout({ title, subtitle, currentPath, children }
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="mt-auto pt-6 border-t border-white/20">
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-3 rounded-2xl bg-red-500/20 px-4 py-3 font-semibold text-white transition-all hover:bg-red-500/30"
+            >
+              <LogOut className="h-5 w-5 shrink-0" />
+              <span>Đăng xuất</span>
+            </button>
           </div>
         </aside>
 

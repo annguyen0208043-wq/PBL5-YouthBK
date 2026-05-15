@@ -83,11 +83,12 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
 
 export const getAllEvents = async (req: Request, res: Response) => {
   try {
-    const { status, category } = req.query;
+    const { status, category, createdBy } = req.query;
 
     const where: any = {};
     if (status) where.status = status;
     if (category) where.category = category;
+    if (createdBy) where.createdBy = createdBy;
 
     const events = await Event.findAll({
       where,

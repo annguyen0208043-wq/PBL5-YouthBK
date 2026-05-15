@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, CheckCircle2, Clock3, Filter, MapPin, Navigation, QrCode, Search, Sparkles, Ticket, XCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { CalendarDays, CheckCircle2, Clock3, Filter, MapPin, Navigation, QrCode, Search, Sparkles, Ticket, XCircle, LogOut } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import schoolLogo from '../../assets/logo-bk.png';
@@ -171,6 +171,7 @@ function buildAttendanceGate(event, attendanceWindowConfig) {
 }
 
 export default function StudentEventsPage() {
+  const navigate = useNavigate();
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
   const [search, setSearch] = useState('');
@@ -188,6 +189,15 @@ export default function StudentEventsPage() {
   const qrStreamRef = useRef(null);
   const qrDetectorRef = useRef(null);
   const qrLoopFrameRef = useRef(null);
+
+  const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    
+    // Redirect to login
+    navigate('/login');
+  };
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_REGISTERED_EVENTS_KEY, JSON.stringify(registeredIds));
@@ -468,26 +478,36 @@ export default function StudentEventsPage() {
           </div>
 
           <nav className="space-y-2">
-            <Link to="/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-              Hồ sơ cá nhân
+            <Link to="/sinhvien" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Sự kiện của tôi
             </Link>
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Sự kiện của tôi</div>
-            <Link to="/student/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+            <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Lịch sử hoạt động
             </Link>
-            <Link to="/student/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+            <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Chat sinh viên
             </Link>
           </nav>
 
-          <div className="mt-auto rounded-[24px] border border-white/10 bg-white/10 p-4">
-            <p className="text-sm font-semibold">Cách sử dụng nhanh</p>
-            <ul className="mt-3 space-y-2 text-sm text-blue-50/90">
-              <li>Xem danh sách sự kiện đang mở</li>
-              <li>Đọc thông tin và chỉ tiêu đăng ký</li>
-              <li>Đăng ký hoặc hủy đăng ký</li>
-              <li>Theo dõi trạng thái tham gia</li>
-            </ul>
+          <div className="mt-auto space-y-4">
+            <div className="rounded-[24px] border border-white/10 bg-white/10 p-4">
+              <p className="text-sm font-semibold">Cách sử dụng nhanh</p>
+              <ul className="mt-3 space-y-2 text-sm text-blue-50/90">
+                <li>Xem danh sách sự kiện đang mở</li>
+                <li>Đọc thông tin và chỉ tiêu đăng ký</li>
+                <li>Đăng ký hoặc hủy đăng ký</li>
+                <li>Theo dõi trạng thái tham gia</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-3 rounded-2xl bg-red-500/20 px-4 py-3 font-semibold text-white transition-all hover:bg-red-500/30"
+            >
+              <LogOut className="h-5 w-5 shrink-0" />
+              <span>Đăng xuất</span>
+            </button>
           </div>
         </aside>
 
