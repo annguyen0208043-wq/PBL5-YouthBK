@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Award, CalendarClock, CheckCircle2, Clock3, Download, FileBadge2, History, LogOut, Stamp, Ticket } from 'lucide-react';
+import { Award, CalendarClock, CheckCircle2, Clock3, Download, FileBadge2, History, LogOut, Stamp } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { jsPDF } from 'jspdf';
@@ -168,13 +168,13 @@ export default function StudentActivityHistoryPage() {
   return (
     <div className="profile-page p-4 sm:p-6">
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className="app-sidebar hidden w-[280px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
+        <aside className="app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
             <div>
               <p className="text-xs uppercase tracking-[0.25em] text-blue-100">BK-Youth</p>
-              <p className="text-sm font-semibold">Hệ thống Đoàn - Hội</p>
+              <p className="text-sm font-semibold">Không gian sinh viên</p>
             </div>
           </div>
 
@@ -197,6 +197,9 @@ export default function StudentActivityHistoryPage() {
           <nav className="space-y-2">
             <Link to="/sinhvien" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Sự kiện của tôi
+            </Link>
+            <Link to="/sinhvien/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Hồ sơ cá nhân
             </Link>
             <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Chat sinh viên
@@ -223,9 +226,8 @@ export default function StudentActivityHistoryPage() {
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Lịch sử hoạt động của tôi</h1>
                 <p className="mt-1 text-slate-500">Theo dõi các hoạt động đã tham gia và những sự kiện bạn đang chờ diễn ra.</p>
               </div>
-              <Link
-                to="/sinhvien/profile"
-                className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3 transition-all hover:border-[#9fc7f3] hover:bg-[#eef6ff] hover:shadow-[0_12px_26px_rgba(37,99,235,0.12)]"
+              <div
+                className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3"
                 aria-label="Mở trang chỉnh sửa thông tin cá nhân"
               >
                 <div className="flex items-center gap-3">
@@ -241,7 +243,7 @@ export default function StudentActivityHistoryPage() {
                     <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
                   </div>
                 </div>
-              </Link>
+              </div>
             </div>
           </div>
 
@@ -407,27 +409,6 @@ export default function StudentActivityHistoryPage() {
               </section>
             </div>
 
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                to="/sinhvien"
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white transition-all hover:bg-[#205fd8]"
-              >
-                <Ticket className="h-5 w-5" />
-                Quay lại sự kiện của tôi
-              </Link>
-              <Link
-                to="/sinhvien"
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]"
-              >
-                Hồ sơ cá nhân
-              </Link>
-              <Link
-                to="/sinhvien/chat"
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]"
-              >
-                Chat sinh viên
-              </Link>
-            </div>
           </div>
         </main>
       </div>

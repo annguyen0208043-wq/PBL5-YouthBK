@@ -1,12 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CalendarRange, LogOut, MessageCircleMore, Save, ShieldCheck } from 'lucide-react';
+import { LogOut, Save, ShieldCheck } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
-
-const menuItems = [{ id: 'profile', label: 'Hồ sơ cá nhân' }];
 
 function UserIdentity({ user, subtitle }) {
   const userInitials = getUserInitials(user.fullName);
@@ -52,7 +50,7 @@ function HeaderIdentity({ user }) {
   );
 }
 
-function ProfileLayout({ activeView, onChangeView, children, title, subtitle, user }) {
+function ProfileLayout({ children, title, subtitle, user }) {
   const navigate = useNavigate();
   const location = useLocation();
   const mainRef = useRef(null);
@@ -70,13 +68,13 @@ function ProfileLayout({ activeView, onChangeView, children, title, subtitle, us
   return (
     <div className="profile-page p-4 sm:p-6">
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className="app-sidebar hidden w-[280px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
+        <aside className="app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
             <div>
               <p className="text-xs uppercase tracking-[0.25em] text-blue-100">BK-Youth</p>
-              <p className="text-sm font-semibold">Hệ thống Đoàn - Hội</p>
+              <p className="text-sm font-semibold">Không gian sinh viên</p>
             </div>
           </div>
 
@@ -85,21 +83,10 @@ function ProfileLayout({ activeView, onChangeView, children, title, subtitle, us
           </div>
 
           <nav className="space-y-2">
-            {menuItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onChangeView(item.id)}
-                className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all ${
-                  activeView === item.id ? 'bg-white text-[#123d94] shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'
-                }`}
-              >
-                <span className="font-semibold">{item.label}</span>
-              </button>
-            ))}
             <Link to="/sinhvien" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Sự kiện của tôi
             </Link>
+            <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Hồ sơ cá nhân</div>
             <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Chat sinh viên
             </Link>
@@ -142,15 +129,13 @@ function StatusPill({ value }) {
   return <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">{value}</span>;
 }
 
-export default function PersonalProfilePage({ activeView = 'profile', onChangeView = () => {} }) {
+export default function PersonalProfilePage() {
   const [activeProfileTab, setActiveProfileTab] = useState('edit');
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
 
   return (
     <ProfileLayout
-      activeView={activeView}
-      onChangeView={onChangeView}
       title="Hồ sơ cá nhân"
       subtitle="Quản lý thông tin tài khoản, cập nhật dữ liệu cá nhân và giữ hồ sơ luôn chính xác."
       user={user}
@@ -301,12 +286,6 @@ export default function PersonalProfilePage({ activeView = 'profile', onChangeVi
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Truy cập danh sách sự kiện đang mở để đăng ký tham gia, theo dõi chỉ tiêu còn lại và quản lý các hoạt động bạn đã chọn.
             </p>
-            <Link
-              to="/sinhvien"
-              className="mt-4 inline-flex rounded-2xl bg-[#1747a6] px-4 py-3 font-bold text-white transition-all hover:bg-[#205fd8]"
-            >
-              Xem sự kiện của tôi
-            </Link>
           </div>
 
           <div className="mt-4 rounded-[24px] border border-[#dce8f5] bg-white p-4">
@@ -315,13 +294,6 @@ export default function PersonalProfilePage({ activeView = 'profile', onChangeVi
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Xem nhanh những hoạt động đã tham gia, trạng thái điểm danh, kết quả cộng điểm và chứng nhận đã nhận.
             </p>
-            <Link
-              to="/sinhvien/history"
-              className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-[#eef6ff] px-4 py-3 font-bold text-[#1747a6] transition-all hover:bg-[#e4f0ff]"
-            >
-              <CalendarRange className="h-5 w-5" />
-              Xem lịch sử hoạt động
-            </Link>
           </div>
 
           <div className="mt-4 rounded-[24px] border border-[#dce8f5] bg-white p-4">
@@ -330,13 +302,6 @@ export default function PersonalProfilePage({ activeView = 'profile', onChangeVi
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Trao đổi với bạn học, nhóm hoạt động và các kênh nội bộ sinh viên ngay trong hệ thống.
             </p>
-            <Link
-              to="/sinhvien/chat"
-              className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-[#eef6ff] px-4 py-3 font-bold text-[#1747a6] transition-all hover:bg-[#e4f0ff]"
-            >
-              <MessageCircleMore className="h-5 w-5" />
-              Mở chat sinh viên
-            </Link>
           </div>
 
           <div className="mt-6 flex flex-wrap gap-3">
@@ -344,7 +309,6 @@ export default function PersonalProfilePage({ activeView = 'profile', onChangeVi
               <Save className="h-5 w-5" />
               Lưu thay đổi
             </button>
-            <button className="rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-slate-600">Quay lại hồ sơ</button>
           </div>
         </section>
         )}

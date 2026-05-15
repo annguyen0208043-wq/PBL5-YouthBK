@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, CheckCircle2, Clock3, Filter, LogOut, MapPin, Navigation, QrCode, Search, Sparkles, Ticket, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock3, Filter, LogOut, MapPin, Navigation, QrCode, Search, Sparkles, XCircle } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -451,13 +451,13 @@ export default function StudentEventsPage() {
   return (
     <div className="profile-page p-4 sm:p-6">
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className="app-sidebar hidden w-[280px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
+        <aside className="app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
             <div>
               <p className="text-xs uppercase tracking-[0.25em] text-blue-100">BK-Youth</p>
-              <p className="text-sm font-semibold">Hệ thống Đoàn - Hội</p>
+              <p className="text-sm font-semibold">Không gian sinh viên</p>
             </div>
           </div>
 
@@ -479,6 +479,9 @@ export default function StudentEventsPage() {
 
           <nav className="space-y-2">
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Sự kiện của tôi</div>
+            <Link to="/sinhvien/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Hồ sơ cá nhân
+            </Link>
             <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Chat sinh viên
             </Link>
@@ -506,9 +509,8 @@ export default function StudentEventsPage() {
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Sự kiện dành cho sinh viên</h1>
                 <p className="mt-1 text-slate-500">Khám phá hoạt động nổi bật và đăng ký tham gia trực tiếp trên hệ thống.</p>
               </div>
-              <Link
-                to="/sinhvien/profile"
-                className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3 transition-all hover:border-[#9fc7f3] hover:bg-[#eef6ff] hover:shadow-[0_12px_26px_rgba(37,99,235,0.12)]"
+              <div
+                className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3"
                 aria-label="Mở trang chỉnh sửa thông tin cá nhân"
               >
                 <div className="flex items-center gap-3">
@@ -524,7 +526,7 @@ export default function StudentEventsPage() {
                     <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
                   </div>
                 </div>
-              </Link>
+              </div>
             </div>
           </div>
 
@@ -590,21 +592,8 @@ export default function StudentEventsPage() {
                   </div>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-600">
-                  Bạn có thể theo dõi các sự kiện đã đăng ký và chuyển sang lịch sử hoạt động để xem tiến trình tham gia.
+                  Theo dõi các sự kiện đang mở, các sự kiện đã đăng ký và thao tác điểm danh ngay trong danh sách bên dưới.
                 </p>
-                <Link
-                  to="/sinhvien/history"
-                  className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-[#f8fbff] px-4 py-3 text-sm font-bold text-[#1747a6] transition-all hover:bg-[#eef6ff]"
-                >
-                  <CalendarDays className="h-4 w-4" />
-                  Xem lịch sử hoạt động
-                </Link>
-                <Link
-                  to="/sinhvien/chat"
-                  className="mt-3 inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-[#f7fbff]"
-                >
-                  Trao đổi với sinh viên khác
-                </Link>
               </motion.div>
             </div>
 
@@ -857,17 +846,6 @@ export default function StudentEventsPage() {
               </div>
             </motion.div>
 
-            <div className="mt-6">
-              <motion.div whileHover={{ x: -2 }} whileTap={{ scale: 0.98 }}>
-                <Link
-                  to="/sinhvien/profile"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]"
-                >
-                  <Ticket className="h-5 w-5" />
-                  Chỉnh sửa hồ sơ cá nhân
-                </Link>
-              </motion.div>
-            </div>
           </div>
         </main>
       </div>
