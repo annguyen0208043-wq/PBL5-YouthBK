@@ -86,7 +86,7 @@ export default function LienChiManagedEventsPage() {
       ) : events.length === 0 ? (
         <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-4 text-center text-slate-600">
           <p className="font-semibold">Chưa có sự kiện nào</p>
-          <p className="mt-1 text-sm">Hãy tạo sự kiện mới từ mục "Tạo sự kiện"</p>
+          <p className="mt-1 text-sm">Hãy tạo sự kiện mới từ mục &quot;Tạo sự kiện&quot;</p>
         </div>
       ) : (
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
