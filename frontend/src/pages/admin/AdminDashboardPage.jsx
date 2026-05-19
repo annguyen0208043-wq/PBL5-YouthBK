@@ -50,6 +50,7 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [pendingEvents, setPendingEvents] = useState([]);
+  const [ongoingEvents, setOngoingEvents] = useState([]);
   const [users, setUsers] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
@@ -64,8 +65,9 @@ export default function AdminDashboardPage() {
           Authorization: `Bearer ${token}`,
         };
 
-        const [eventsResponse, usersResponse, notificationsResponse] = await Promise.all([
+        const [eventsResponse, ongoingEventsResponse, usersResponse, notificationsResponse] = await Promise.all([
           fetch('/api/events/pending', { headers }),
+          fetch('/api/events?status=ongoing', { headers }),
           fetch('/api/users', { headers }),
           fetch('/api/notifications/sent', { headers }),
         ]);
@@ -86,10 +88,12 @@ export default function AdminDashboardPage() {
         }
 
         const eventsData = await eventsResponse.json();
+        const ongoingEventsData = await ongoingEventsResponse.json();
         const usersData = await usersResponse.json();
         const notificationsData = await notificationsResponse.json();
 
         setPendingEvents(eventsData.events || []);
+        setOngoingEvents(ongoingEventsData.events || []);
         setUsers(usersData.users || []);
         setNotifications(notificationsData.notifications || []);
       } catch (err) {
@@ -230,6 +234,40 @@ export default function AdminDashboardPage() {
                           <p className="mt-1 text-sm text-slate-500">{event.creator?.fullName || event.creator?.email || 'Chưa rõ đơn vị tạo'}</p>
                         </div>
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">{event.status}</span>
+                      </div>
+                      <p className="mt-3 text-sm text-slate-600">{formatDateTime(event.startTime)} • {event.location}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+
+            <motion.div whileHover={{ y: -4 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Đang diễn ra</p>
+                  <h3 className="mt-2 text-2xl font-black text-[#132b57]">Sự kiện đang diễn ra</h3>
+                </div>
+                <Link to="/admin/events" className="inline-flex items-center gap-2 rounded-2xl bg-[#eef6ff] px-4 py-3 font-bold text-[#1747a6] transition-all hover:bg-[#dce8f5]">
+                  Xem tất cả
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                {ongoingEvents.length === 0 ? (
+                  <div className="rounded-[24px] bg-[#f6faff] p-4 text-sm text-slate-500">
+                    Hiện không có sự kiện nào đang diễn ra.
+                  </div>
+                ) : (
+                  ongoingEvents.slice(0, 3).map((event) => (
+                    <div key={event.id} className="rounded-[24px] bg-[#f6faff] p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                          <p className="text-lg font-black text-[#132b57]">{event.title}</p>
+                          <p className="mt-1 text-sm text-slate-500">{event.creator?.fullName || event.creator?.email || 'Chưa rõ đơn vị tạo'}</p>
+                        </div>
+                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">Đang diễn ra</span>
                       </div>
                       <p className="mt-3 text-sm text-slate-600">{formatDateTime(event.startTime)} • {event.location}</p>
                     </div>
