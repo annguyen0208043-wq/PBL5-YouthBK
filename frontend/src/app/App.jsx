@@ -16,6 +16,7 @@ import LienChiCreateEventPage from '../pages/lienchi/LienChiCreateEventPage';
 import LienChiDashboardPage from '../pages/lienchi/LienChiDashboardPage';
 import LienChiEvidenceApprovalPage from '../pages/lienchi/LienChiEvidenceApprovalPage';
 import LienChiManagedEventsPage from '../pages/lienchi/LienChiManagedEventsPage';
+import LienChiEditEventPage from '../pages/lienchi/LienChiEditEventPage';
 import LienChiRegistrationsPage from '../pages/lienchi/LienChiRegistrationsPage';
 import StudentActivityHistoryPage from '../pages/student/StudentActivityHistoryPage';
 import StudentChatPage from '../pages/student/StudentChatPage';
@@ -44,6 +45,7 @@ export default function App() {
       <Route path="/lien-chi" element={<LienChiDashboardPage />} />
       <Route path="/lien-chi/events/create" element={<LienChiCreateEventPage />} />
       <Route path="/lien-chi/events/manage" element={<LienChiManagedEventsPage />} />
+      <Route path="/lien-chi/events/manage/edit/:id" element={<LienChiEditEventPage />} />
       <Route path="/lien-chi/registrations" element={<LienChiRegistrationsPage />} />
       <Route path="/lien-chi/evidences" element={<LienChiEvidenceApprovalPage />} />
       

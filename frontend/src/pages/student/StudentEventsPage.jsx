@@ -242,8 +242,63 @@ export default function StudentEventsPage() {
 
   const filters = ['Tất cả', 'Đang mở đăng ký', 'Đã đăng ký', 'Sắp diễn ra'];
 
+  const [dbEvents, setDbEvents] = useState([]);
+
+  useEffect(() => {
+    const fetchDbEvents = async () => {
+      try {
+        const token = localStorage.getItem('token') || '';
+        const response = await fetch('/api/events', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const approvedEvents = data.events.filter(e => e.status === 'approved' || e.status === 'ongoing');
+          
+          const formattedEvents = approvedEvents.map(e => {
+            const formatTime = (iso) => {
+              if (!iso) return '';
+              const d = new Date(iso);
+              const hh = String(d.getHours()).padStart(2, '0');
+              const mm = String(d.getMinutes()).padStart(2, '0');
+              const DD = String(d.getDate()).padStart(2, '0');
+              const MM = String(d.getMonth() + 1).padStart(2, '0');
+              const YYYY = d.getFullYear();
+              return `${hh}:${mm}, ${DD}/${MM}/${YYYY}`;
+            };
+            const timeRange = `${formatTime(e.startTime || e.startDate)} - ${formatTime(e.endTime || e.endDate)}`;
+
+            return {
+              id: `db-${e.id}`,
+              realId: e.id,
+              title: e.title,
+              organizer: e.creator?.name || 'Liên chi Đoàn',
+              category: e.category || 'Hoạt động',
+              time: timeRange,
+              location: e.location,
+              points: '+5 ĐRL',
+              slots: e.maxParticipants || e.capacity || 100,
+              registered: 0,
+              status: e.status === 'ongoing' ? 'Sắp diễn ra' : 'Đang mở đăng ký',
+              description: e.description,
+              tags: ['Cập nhật mới'],
+              accent: 'from-blue-500 to-indigo-500',
+              attendanceConfig: { gpsCenter: { lat: 16.074061, lng: 108.150720 }, allowedRadiusMeters: 100, qrValue: `BKYOUTH-${e.id}` }
+            };
+          });
+          
+          setDbEvents(formattedEvents);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchDbEvents();
+  }, []);
+
   const visibleEvents = useMemo(() => {
-    return studentEvents
+    const allEvents = [...dbEvents, ...studentEvents];
+    return allEvents
       .map((event) => ({
         ...event,
         enrolled: registeredIds.includes(event.id),

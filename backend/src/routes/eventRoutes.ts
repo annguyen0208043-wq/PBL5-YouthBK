@@ -15,7 +15,7 @@ router.get('/:id', getEventById);
 
 // Tạo sự kiện (admin hoặc liên chi đoàn) - có upload ảnh
 router.post('/', authMiddleware, adminOrLienChiMiddleware, uploadEventImages.array('images', 10), createEvent);
-router.put('/:id', authMiddleware, adminOrLienChiMiddleware, updateEvent);
+router.put('/:id', authMiddleware, adminOrLienChiMiddleware, uploadEventImages.array('images', 10), updateEvent);
 router.delete('/:id', authMiddleware, adminOrLienChiMiddleware, deleteEvent);
 
 // Đăng ký sự kiện (student)

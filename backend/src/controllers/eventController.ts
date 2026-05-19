@@ -34,7 +34,7 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       maxParticipants: maxParticipants || capacity,
       category,
       createdBy: userId,
-      status: 'pending'
+      status: req.user?.role === 'admin' ? 'approved' : 'pending'
     });
 
     // Xử lý timeline nếu có
@@ -95,7 +95,8 @@ export const getAllEvents = async (req: Request, res: Response) => {
       include: [
         { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
         { model: EventTimeline, as: 'timelines' },
-        { model: EventImage, as: 'images' }
+        { model: EventImage, as: 'images' },
+        { model: EventApproval, as: 'approvals', include: [{ model: User, as: 'approver', attributes: ['name'] }] }
       ],
       order: [['createdAt', 'DESC']]
     });
@@ -163,7 +164,48 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       status: status || event.status
     });
 
-    res.json({ message: 'Event updated successfully', event });
+    const { timeline } = req.body;
+    if (timeline) {
+      const timelineItems = typeof timeline === 'string' ? JSON.parse(timeline) : timeline;
+      if (Array.isArray(timelineItems)) {
+        await EventTimeline.destroy({ where: { eventId: id } });
+        if (timelineItems.length > 0) {
+          await Promise.all(
+            timelineItems.map((item: any) =>
+              EventTimeline.create({
+                eventId: event.id,
+                dateTime: item.dateTime,
+                description: item.description
+              })
+            )
+          );
+        }
+      }
+    }
+
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      await EventImage.destroy({ where: { eventId: id } });
+      await Promise.all(
+        (req.files as Express.Multer.File[]).map((file) =>
+          EventImage.create({
+            eventId: event.id,
+            imageUrl: `/uploads/events/${file.filename}`
+          })
+        )
+      );
+    }
+
+    // Lấy lại event đầy đủ với images và timelines
+    const fullEvent = await Event.findByPk(id, {
+      include: [
+        { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
+        { model: EventTimeline, as: 'timelines' },
+        { model: EventImage, as: 'images' },
+        { model: EventApproval, as: 'approvals' }
+      ]
+    });
+
+    res.json({ message: 'Event updated successfully', event: fullEvent });
   } catch (error) {
     console.error('Update event error:', error);
     res.status(500).json({ message: 'Internal server error' });
