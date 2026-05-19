@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, CheckCircle2, Clock3, Filter, MapPin, Navigation, QrCode, Search, Sparkles, Ticket, XCircle, LogOut } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { CheckCircle2, Clock3, Filter, LogOut, MapPin, Navigation, QrCode, Search, Sparkles, XCircle } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import schoolLogo from '../../assets/logo-bk.png';
@@ -172,6 +172,8 @@ function buildAttendanceGate(event, attendanceWindowConfig) {
 
 export default function StudentEventsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const mainRef = useRef(null);
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
   const [search, setSearch] = useState('');
@@ -198,6 +200,10 @@ export default function StudentEventsPage() {
     // Redirect to login
     navigate('/login');
   };
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [location.pathname]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_REGISTERED_EVENTS_KEY, JSON.stringify(registeredIds));
@@ -445,13 +451,13 @@ export default function StudentEventsPage() {
   return (
     <div className="profile-page p-4 sm:p-6">
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className="hidden w-[280px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
+        <aside className="app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
             <div>
               <p className="text-xs uppercase tracking-[0.25em] text-blue-100">BK-Youth</p>
-              <p className="text-sm font-semibold">Hệ thống Đoàn - Hội</p>
+              <p className="text-sm font-semibold">Không gian sinh viên</p>
             </div>
           </div>
 
@@ -471,39 +477,23 @@ export default function StudentEventsPage() {
             </div>
           </div>
 
-          <div className="mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
-            <p className="text-xs uppercase tracking-[0.28em] text-blue-100">Quản lý tham gia</p>
-            <p className="mt-2 text-xl font-bold">Sự kiện của tôi</p>
-            <p className="mt-2 text-sm text-blue-50/85">Theo dõi hoạt động đang mở, đăng ký tham gia và kiểm tra trạng thái của bạn.</p>
-          </div>
-
           <nav className="space-y-2">
-            <Link to="/sinhvien" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-              Sự kiện của tôi
-            </Link>
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Sự kiện của tôi</div>
-            <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-              Lịch sử hoạt động
+            <Link to="/sinhvien/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Hồ sơ cá nhân
             </Link>
             <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Chat sinh viên
             </Link>
+            <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Lịch sử hoạt động
+            </Link>
           </nav>
 
-          <div className="mt-auto space-y-4">
-            <div className="rounded-[24px] border border-white/10 bg-white/10 p-4">
-              <p className="text-sm font-semibold">Cách sử dụng nhanh</p>
-              <ul className="mt-3 space-y-2 text-sm text-blue-50/90">
-                <li>Xem danh sách sự kiện đang mở</li>
-                <li>Đọc thông tin và chỉ tiêu đăng ký</li>
-                <li>Đăng ký hoặc hủy đăng ký</li>
-                <li>Theo dõi trạng thái tham gia</li>
-              </ul>
-            </div>
-
+          <div className="mt-auto pt-6">
             <button
               onClick={handleLogout}
-              className="flex w-full items-center gap-3 rounded-2xl bg-red-500/20 px-4 py-3 font-semibold text-white transition-all hover:bg-red-500/30"
+              className="app-logout-button flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all"
             >
               <LogOut className="h-5 w-5 shrink-0" />
               <span>Đăng xuất</span>
@@ -511,15 +501,18 @@ export default function StudentEventsPage() {
           </div>
         </aside>
 
-        <main className="flex-1">
-          <div className="border-b border-[#dce9f6] bg-white/80 px-5 py-4 backdrop-blur-md sm:px-8">
+        <main ref={mainRef} className="app-main flex-1">
+          <div className="app-page-header border-b border-[#dce9f6] bg-white/90 px-5 py-4 backdrop-blur-md sm:px-8">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#1f5dcc]">BK-Youth Student</p>
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Sự kiện dành cho sinh viên</h1>
                 <p className="mt-1 text-slate-500">Khám phá hoạt động nổi bật và đăng ký tham gia trực tiếp trên hệ thống.</p>
               </div>
-              <div className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3">
+              <div
+                className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3"
+                aria-label="Mở trang chỉnh sửa thông tin cá nhân"
+              >
                 <div className="flex items-center gap-3">
                   {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
@@ -599,21 +592,8 @@ export default function StudentEventsPage() {
                   </div>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-600">
-                  Bạn có thể theo dõi các sự kiện đã đăng ký và chuyển sang lịch sử hoạt động để xem tiến trình tham gia.
+                  Theo dõi các sự kiện đang mở, các sự kiện đã đăng ký và thao tác điểm danh ngay trong danh sách bên dưới.
                 </p>
-                <Link
-                  to="/student/history"
-                  className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-[#f8fbff] px-4 py-3 text-sm font-bold text-[#1747a6] transition-all hover:bg-[#eef6ff]"
-                >
-                  <CalendarDays className="h-4 w-4" />
-                  Xem lịch sử hoạt động
-                </Link>
-                <Link
-                  to="/student/chat"
-                  className="mt-3 inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-[#f7fbff]"
-                >
-                  Trao đổi với sinh viên khác
-                </Link>
               </motion.div>
             </div>
 
@@ -866,17 +846,6 @@ export default function StudentEventsPage() {
               </div>
             </motion.div>
 
-            <div className="mt-6">
-              <motion.div whileHover={{ x: -2 }} whileTap={{ scale: 0.98 }}>
-                <Link
-                  to="/profile"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]"
-                >
-                  <Ticket className="h-5 w-5" />
-                  Quay lại hồ sơ cá nhân
-                </Link>
-              </motion.div>
-            </div>
           </div>
         </main>
       </div>

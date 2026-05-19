@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import LoginPage from '../pages/auth/LoginPage';
 import RegisterPage from '../pages/auth/RegisterPage';
+import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
 import AdminAuditLogsPage from '../pages/admin/AdminAuditLogsPage';
 import AdminCreateEventPage from '../pages/admin/AdminCreateEventPage';
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
@@ -19,6 +20,7 @@ import LienChiRegistrationsPage from '../pages/lienchi/LienChiRegistrationsPage'
 import StudentActivityHistoryPage from '../pages/student/StudentActivityHistoryPage';
 import StudentChatPage from '../pages/student/StudentChatPage';
 import StudentEventsPage from '../pages/student/StudentEventsPage';
+import PersonalProfilePage from '../pages/profile/PersonalProfilePage';
 
 export default function App() {
   return (
@@ -26,6 +28,7 @@ export default function App() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       
       {/* Admin Routes */}
       <Route path="/admin" element={<AdminDashboardPage />} />
@@ -49,6 +52,7 @@ export default function App() {
       <Route path="/sinhvien/chat" element={<StudentChatPage />} />
       <Route path="/sinhvien/events" element={<StudentEventsPage />} />
       <Route path="/sinhvien/history" element={<StudentActivityHistoryPage />} />
+      <Route path="/sinhvien/profile" element={<PersonalProfilePage />} />
     </Routes>
   );
 }

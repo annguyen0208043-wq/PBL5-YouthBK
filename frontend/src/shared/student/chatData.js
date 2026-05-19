@@ -6,7 +6,14 @@ export const studentChatThreads = [
     preview: 'Tối nay ai đi họp chuẩn bị cho Chủ nhật xanh không?',
     updatedAt: '10:24',
     unreadCount: 3,
+    memberCount: 48,
+    onlineCount: 12,
     accent: 'from-blue-500 to-cyan-400',
+    seenBy: [
+      { id: 'an', name: 'Nguyễn Hoài An', avatarColor: 'bg-emerald-500' },
+      { id: 'quan', name: 'Trần Minh Quân', avatarColor: 'bg-sky-500' },
+      { id: 'ha', name: 'Lê Thu Hà', avatarColor: 'bg-rose-500' },
+    ],
     messages: [
       { id: 'm1', sender: 'other', author: 'Trần Minh Quân', time: '09:58', text: 'Mình vừa gửi file phân công công việc lên nhóm.' },
       { id: 'm2', sender: 'me', author: 'Bạn', time: '10:06', text: 'Mình đã xem rồi, chiều nay mình phụ trách phần truyền thông.' },
@@ -20,7 +27,13 @@ export const studentChatThreads = [
     preview: 'Nhớ kiểm tra lại minh chứng trước 17h nhé.',
     updatedAt: 'Hôm nay',
     unreadCount: 1,
+    memberCount: 18,
+    onlineCount: 5,
     accent: 'from-emerald-500 to-lime-400',
+    seenBy: [
+      { id: 'ha', name: 'Lê Thu Hà', avatarColor: 'bg-emerald-500' },
+      { id: 'minh', name: 'Phạm Đức Minh', avatarColor: 'bg-amber-500' },
+    ],
     messages: [
       { id: 'm4', sender: 'other', author: 'Lê Thu Hà', time: '08:45', text: 'Admin đã mở lại hạn nộp minh chứng đến 17h hôm nay.' },
       { id: 'm5', sender: 'me', author: 'Bạn', time: '09:00', text: 'Mình đang bổ sung bản scan giấy xác nhận tham gia.' },
@@ -34,7 +47,12 @@ export const studentChatThreads = [
     preview: 'Tuần này sẽ có lịch tập huấn cán bộ lớp.',
     updatedAt: 'Hôm qua',
     unreadCount: 0,
+    memberCount: 126,
+    onlineCount: 21,
     accent: 'from-violet-500 to-fuchsia-400',
+    seenBy: [
+      { id: 'doan', name: 'Đoàn khoa CNTT', avatarColor: 'bg-violet-500' },
+    ],
     messages: [
       { id: 'm7', sender: 'other', author: 'Đoàn khoa CNTT', time: 'Hôm qua', text: 'Tuần này sẽ có lịch tập huấn cán bộ lớp. Các bạn theo dõi thông báo để đăng ký.' },
     ],

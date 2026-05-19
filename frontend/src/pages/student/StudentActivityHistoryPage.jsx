@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Award, CalendarClock, CheckCircle2, Clock3, Download, FileBadge2, History, Stamp, Ticket } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Award, CalendarClock, CheckCircle2, Clock3, Download, FileBadge2, History, LogOut, Stamp } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -37,11 +37,18 @@ function certificateStatusTone(status) {
 }
 
 export default function StudentActivityHistoryPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const mainRef = useRef(null);
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
   const registeredEventIds = getRegisteredEventIds();
   const [certificateRequests, setCertificateRequests] = useState(getCertificateRequests);
   const [certificateNotice, setCertificateNotice] = useState('');
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [location.pathname]);
 
   useEffect(() => {
     const syncRequests = () => setCertificateRequests(getCertificateRequests());
@@ -152,16 +159,22 @@ export default function StudentActivityHistoryPage() {
       });
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
   return (
     <div className="profile-page p-4 sm:p-6">
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className="hidden w-[280px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
+        <aside className="app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
             <div>
               <p className="text-xs uppercase tracking-[0.25em] text-blue-100">BK-Youth</p>
-              <p className="text-sm font-semibold">Hệ thống Đoàn - Hội</p>
+              <p className="text-sm font-semibold">Không gian sinh viên</p>
             </div>
           </div>
 
@@ -181,44 +194,42 @@ export default function StudentActivityHistoryPage() {
             </div>
           </div>
 
-          <div className="mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
-            <p className="text-xs uppercase tracking-[0.28em] text-blue-100">Theo dõi tham gia</p>
-            <p className="mt-2 text-xl font-bold">Lịch sử hoạt động</p>
-            <p className="mt-2 text-sm text-blue-50/85">Tổng hợp các hoạt động đã tham gia, chứng nhận đã nhận và những sự kiện sắp diễn ra.</p>
-          </div>
-
           <nav className="space-y-2">
-            <Link to="/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-              Hồ sơ cá nhân
-            </Link>
-            <Link to="/student/events" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+            <Link to="/sinhvien" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Sự kiện của tôi
             </Link>
-            <Link to="/student/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+            <Link to="/sinhvien/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Hồ sơ cá nhân
+            </Link>
+            <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Chat sinh viên
             </Link>
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Lịch sử hoạt động</div>
           </nav>
 
-          <div className="mt-auto rounded-[24px] border border-white/10 bg-white/10 p-4">
-            <p className="text-sm font-semibold">Tóm tắt nhanh</p>
-            <ul className="mt-3 space-y-2 text-sm text-blue-50/90">
-              <li>{activityHistory.length} hoạt động đã được ghi nhận</li>
-              <li>{upcomingRegistrations.length} hoạt động đang theo dõi</li>
-              <li>Chứng nhận và điểm rèn luyện luôn hiển thị cùng hồ sơ</li>
-            </ul>
+          <div className="mt-auto pt-6">
+            <button
+              onClick={handleLogout}
+              className="app-logout-button flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all"
+            >
+              <LogOut className="h-5 w-5 shrink-0" />
+              <span>Đăng xuất</span>
+            </button>
           </div>
         </aside>
 
-        <main className="flex-1">
-          <div className="border-b border-[#dce9f6] bg-white/80 px-5 py-4 backdrop-blur-md sm:px-8">
+        <main ref={mainRef} className="app-main flex-1">
+          <div className="app-page-header border-b border-[#dce9f6] bg-white/90 px-5 py-4 backdrop-blur-md sm:px-8">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#1f5dcc]">BK-Youth Student</p>
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Lịch sử hoạt động của tôi</h1>
                 <p className="mt-1 text-slate-500">Theo dõi các hoạt động đã tham gia và những sự kiện bạn đang chờ diễn ra.</p>
               </div>
-              <div className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3">
+              <div
+                className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3"
+                aria-label="Mở trang chỉnh sửa thông tin cá nhân"
+              >
                 <div className="flex items-center gap-3">
                   {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
@@ -398,27 +409,6 @@ export default function StudentActivityHistoryPage() {
               </section>
             </div>
 
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                to="/student/events"
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white transition-all hover:bg-[#205fd8]"
-              >
-                <Ticket className="h-5 w-5" />
-                Quay lại sự kiện của tôi
-              </Link>
-              <Link
-                to="/profile"
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]"
-              >
-                Hồ sơ cá nhân
-              </Link>
-              <Link
-                to="/student/chat"
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]"
-              >
-                Chat sinh viên
-              </Link>
-            </div>
           </div>
         </main>
       </div>

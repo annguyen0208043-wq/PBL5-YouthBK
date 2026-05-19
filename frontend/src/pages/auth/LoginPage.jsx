@@ -7,8 +7,6 @@ import { motion } from 'framer-motion';
 import AuthShowcase from '../../components/auth/AuthShowcase';
 import { BachKhoaLogo, DoanLogo } from '../../components/auth/AuthLogos';
 import { authContainerVariants, authItemVariants } from '../../shared/auth/authData';
-import { isAdminRole, isLienChiRole } from '../../shared/user/session';
-
 const API_URL = 'http://localhost:5000/api/auth';
 
 export default function LoginPage() {
@@ -146,9 +144,9 @@ export default function LoginPage() {
                     <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-[#1f5dcc] focus:ring-[#1f5dcc]" />
                     <span className="font-medium">Ghi nhớ đăng nhập</span>
                   </label>
-                  <a href="#" className="font-semibold text-[#395483] transition-colors hover:text-[#1f5dcc]">
+                  <Link to="/forgot-password" className="font-semibold text-[#395483] transition-colors hover:text-[#1f5dcc]">
                     Quên mật khẩu?
-                  </a>
+                  </Link>
                 </motion.div>
 
                 <motion.div variants={authItemVariants}>
