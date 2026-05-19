@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { BellRing, CalendarClock, PencilLine, XCircle, Loader } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { BellRing, CalendarClock, PencilLine, XCircle, Loader, X, MapPin, Users, Tag, Clock } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
@@ -173,7 +173,7 @@ export default function LienChiManagedEventsPage() {
           <p className="mt-1 text-sm">Hãy tạo sự kiện mới từ mục &quot;Tạo sự kiện&quot;</p>
         </div>
       ) : (
-        <div className={`grid gap-6 transition-all duration-300 ${selectedEvent ? 'xl:grid-cols-[1fr_1.2fr]' : 'grid-cols-1'}`}>
+        <div className="grid gap-6 grid-cols-1">
           <section className="space-y-4">
             <div className="rounded-[28px] border border-[#dce8f5] bg-white p-5 shadow-sm">
               <input 
@@ -228,120 +228,142 @@ export default function LienChiManagedEventsPage() {
             </div>
           </section>
 
-          {selectedEvent && (
-            <section className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#e7eff8] pb-5">
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Thông tin sự kiện</p>
-                  <h2 className="mt-2 text-3xl font-black text-[#132b57]">{selectedEvent.title}</h2>
-                  <p className="mt-2 text-sm text-slate-500">{selectedEvent.creator?.name || 'N/A'}</p>
-                </div>
-                <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-none ${statusTone(selectedEvent.status)}`}>{translateStatus(selectedEvent.status)}</span>
-              </div>
-
-              {selectedEvent.images && selectedEvent.images.length > 0 && (
-                <div className="mt-5 flex snap-x gap-3 overflow-x-auto pb-3 scrollbar-hide">
-                  {selectedEvent.images.map(img => (
-                    <img key={img.id} src={img.imageUrl} alt="Sự kiện" className="h-48 w-72 shrink-0 snap-center rounded-2xl object-cover shadow-sm" />
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-[24px] bg-[#f6faff] p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Sức chứa</p>
-                  <p className="mt-2 font-semibold text-slate-700">
-                    {selectedEvent.capacity || selectedEvent.maxParticipants || 'Không giới hạn'} sinh viên
-                  </p>
-                </div>
-                <div className="rounded-[24px] bg-[#f6faff] p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Danh mục</p>
-                  <p className="mt-2 font-semibold text-slate-700">{selectedEvent.category || 'N/A'}</p>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">Thời gian bắt đầu</span>
-                  <input defaultValue={new Date(selectedEvent.startTime).toLocaleString('vi-VN') || ''} className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" readOnly />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">Địa điểm</span>
-                  <input defaultValue={selectedEvent.location} className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" readOnly />
-                </label>
-              </div>
-
-              <label className="mt-4 block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Mô tả</span>
-                <textarea rows="5" defaultValue={selectedEvent.description} className="w-full rounded-[24px] border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" readOnly />
-              </label>
-
-              {selectedEvent.approvals && selectedEvent.approvals.length > 0 && ['revision_requested', 'rejected', 'cancelled'].includes(selectedEvent.status) && (
-                <div className="mt-4 rounded-[24px] border border-rose-200 bg-rose-50 p-4">
-                  <p className="text-sm font-bold uppercase tracking-[0.16em] text-rose-700">Phản hồi từ admin</p>
-                  <p className="mt-2 text-sm text-rose-900">
-                    {selectedEvent.approvals[selectedEvent.approvals.length - 1].note}
-                  </p>
-                </div>
-              )}
-
-              {selectedEvent.timelines && selectedEvent.timelines.length > 0 && (
-                <div className="mt-4 rounded-[24px] bg-[#f8fbff] p-4">
-                  <div className="flex items-center gap-2 text-[#132b57]">
-                    <CalendarClock className="h-5 w-5 text-[#1747a6]" />
-                    <p className="font-semibold">Timeline</p>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {selectedEvent.timelines.map((item) => (
-                      <div key={item.id} className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600">
-                        <p className="font-semibold text-slate-700">{new Date(item.dateTime).toLocaleString('vi-VN')}</p>
-                        <p className="mt-1">{item.description}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {notice && <div className="mt-4 rounded-[24px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{notice}</div>}
-
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => navigate(`/lien-chi/events/manage/edit/${selectedEvent.id}`)}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white transition-all hover:bg-[#205fd8]"
-                >
-                  <PencilLine className="h-5 w-5" />
-                  {selectedEvent.status === 'approved' ? 'Xin sửa sự kiện' : 'Sửa sự kiện toàn diện'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPostponeModal(true)}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-slate-600 transition-all hover:bg-[#f3f8ff]"
-                >
-                  <CalendarClock className="h-5 w-5 text-[#1747a6]" />
-                  Xin hoãn
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCancelModal(true)}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-3 font-semibold text-rose-700 transition-all hover:bg-rose-100"
-                >
-                  <XCircle className="h-5 w-5" />
-                  Xin huỷ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNotice('Đã ghi nhận yêu cầu gửi email thông báo thay đổi đến sinh viên đã đăng ký.')}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-[#eef6ff] px-5 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#e4f0ff]"
-                >
-                  <BellRing className="h-5 w-5" />
-                  Thông báo đến sinh viên
-                </button>
-              </div>
-            </section>
-          )}
           </div>
         )}
+
+        {/* ===== DETAIL MODAL OVERLAY ===== */}
+        <AnimatePresence>
+          {selectedEvent && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 py-6"
+              onClick={() => { setSelectedEventId(''); setNotice(''); }}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 40, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 40, scale: 0.97 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 350 }}
+                className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[28px] bg-white p-6 md:p-8 shadow-2xl scrollbar-hide"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close */}
+                <button onClick={() => { setSelectedEventId(''); setNotice(''); }} className="absolute right-5 top-5 rounded-full bg-slate-100 p-2 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 z-10">
+                  <X className="h-5 w-5" />
+                </button>
+
+                {/* Header */}
+                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#e7eff8] pb-5 pr-10">
+                  <div>
+                    <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Chi tiết sự kiện</p>
+                    <h2 className="mt-2 text-2xl md:text-3xl font-black text-[#132b57]">{selectedEvent.title}</h2>
+                    <p className="mt-1 text-sm text-slate-500">Người tạo: {selectedEvent.creator?.name || 'N/A'}</p>
+                  </div>
+                  <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-none ${statusTone(selectedEvent.status)}`}>{translateStatus(selectedEvent.status)}</span>
+                </div>
+
+                {/* Images */}
+                {selectedEvent.images && selectedEvent.images.length > 0 && (
+                  <div className="mt-5 flex snap-x gap-3 overflow-x-auto pb-3 scrollbar-hide">
+                    {selectedEvent.images.map(img => (
+                      <img key={img.id} src={img.imageUrl} alt="Sự kiện" className="h-48 w-72 shrink-0 snap-center rounded-2xl object-cover shadow-sm" />
+                    ))}
+                  </div>
+                )}
+
+                {/* Info cards */}
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="flex items-center gap-3 rounded-2xl bg-[#f6faff] p-4">
+                    <Users className="h-5 w-5 text-[#1747a6]" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-400">Sức chứa</p>
+                      <p className="font-semibold text-slate-700">{selectedEvent.capacity || selectedEvent.maxParticipants || '∞'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-2xl bg-[#f6faff] p-4">
+                    <Tag className="h-5 w-5 text-[#1747a6]" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-400">Danh mục</p>
+                      <p className="font-semibold text-slate-700">{selectedEvent.category || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-2xl bg-[#f6faff] p-4">
+                    <Clock className="h-5 w-5 text-[#1747a6]" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-400">Bắt đầu</p>
+                      <p className="font-semibold text-slate-700 text-xs">{new Date(selectedEvent.startTime).toLocaleString('vi-VN')}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-2xl bg-[#f6faff] p-4">
+                    <MapPin className="h-5 w-5 text-[#1747a6]" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-400">Địa điểm</p>
+                      <p className="font-semibold text-slate-700 text-xs">{selectedEvent.location}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description */}
+                {selectedEvent.description && (
+                  <div className="mt-4">
+                    <p className="mb-2 text-sm font-semibold text-slate-700">Mô tả</p>
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 whitespace-pre-wrap">{selectedEvent.description}</div>
+                  </div>
+                )}
+
+                {/* Admin feedback */}
+                {selectedEvent.approvals && selectedEvent.approvals.length > 0 && ['revision_requested', 'rejected', 'cancelled'].includes(selectedEvent.status) && (
+                  <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                    <p className="text-sm font-bold uppercase tracking-[0.16em] text-rose-700">Phản hồi từ admin</p>
+                    <p className="mt-2 text-sm text-rose-900">{selectedEvent.approvals[selectedEvent.approvals.length - 1].note}</p>
+                  </div>
+                )}
+
+                {/* Timeline */}
+                {selectedEvent.timelines && selectedEvent.timelines.length > 0 && (
+                  <div className="mt-4 rounded-2xl bg-[#f8fbff] p-4">
+                    <div className="flex items-center gap-2 text-[#132b57]">
+                      <CalendarClock className="h-5 w-5 text-[#1747a6]" />
+                      <p className="font-semibold">Timeline</p>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {selectedEvent.timelines.map((item) => (
+                        <div key={item.id} className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600">
+                          <p className="font-semibold text-slate-700">{new Date(item.dateTime).toLocaleString('vi-VN')}</p>
+                          <p className="mt-1">{item.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {notice && <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{notice}</div>}
+
+                {/* Actions */}
+                <div className="mt-6 flex flex-wrap gap-3 border-t border-[#e7eff8] pt-5">
+                  <button type="button" onClick={() => navigate(`/lien-chi/events/manage/edit/${selectedEvent.id}`)} className="inline-flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white transition-all hover:bg-[#205fd8]">
+                    <PencilLine className="h-5 w-5" />
+                    {selectedEvent.status === 'approved' ? 'Xin sửa sự kiện' : 'Sửa sự kiện toàn diện'}
+                  </button>
+                  <button type="button" onClick={() => setShowPostponeModal(true)} className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-slate-600 transition-all hover:bg-[#f3f8ff]">
+                    <CalendarClock className="h-5 w-5 text-[#1747a6]" />
+                    Xin hoãn
+                  </button>
+                  <button type="button" onClick={() => setShowCancelModal(true)} className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-3 font-semibold text-rose-700 transition-all hover:bg-rose-100">
+                    <XCircle className="h-5 w-5" />
+                    Xin huỷ
+                  </button>
+                  <button type="button" onClick={() => setNotice('Đã ghi nhận yêu cầu gửi email thông báo thay đổi đến sinh viên đã đăng ký.')} className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-[#eef6ff] px-5 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#e4f0ff]">
+                    <BellRing className="h-5 w-5" />
+                    Thông báo đến sinh viên
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {showCancelModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
