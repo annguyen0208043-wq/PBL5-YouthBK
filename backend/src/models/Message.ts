@@ -8,6 +8,7 @@ export class Message extends Model {
   declare conversationId: number;
   declare senderId: number;
   declare content: string;
+  declare attachments: any | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -38,6 +39,11 @@ Message.init(
     content: {
       type: DataTypes.TEXT,
       allowNull: false
+    }
+    ,
+    attachments: {
+      type: DataTypes.JSON,
+      allowNull: true
     }
   },
   {

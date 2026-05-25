@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import http from 'http';
 import sequelize from './config/database';
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
@@ -9,6 +10,7 @@ import eventRoutes from './routes/eventRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import chatRoutes from './routes/chatRoutes';
 import certificateRoutes from './routes/certificateRoutes';
+import { registerChatSocket } from './sockets/chatSocket';
 
 // Import models để đảm bảo associations được thiết lập
 import './models/User';
@@ -21,6 +23,8 @@ import './models/Notification';
 import './models/NotificationRecipient';
 import './models/Certificate';
 import './models/Conversation';
+import './models/ConversationMember';
+import './models/ChatInvitation';
 import './models/Message';
 import './models/AuditLog';
 
@@ -28,6 +32,8 @@ dotenv.config();
 
 const app: Express = express();
 const PORT = process.env.PORT || 5000;
+const httpServer = http.createServer(app);
+registerChatSocket(httpServer);
 
 // Middleware
 app.use(cors({
@@ -59,10 +65,17 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log('Database connected successfully');
 
-    await sequelize.sync({ alter: process.env.NODE_ENV === 'development' });
+    // Avoid automatic schema alterations by default (can enable with DB_AUTO_ALTER=true)
+    if (process.env.DB_AUTO_ALTER === 'true') {
+      await sequelize.sync({ alter: true });
+      console.log('Database models synchronized (alter)');
+    } else {
+      await sequelize.sync();
+      console.log('Database models synchronized');
+    }
     console.log('Database models synchronized');
 
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
     });
   } catch (error) {
