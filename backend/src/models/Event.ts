@@ -11,12 +11,23 @@ export class Event extends Model {
   declare endDate: Date;
   declare startTime: Date;
   declare endTime: Date;
+  declare registrationDeadline: Date | null;
   declare createdBy: number;
-  declare status: 'pending' | 'approved' | 'ongoing' | 'completed' | 'cancelled' | 'revision_requested' | 'rejected';
+  declare createdByRole: 'admin' | 'lienchi';
+  declare status: 'draft' | 'pending' | 'revision_required' | 'approved' | 'update_requested' | 'cancel_requested' | 'postpone_requested' | 'cancelled' | 'postponed' | 'ongoing' | 'ended' | 'completed' | 'revision_requested' | 'rejected';
   declare image: string | null;
   declare capacity: number | null;
   declare maxParticipants: number | null;
+  declare maxSlots: number | null;
+  declare currentSlots: number;
   declare category: string | null;
+  declare reviewHistory: any[] | null;
+  declare rejectionReason: string | null;
+  declare revisionMessage: string | null;
+  declare pendingChanges: any | null;
+  declare pendingChangeType: 'update' | 'cancel' | 'postpone' | null;
+  declare pendingChangeReason: string | null;
+  declare pendingProposedDate: Date | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -56,6 +67,10 @@ Event.init(
       type: DataTypes.DATE,
       allowNull: true
     },
+    registrationDeadline: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
     createdBy: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -64,9 +79,13 @@ Event.init(
         key: 'id'
       }
     },
+    createdByRole: {
+      type: DataTypes.ENUM('admin', 'lienchi'),
+      defaultValue: 'lienchi'
+    },
     status: {
-      type: DataTypes.ENUM('pending', 'approved', 'ongoing', 'completed', 'cancelled', 'revision_requested', 'rejected'),
-      defaultValue: 'pending'
+      type: DataTypes.ENUM('draft', 'pending', 'revision_required', 'approved', 'update_requested', 'cancel_requested', 'postpone_requested', 'cancelled', 'postponed', 'ongoing', 'ended', 'completed', 'revision_requested', 'rejected'),
+      defaultValue: 'draft'
     },
     image: {
       type: DataTypes.STRING,
@@ -80,8 +99,45 @@ Event.init(
       type: DataTypes.INTEGER,
       allowNull: true
     },
+    maxSlots: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    currentSlots: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
+    },
     category: {
       type: DataTypes.STRING,
+      allowNull: true
+    },
+    reviewHistory: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: []
+    },
+    rejectionReason: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    revisionMessage: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    pendingChanges: {
+      type: DataTypes.JSON,
+      allowNull: true
+    },
+    pendingChangeType: {
+      type: DataTypes.ENUM('update', 'cancel', 'postpone'),
+      allowNull: true
+    },
+    pendingChangeReason: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    pendingProposedDate: {
+      type: DataTypes.DATE,
       allowNull: true
     }
   },

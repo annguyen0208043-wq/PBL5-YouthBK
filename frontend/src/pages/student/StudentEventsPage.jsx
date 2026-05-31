@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
-import { defaultRegisteredEventIds, STORAGE_ATTENDANCE_CHECKINS_KEY, STORAGE_ATTENDANCE_WINDOW_KEY, STORAGE_REGISTERED_EVENTS_KEY, studentEvents } from '../../shared/student/studentData';
+import { defaultRegisteredEventIds, STORAGE_ATTENDANCE_CHECKINS_KEY, STORAGE_ATTENDANCE_WINDOW_KEY, STORAGE_REGISTERED_EVENTS_KEY } from '../../shared/student/studentData';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
 
 const EARTH_RADIUS_METERS = 6371000;
@@ -281,9 +281,10 @@ export default function StudentEventsPage() {
               registered: 0,
               status: e.status === 'ongoing' ? 'Sắp diễn ra' : 'Đang mở đăng ký',
               description: e.description,
-              tags: ['Cập nhật mới'],
+              tags: e.tags || ['Cập nhật mới'],
               accent: 'from-blue-500 to-indigo-500',
-              attendanceConfig: { gpsCenter: { lat: 16.074061, lng: 108.150720 }, allowedRadiusMeters: 100, qrValue: `BKYOUTH-${e.id}` }
+              attendanceConfig: { gpsCenter: { lat: 16.074061, lng: 108.150720 }, allowedRadiusMeters: 100, qrValue: `BKYOUTH-${e.id}` },
+              imageUrl: e.images && e.images.length > 0 ? e.images[0].imageUrl : null,
             };
           });
           
@@ -297,7 +298,7 @@ export default function StudentEventsPage() {
   }, []);
 
   const visibleEvents = useMemo(() => {
-    const allEvents = [...dbEvents, ...studentEvents];
+    const allEvents = [...dbEvents];
     return allEvents
       .map((event) => ({
         ...event,
@@ -679,6 +680,11 @@ export default function StudentEventsPage() {
                           <span className="rounded-full bg-[#fff3e8] px-3 py-1 text-xs font-bold text-[#cb6d13]">{event.category}</span>
                         </div>
 
+                        {event.imageUrl && (
+                          <div className="mb-4 overflow-hidden rounded-2xl">
+                            <img src={event.imageUrl} alt={event.title} className="h-44 w-full object-cover" />
+                          </div>
+                        )}
                         <h2 className="mt-4 text-2xl font-black text-[#132b57]">{event.title}</h2>
                         <p className="mt-2 text-sm font-semibold text-[#1f5dcc]">{event.organizer}</p>
                         <p className="mt-4 text-sm leading-6 text-slate-600">{event.description}</p>

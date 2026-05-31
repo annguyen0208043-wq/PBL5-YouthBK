@@ -43,9 +43,9 @@ export default function LoginPage() {
         userRole === 'ban cán sự' ||
         userRole === 'ban can su'
       ) {
-        navigate('/sinhvien');
+        navigate('/sinhvien/event');
       } else {
-        navigate('/sinhvien');
+        navigate('/sinhvien/event');
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Đăng nhập thất bại');

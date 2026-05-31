@@ -50,9 +50,9 @@ export default function App() {
       <Route path="/lien-chi/evidences" element={<LienChiEvidenceApprovalPage />} />
       
       {/* Student Routes */}
-      <Route path="/sinhvien" element={<StudentEventsPage />} />
+      <Route path="/sinhvien" element={<Navigate to="/sinhvien/event" replace />} />
       <Route path="/sinhvien/chat" element={<StudentChatPage />} />
-      <Route path="/sinhvien/events" element={<StudentEventsPage />} />
+      <Route path="/sinhvien/event" element={<StudentEventsPage />} />
       <Route path="/sinhvien/history" element={<StudentActivityHistoryPage />} />
       <Route path="/sinhvien/profile" element={<PersonalProfilePage />} />
     </Routes>

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
+import CustomDateTimePicker from '../../components/common/CustomDateTimePicker';
 
 export default function LienChiEditEventPage() {
   const { id } = useParams();
@@ -93,7 +94,11 @@ export default function LienChiEditEventPage() {
       return;
     }
 
-    setTimelineItems((prev) => [...prev, { ...newTimelineItem }]);
+    setTimelineItems((prev) => {
+      const newList = [...prev, { ...newTimelineItem }];
+      newList.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+      return newList;
+    });
     setNewTimelineItem({ dateTime: '', description: '' });
     setNotice('');
   };
@@ -228,24 +233,20 @@ export default function LienChiEditEventPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">Bắt đầu *</span>
-                <input
-                  type="datetime-local"
-                  name="startTime"
+                <CustomDateTimePicker
                   value={formData.startTime}
-                  onChange={handleInputChange}
-                  className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
+                  onChange={(val) => setFormData(prev => ({ ...prev, startTime: val }))}
+                  placeholder="Chọn ngày giờ bắt đầu"
                 />
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">Kết thúc *</span>
-                <input
-                  type="datetime-local"
-                  name="endTime"
+                <CustomDateTimePicker
                   value={formData.endTime}
-                  onChange={handleInputChange}
+                  onChange={(val) => setFormData(prev => ({ ...prev, endTime: val }))}
                   min={formData.startTime}
                   disabled={!formData.startTime}
-                  className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] disabled:cursor-not-allowed disabled:bg-slate-100"
+                  placeholder="Chọn ngày giờ kết thúc"
                 />
                 {!formData.startTime && <p className="mt-1 text-xs text-slate-500">Vui lòng chọn thời gian bắt đầu trước</p>}
               </label>
@@ -302,15 +303,31 @@ export default function LienChiEditEventPage() {
               </div>
             )}
             {imageFiles.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {imageFiles.map((file, idx) => (
-                  <div key={`${file.name}-${idx}`} className="flex items-center justify-between rounded-lg bg-slate-50 p-2">
-                    <span className="text-xs text-slate-600">{file.name}</span>
-                    <button type="button" onClick={() => handleRemoveFile(idx)} className="text-red-500 hover:text-red-700">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
+              <div className="mt-4 space-y-3">
+                {imageFiles.map((file, idx) => {
+                  const isImage = file.type.startsWith('image/');
+                  const previewUrl = isImage ? URL.createObjectURL(file) : null;
+                  return (
+                    <div key={`${file.name}-${idx}`} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                      <div className="flex items-center gap-4 overflow-hidden">
+                        {isImage ? (
+                          <img src={previewUrl} alt="preview" className="h-16 w-16 rounded-lg object-cover" />
+                        ) : (
+                          <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
+                            <FileImage className="h-8 w-8" />
+                          </div>
+                        )}
+                        <div className="truncate">
+                          <p className="truncate text-sm font-semibold text-slate-700">{file.name}</p>
+                          <p className="text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => handleRemoveFile(idx)} className="rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </motion.div>
@@ -329,15 +346,14 @@ export default function LienChiEditEventPage() {
             <div className="mt-4 space-y-3">
               {timelineItems.map((item, idx) => (
                 <div key={idx} className="flex flex-wrap items-center gap-3 rounded-2xl bg-[#f6faff] px-4 py-3 text-sm text-slate-600">
-                  <input
-                    type="datetime-local"
+                  <CustomDateTimePicker
                     value={item.dateTime}
-                    onChange={(e) => {
+                    onChange={(val) => {
                       const newItems = [...timelineItems];
-                      newItems[idx].dateTime = e.target.value;
+                      newItems[idx].dateTime = val;
                       setTimelineItems(newItems);
                     }}
-                    className="rounded-xl border border-[#dce8f5] px-3 py-2 outline-none focus:border-[#1f5dcc]"
+                    placeholder="Thời gian"
                   />
                   <input
                     type="text"
@@ -358,16 +374,14 @@ export default function LienChiEditEventPage() {
             </div>
 
             <div className="mt-4 space-y-3">
-              <label className="block">
+              <label className="block relative z-40">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">Ngày giờ timeline *</span>
-                <input
-                  type="datetime-local"
+                <CustomDateTimePicker
                   value={newTimelineItem.dateTime}
-                  onChange={(e) => setNewTimelineItem((prev) => ({ ...prev, dateTime: e.target.value }))}
+                  onChange={(val) => setNewTimelineItem((prev) => ({ ...prev, dateTime: val }))}
                   min={formData.startTime}
-                  max={formData.endTime}
-                  className="w-full rounded-2xl border border-[#dce8f5] px-3 py-2 text-sm outline-none focus:border-[#1f5dcc]"
                   disabled={!formData.startTime || !formData.endTime}
+                  placeholder="Chọn mốc thời gian"
                 />
                 {(!formData.startTime || !formData.endTime) && <p className="mt-1 text-xs text-slate-500">Vui lòng chọn thời gian sự kiện trước</p>}
               </label>

@@ -11,6 +11,8 @@ import notificationRoutes from './routes/notificationRoutes';
 import chatRoutes from './routes/chatRoutes';
 import certificateRoutes from './routes/certificateRoutes';
 import { registerChatSocket } from './sockets/chatSocket';
+import { initCronJobs } from './cron/event-status.cron';
+
 
 // Import models để đảm bảo associations được thiết lập
 import './models/User';
@@ -70,10 +72,12 @@ const startServer = async () => {
       await sequelize.sync({ alter: true });
       console.log('Database models synchronized (alter)');
     } else {
-      await sequelize.sync();
+      await sequelize.sync({ alter: true }); // Automatically applying schema changes for development
       console.log('Database models synchronized');
     }
     console.log('Database models synchronized');
+
+    initCronJobs();
 
     httpServer.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
