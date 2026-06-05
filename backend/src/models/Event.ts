@@ -28,6 +28,7 @@ export class Event extends Model {
   declare pendingChangeType: 'update' | 'cancel' | 'postpone' | null;
   declare pendingChangeReason: string | null;
   declare pendingProposedDate: Date | null;
+  declare communityPoints: number;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -139,6 +140,10 @@ Event.init(
     pendingProposedDate: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    communityPoints: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
     }
   },
   {

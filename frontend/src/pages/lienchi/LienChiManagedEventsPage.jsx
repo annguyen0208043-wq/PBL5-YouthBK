@@ -8,6 +8,7 @@ import { getStoredUserProfile } from '../../shared/user/session';
 
 function translateStatus(status) {
   switch (status) {
+    case 'draft': return 'Nháp';
     case 'pending': return 'Chờ duyệt';
     case 'approved': return 'Đã duyệt';
     case 'ongoing': return 'Đang diễn ra';
@@ -22,6 +23,7 @@ function translateStatus(status) {
 function statusTone(status) {
   if (['approved', 'ongoing', 'completed', 'Đã duyệt', 'Đang diễn ra', 'Đã kết thúc'].includes(status)) return 'bg-emerald-100 text-emerald-700';
   if (['revision_requested', 'cancelled', 'rejected', 'Cần sửa chữa', 'Đã hủy', 'Bị từ chối'].includes(status)) return 'bg-rose-100 text-rose-700';
+  if (['draft', 'Nháp'].includes(status)) return 'bg-slate-100 text-slate-700';
   return 'bg-amber-100 text-amber-700';
 }
 
@@ -80,7 +82,7 @@ export default function LienChiManagedEventsPage() {
     fetchEvents();
   }, [user.fullName]);
 
-  const filters = ['Tất cả', 'Chờ duyệt', 'Đã duyệt', 'Đang diễn ra', 'Cần sửa chữa', 'Đã hủy'];
+  const filters = ['Tất cả', 'Nháp', 'Chờ duyệt', 'Đã duyệt', 'Đang diễn ra', 'Cần sửa chữa', 'Đã hủy'];
   
   const visibleEvents = useMemo(() => {
     return events.filter((event) => {
@@ -96,6 +98,23 @@ export default function LienChiManagedEventsPage() {
   const updateStatus = (nextStatus, message) => {
     setEvents((current) => current.map((item) => (item.id === selectedEventId ? { ...item, status: nextStatus, note: message } : item)));
     setNotice(message);
+  };
+
+  const handlePublish = async (eventId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/events/${eventId}/submit`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) throw new Error('Lỗi khi gửi duyệt sự kiện');
+      setNotice('Đã gửi duyệt sự kiện thành công.');
+      setEvents(current => current.map(item => item.id === eventId ? { ...item, status: 'pending' } : item));
+    } catch (err) {
+      setNotice(err.message);
+    }
   };
 
   const handleRequestCancel = async () => {
@@ -343,6 +362,11 @@ export default function LienChiManagedEventsPage() {
 
                 {/* Actions */}
                 <div className="mt-6 flex flex-wrap gap-3 border-t border-[#e7eff8] pt-5">
+                  {['draft', 'revision_requested'].includes(selectedEvent.status) && (
+                    <button type="button" onClick={() => handlePublish(selectedEvent.id)} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 font-bold text-white transition-all hover:bg-emerald-700">
+                      Gửi duyệt
+                    </button>
+                  )}
                   <button type="button" onClick={() => navigate(`/lien-chi/events/manage/edit/${selectedEvent.id}`)} className="inline-flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white transition-all hover:bg-[#205fd8]">
                     <PencilLine className="h-5 w-5" />
                     {selectedEvent.status === 'approved' ? 'Xin sửa sự kiện' : 'Sửa sự kiện toàn diện'}

@@ -1,19 +1,26 @@
 import { Router } from 'express';
 import {
-  createEvent, getAllEvents, getEventById, updateEvent, deleteEvent, submitEvent,
-  registerForEvent, getPendingEvents, approveEvent, rejectEvent, requestEventRevision,
+  createEvent, getEvents, getEventById, updateEvent, deleteEvent, submitEvent,
+  registerForEvent, cancelRegistration, getPendingEvents, approveEvent, rejectEvent, requestEventRevision,
   approveUpdate, approveCancel, approvePostpone, rejectRequest,
-  requestUpdate, requestCancel, requestPostpone
+  requestUpdate, requestCancel, requestPostpone,
+  getEventRegistrations, manuallyAddRegistration, updateRegistrationStatus, deleteRegistration
 } from '../controllers/eventController';
 import { authMiddleware, adminMiddleware, adminOrLienChiMiddleware } from '../middlewares/authMiddleware';
 import { uploadEventImages } from '../config/multer';
 
 const router = Router();
 
+// Lấy danh sách đăng ký của 1 sự kiện (Lien Chi / Admin)
+router.get('/:id/registrations', authMiddleware, adminOrLienChiMiddleware, getEventRegistrations);
+router.post('/:id/registrations/manual', authMiddleware, adminOrLienChiMiddleware, manuallyAddRegistration);
+router.put('/registrations/:registrationId', authMiddleware, adminOrLienChiMiddleware, updateRegistrationStatus);
+router.delete('/registrations/:registrationId', authMiddleware, adminOrLienChiMiddleware, deleteRegistration);
+
 // Public / General
-router.get('/', getAllEvents);
+router.get('/', authMiddleware, getEvents);
 router.get('/pending', authMiddleware, adminMiddleware, getPendingEvents);
-router.get('/:id', getEventById);
+router.get('/:id', authMiddleware, getEventById);
 
 // LienChi / Admin Create & Update
 router.post('/', authMiddleware, adminOrLienChiMiddleware, uploadEventImages.array('images', 10), createEvent);
@@ -27,7 +34,8 @@ router.post('/:id/request-cancel', authMiddleware, adminOrLienChiMiddleware, req
 router.post('/:id/request-postpone', authMiddleware, adminOrLienChiMiddleware, requestPostpone);
 
 // Đăng ký sự kiện (student)
-router.post('/register', authMiddleware, registerForEvent);
+router.post('/:id/register', authMiddleware, registerForEvent);
+router.post('/:id/cancel-registration', authMiddleware, cancelRegistration);
 
 // Admin: Duyệt / Từ chối / Yêu cầu chỉnh sửa
 router.put('/:id/approve', authMiddleware, adminMiddleware, approveEvent);

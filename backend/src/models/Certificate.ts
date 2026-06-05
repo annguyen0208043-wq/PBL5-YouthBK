@@ -15,6 +15,7 @@ export class Certificate extends Model {
   declare stampCode: string | null;
   declare note: string | null;
   declare certificateUrl: string | null;
+  declare earnedPoints: number;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -77,6 +78,10 @@ Certificate.init(
     certificateUrl: {
       type: DataTypes.STRING,
       allowNull: true
+    },
+    earnedPoints: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
     }
   },
   {

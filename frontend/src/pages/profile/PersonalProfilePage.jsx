@@ -131,8 +131,30 @@ function StatusPill({ value }) {
 
 export default function PersonalProfilePage() {
   const [activeProfileTab, setActiveProfileTab] = useState('edit');
-  const user = getStoredUserProfile();
+  const [user, setUser] = useState(getStoredUserProfile());
   const userInitials = getUserInitials(user.fullName);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/users/profile', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setUser(prev => ({
+            ...prev,
+            ...data.user,
+            communityPoints: data.user.communityPoints || 0
+          }));
+        }
+      } catch (error) {
+        console.error('Fetch profile error:', error);
+      }
+    };
+    fetchProfile();
+  }, []);
 
   return (
     <ProfileLayout
@@ -185,6 +207,7 @@ export default function PersonalProfilePage() {
                 ['Lớp sinh hoạt', user.className],
                 ['Email', user.email],
                 ['Vai trò', user.role],
+                ['Điểm cộng đồng', user.communityPoints !== undefined ? user.communityPoints : 0],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-2xl bg-[#f8fbff] p-4">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>

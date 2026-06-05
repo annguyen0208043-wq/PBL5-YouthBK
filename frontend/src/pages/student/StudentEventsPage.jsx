@@ -178,7 +178,6 @@ export default function StudentEventsPage() {
   const userInitials = getUserInitials(user.fullName);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('Tất cả');
-  const [registeredIds, setRegisteredIds] = useState(getInitialRegisteredEvents);
   const [attendanceCheckins, setAttendanceCheckins] = useState(getInitialAttendanceCheckins);
   const [openedAttendanceEventId, setOpenedAttendanceEventId] = useState('');
   const [isCheckingGps, setIsCheckingGps] = useState(false);
@@ -204,10 +203,6 @@ export default function StudentEventsPage() {
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, left: 0 });
   }, [location.pathname]);
-
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_REGISTERED_EVENTS_KEY, JSON.stringify(registeredIds));
-  }, [registeredIds]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_ATTENDANCE_CHECKINS_KEY, JSON.stringify(attendanceCheckins));
@@ -277,14 +272,16 @@ export default function StudentEventsPage() {
               time: timeRange,
               location: e.location,
               points: '+5 ĐRL',
-              slots: e.maxParticipants || e.capacity || 100,
-              registered: 0,
+              slots: e.maxSlots || e.maxParticipants || e.capacity || 100,
+              registered: e.currentSlots || 0,
+              enrolled: e.isRegistered || false,
               status: e.status === 'ongoing' ? 'Sắp diễn ra' : 'Đang mở đăng ký',
               description: e.description,
               tags: e.tags || ['Cập nhật mới'],
               accent: 'from-blue-500 to-indigo-500',
               attendanceConfig: { gpsCenter: { lat: 16.074061, lng: 108.150720 }, allowedRadiusMeters: 100, qrValue: `BKYOUTH-${e.id}` },
               imageUrl: e.images && e.images.length > 0 ? e.images[0].imageUrl : null,
+              communityPoints: e.communityPoints || 0,
             };
           });
           
@@ -294,6 +291,8 @@ export default function StudentEventsPage() {
         console.error(err);
       }
     };
+
+    fetchDbEventsRef.current = fetchDbEvents;
     fetchDbEvents();
   }, []);
 
@@ -302,7 +301,6 @@ export default function StudentEventsPage() {
     return allEvents
       .map((event) => ({
         ...event,
-        enrolled: registeredIds.includes(event.id),
         attendance: attendanceCheckins[event.id] || null,
         attendanceGate: buildAttendanceGate(event, attendanceWindowConfig),
       }))
@@ -321,7 +319,7 @@ export default function StudentEventsPage() {
 
         return matchesSearch && matchesFilter;
       });
-  }, [activeFilter, registeredIds, search, attendanceCheckins, attendanceWindowConfig]);
+  }, [dbEvents, activeFilter, search, attendanceCheckins, attendanceWindowConfig]);
 
   const stopQrScanner = () => {
     if (qrLoopFrameRef.current) {
@@ -475,14 +473,41 @@ export default function StudentEventsPage() {
     setOpenedAttendanceEventId('');
   };
 
-  const toggleRegistration = (eventId, eventTitle) => {
-    const isEnrolled = registeredIds.includes(eventId);
-    setRegisteredIds((current) => (isEnrolled ? current.filter((id) => id !== eventId) : [...current, eventId]));
-    setFeedback(isEnrolled ? `Bạn đã hủy đăng ký: ${eventTitle}` : `Đăng ký thành công: ${eventTitle}`);
+  const fetchDbEventsRef = useRef(null); // to re-fetch events
+
+  const toggleRegistration = async (eventId, eventTitle, isEnrolled, realId) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const endpoint = isEnrolled ? `/api/events/${realId}/cancel-registration` : `/api/events/${realId}/register`;
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setFeedback(data.message || 'Có lỗi xảy ra');
+      } else {
+        setFeedback(isEnrolled ? `Bạn đã hủy đăng ký: ${eventTitle}` : `Đăng ký thành công: ${eventTitle}`);
+        // Re-fetch events to get updated slots and registration status
+        if (fetchDbEventsRef.current) {
+          fetchDbEventsRef.current();
+        }
+      }
+    } catch (err) {
+      setFeedback('Lỗi kết nối máy chủ');
+    }
+    
     if (toastTimerRef.current) {
       window.clearTimeout(toastTimerRef.current);
     }
-    toastTimerRef.current = window.setTimeout(() => setFeedback(''), 2200);
+    toastTimerRef.current = window.setTimeout(() => setFeedback(''), 3000);
   };
 
   const toggleAttendancePanel = (eventId) => {
@@ -644,7 +669,7 @@ export default function StudentEventsPage() {
                   </motion.div>
                   <div>
                     <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Tình trạng hiện tại</p>
-                    <h2 className="mt-1 text-2xl font-black text-[#132b57]">{registeredIds.length} sự kiện đã đăng ký</h2>
+                    <h2 className="mt-1 text-2xl font-black text-[#132b57]">{dbEvents.filter(e => e.enrolled).length} sự kiện đã đăng ký</h2>
                   </div>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -655,7 +680,7 @@ export default function StudentEventsPage() {
 
             <motion.div variants={listVariants} initial="hidden" animate="show" className="grid gap-5">
               {visibleEvents.map((event) => {
-                const usedSlots = event.enrolled ? event.registered + 1 : event.registered;
+                const usedSlots = event.registered;
                 const displayStatus = event.enrolled ? 'Đã đăng ký' : event.status;
                 const progress = Math.min((usedSlots / event.slots) * 100, 100);
                 const checkinState = event.attendance || {};
@@ -677,6 +702,9 @@ export default function StudentEventsPage() {
                         <div className="flex flex-wrap items-center gap-3">
                           <EventStatus value={displayStatus} />
                           <span className="rounded-full bg-[#edf5ff] px-3 py-1 text-xs font-bold text-[#1f5dcc]">{event.points}</span>
+                          {event.communityPoints > 0 && (
+                            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">+{event.communityPoints} Điểm cộng đồng</span>
+                          )}
                           <span className="rounded-full bg-[#fff3e8] px-3 py-1 text-xs font-bold text-[#cb6d13]">{event.category}</span>
                         </div>
 
@@ -736,16 +764,19 @@ export default function StudentEventsPage() {
                             type="button"
                             whileHover={{ scale: 1.02, y: -1 }}
                             whileTap={{ scale: 0.97 }}
-                            onClick={() => toggleRegistration(event.id, event.title)}
+                            onClick={() => toggleRegistration(event.id, event.title, event.enrolled, event.realId)}
+                            disabled={!event.enrolled && event.registered >= event.slots}
                             className={`rounded-2xl px-4 py-3 font-bold text-white transition-all ${
                               event.enrolled
                                 ? 'bg-[#d24c4c] shadow-[0_12px_24px_rgba(210,76,76,0.24)] hover:bg-[#bf3b3b]'
+                                : event.registered >= event.slots
+                                ? 'bg-slate-400 cursor-not-allowed'
                                 : 'bg-[#1747a6] shadow-[0_12px_24px_rgba(23,71,166,0.24)] hover:bg-[#205fd8]'
                             }`}
                           >
                             <span className="inline-flex items-center gap-2">
                               {event.enrolled && <CheckCircle2 className="h-4 w-4" />}
-                              {event.enrolled ? 'Hủy đăng ký' : 'Đăng ký tham gia'}
+                              {event.enrolled ? 'Đã đăng ký (Nhấn để hủy)' : event.registered >= event.slots ? 'Đã đầy' : 'Đăng ký tham gia'}
                             </span>
                           </motion.button>
                           <motion.button

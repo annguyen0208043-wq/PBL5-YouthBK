@@ -55,5 +55,7 @@ EventRegistration.init(
 
 EventRegistration.belongsTo(Event, { foreignKey: 'eventId' });
 EventRegistration.belongsTo(User, { foreignKey: 'userId' });
+Event.hasMany(EventRegistration, { as: 'registrations', foreignKey: 'eventId' });
+User.hasMany(EventRegistration, { as: 'eventRegistrations', foreignKey: 'userId' });
 
 export default EventRegistration;

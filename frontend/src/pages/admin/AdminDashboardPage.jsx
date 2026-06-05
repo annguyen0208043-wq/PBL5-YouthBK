@@ -46,6 +46,32 @@ function isToday(dateValue) {
   );
 }
 
+function translateStatus(status) {
+  switch (status) {
+    case 'draft': return 'Nháp';
+    case 'pending': return 'Chờ duyệt';
+    case 'approved': return 'Đã duyệt';
+    case 'ongoing': return 'Đang diễn ra';
+    case 'completed': return 'Đã kết thúc';
+    case 'cancelled': return 'Đã hủy';
+    case 'revision_required': return 'Cần chỉnh sửa';
+    default: return status;
+  }
+}
+
+function statusTone(status) {
+  switch (status) {
+    case 'draft': return 'bg-slate-100 text-slate-700';
+    case 'pending': return 'bg-amber-100 text-amber-700';
+    case 'approved': return 'bg-emerald-100 text-emerald-700';
+    case 'ongoing': return 'bg-blue-100 text-blue-700';
+    case 'completed': return 'bg-indigo-100 text-indigo-700';
+    case 'cancelled': return 'bg-rose-100 text-rose-700';
+    case 'revision_required': return 'bg-orange-100 text-orange-700';
+    default: return 'bg-slate-100 text-slate-700';
+  }
+}
+
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -233,7 +259,7 @@ export default function AdminDashboardPage() {
                           <p className="text-lg font-black text-[#132b57]">{event.title}</p>
                           <p className="mt-1 text-sm text-slate-500">{event.creator?.fullName || event.creator?.email || 'Chưa rõ đơn vị tạo'}</p>
                         </div>
-                        <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">{event.status}</span>
+                        <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-none ${statusTone(event.status)}`}>{translateStatus(event.status)}</span>
                       </div>
                       <p className="mt-3 text-sm text-slate-600">{formatDateTime(event.startTime)} • {event.location}</p>
                     </div>

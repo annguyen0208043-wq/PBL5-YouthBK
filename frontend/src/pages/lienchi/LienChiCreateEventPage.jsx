@@ -17,6 +17,7 @@ export default function LienChiCreateEventPage() {
     endTime: '',
     location: '',
     description: '',
+    communityPoints: 0
   });
 
   const [timelineItems, setTimelineItems] = useState([]);
@@ -93,6 +94,7 @@ export default function LienChiCreateEventPage() {
       formDataToSend.append('endTime', formData.endTime);
       formDataToSend.append('maxParticipants', formData.maxParticipants ? parseInt(formData.maxParticipants, 10) : null);
       formDataToSend.append('category', formData.category);
+      formDataToSend.append('communityPoints', formData.communityPoints);
       formDataToSend.append('timeline', JSON.stringify(timelineItems));
 
       imageFiles.forEach((file) => {
@@ -123,6 +125,7 @@ export default function LienChiCreateEventPage() {
         endTime: '',
         location: '',
         description: '',
+        communityPoints: 0
       });
       setImageFiles([]);
       setTimelineItems([]);
@@ -205,6 +208,21 @@ export default function LienChiCreateEventPage() {
                   onChange={handleInputChange}
                   className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
                   placeholder="Ví dụ: 200"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Điểm cộng đồng (nếu có)</span>
+                <input 
+                  type="number" 
+                  name="communityPoints"
+                  value={formData.communityPoints}
+                  onChange={handleInputChange}
+                  className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" 
+                  placeholder="Ví dụ: 5" 
+                  min="0"
                 />
               </label>
             </div>

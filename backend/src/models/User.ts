@@ -15,6 +15,7 @@ export class User extends Model {
   declare faculty: string | null;
   declare status: string;
   declare isActive: boolean;
+  declare communityPoints: number;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -81,6 +82,10 @@ User.init(
     isActive: {
       type: DataTypes.BOOLEAN,
       defaultValue: true
+    },
+    communityPoints: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
     }
   },
   {

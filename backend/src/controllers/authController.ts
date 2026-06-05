@@ -79,17 +79,20 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       role: user.role
     });
 
-    res.json({
-      message: 'Đăng nhập thành công',
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: convertRoleToVietnamese(user.role),
-        avatar: user.avatar
-      },
-      token
-    });
+      res.json({
+        message: 'Đăng nhập thành công',
+        user: {
+          id: user.id,
+          name: user.name,
+          fullName: user.name, // Many frontend places expect fullName
+          email: user.email,
+          role: convertRoleToVietnamese(user.role),
+          avatar: user.avatar,
+          faculty: user.faculty,
+          department: user.department
+        },
+        token
+      });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Lỗi server' });

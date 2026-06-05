@@ -4,8 +4,35 @@ import { motion } from 'framer-motion';
 
 import AdminLayout from '../../components/admin/AdminLayout';
 
+function translateStatus(status) {
+  switch (status) {
+    case 'draft': return 'Nháp';
+    case 'pending': return 'Chờ duyệt';
+    case 'approved': return 'Đã duyệt';
+    case 'ongoing': return 'Đang diễn ra';
+    case 'completed': return 'Đã kết thúc';
+    case 'cancelled': return 'Đã hủy';
+    case 'revision_required': return 'Cần chỉnh sửa';
+    default: return status;
+  }
+}
+
+function statusTone(status) {
+  switch (status) {
+    case 'draft': return 'bg-slate-100 text-slate-700';
+    case 'pending': return 'bg-amber-100 text-amber-700';
+    case 'approved': return 'bg-emerald-100 text-emerald-700';
+    case 'ongoing': return 'bg-blue-100 text-blue-700';
+    case 'completed': return 'bg-indigo-100 text-indigo-700';
+    case 'cancelled': return 'bg-rose-100 text-rose-700';
+    case 'revision_required': return 'bg-orange-100 text-orange-700';
+    default: return 'bg-slate-100 text-slate-700';
+  }
+}
+
 export default function AdminEventApprovalPage() {
-  const [pendingEvents, setPendingEvents] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'history'
   const [selectedEventId, setSelectedEventId] = useState('');
   const [decision, setDecision] = useState('Duyệt');
   const [feedback, setFeedback] = useState('');
@@ -13,26 +40,28 @@ export default function AdminEventApprovalPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch pending events on component mount
+  // Fetch all events on component mount
   useEffect(() => {
-    const fetchPendingEvents = async () => {
+    const fetchEvents = async () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('token');
-        const response = await fetch('/api/events/pending', {
+        const response = await fetch('/api/events', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
 
         if (!response.ok) {
-          throw new Error('Không thể tải danh sách sự kiện chờ duyệt');
+          throw new Error('Không thể tải danh sách sự kiện');
         }
 
         const data = await response.json();
-        setPendingEvents(data.events || []);
-        if (data.events && data.events.length > 0) {
-          setSelectedEventId(data.events[0].id);
+        setEvents(data.events || []);
+        
+        const pending = (data.events || []).filter(e => e.status === 'pending');
+        if (pending.length > 0) {
+          setSelectedEventId(pending[0].id);
         }
       } catch (err) {
         setNotice(`❌ Lỗi: ${err.message}`);
@@ -41,12 +70,17 @@ export default function AdminEventApprovalPage() {
       }
     };
 
-    fetchPendingEvents();
+    fetchEvents();
   }, []);
 
+  const pendingEvents = events.filter(e => e.status === 'pending');
+  const historyEvents = events.filter(e => e.status !== 'pending' && e.status !== 'draft').sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+  const displayedEvents = activeTab === 'pending' ? pendingEvents : historyEvents;
+
   const selectedEvent = useMemo(
-    () => pendingEvents.find((item) => item.id === parseInt(selectedEventId)) ?? pendingEvents[0],
-    [selectedEventId, pendingEvents]
+    () => displayedEvents.find((item) => item.id === parseInt(selectedEventId)) ?? displayedEvents[0],
+    [selectedEventId, displayedEvents]
   );
 
   const handleSubmit = async () => {
@@ -71,10 +105,10 @@ export default function AdminEventApprovalPage() {
         body = { note: feedback };
       } else if (decision === 'Từ chối') {
         endpoint = `/api/events/${selectedEvent.id}/reject`;
-        body = { note: feedback };
+        body = { reason: feedback };
       } else if (decision === 'Yêu cầu chỉnh sửa') {
         endpoint = `/api/events/${selectedEvent.id}/request-revision`;
-        body = { note: feedback };
+        body = { message: feedback };
       }
 
       const response = await fetch(endpoint, {
@@ -121,119 +155,165 @@ export default function AdminEventApprovalPage() {
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <Loader className="mx-auto mb-4 h-8 w-8 animate-spin text-[#1747a6]" />
-            <p className="text-slate-600">Đang tải danh sách sự kiện chờ duyệt...</p>
+            <p className="text-slate-600">Đang tải danh sách sự kiện...</p>
           </div>
         </div>
-      ) : pendingEvents.length === 0 ? (
-        <div className="rounded-[28px] border border-[#dce8f5] bg-white p-12 text-center">
-          <p className="text-slate-600">Không có sự kiện nào chờ duyệt.</p>
-        </div>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[0.88fr_1.12fr]">
-          <section className="space-y-4">
-            {pendingEvents.map((event) => (
-              <motion.button
-                key={event.id}
-                type="button"
-                whileHover={{ y: -3 }}
-                onClick={() => setSelectedEventId(event.id)}
-                className={`profile-panel w-full rounded-[28px] border p-5 text-left transition-all ${
-                  selectedEventId === event.id ? 'border-[#88b2ef] bg-[#eef6ff]' : 'border-[#dce8f5] bg-white'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-lg font-black text-[#132b57]">{event.title}</p>
-                    <p className="mt-1 text-sm text-slate-500">{event.creator?.fullName || 'N/A'}</p>
-                  </div>
-                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">{event.status}</span>
-                </div>
-                <p className="mt-3 text-sm text-slate-600">
-                  {new Date(event.startTime).toLocaleString('vi-VN')}
-                </p>
-              </motion.button>
-            ))}
-          </section>
+        <>
+          <div className="mb-6 flex gap-4">
+            <button
+              onClick={() => { setActiveTab('pending'); setSelectedEventId(pendingEvents[0]?.id || ''); }}
+              className={`rounded-2xl px-5 py-2.5 font-bold transition-all ${
+                activeTab === 'pending'
+                  ? 'bg-[#1747a6] text-white shadow-md'
+                  : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              Chờ duyệt ({pendingEvents.length})
+            </button>
+            <button
+              onClick={() => { setActiveTab('history'); setSelectedEventId(historyEvents[0]?.id || ''); }}
+              className={`rounded-2xl px-5 py-2.5 font-bold transition-all ${
+                activeTab === 'history'
+                  ? 'bg-[#1747a6] text-white shadow-md'
+                  : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              Lịch sử duyệt ({historyEvents.length})
+            </button>
+          </div>
 
-          <section className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
-            {selectedEvent && (
-              <>
-                <div className="flex flex-col gap-4 border-b border-[#e7eff8] pb-5 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Chi tiết hồ sơ</p>
-                    <h2 className="mt-2 text-3xl font-black text-[#132b57]">{selectedEvent.title}</h2>
-                    <p className="mt-2 text-sm text-slate-500">{selectedEvent.creator?.fullName || 'N/A'}</p>
-                  </div>
-                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">{selectedEvent.category}</span>
-                </div>
-
-                <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-[24px] bg-[#f6faff] p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Thời gian bắt đầu</p>
-                    <p className="mt-2 font-semibold text-slate-700">{new Date(selectedEvent.startTime).toLocaleString('vi-VN')}</p>
-                  </div>
-                  <div className="rounded-[24px] bg-[#f6faff] p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Địa điểm</p>
-                    <p className="mt-2 font-semibold text-slate-700">{selectedEvent.location}</p>
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-[24px] bg-[#f6faff] p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Mô tả sự kiện</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{selectedEvent.description}</p>
-                </div>
-
-                {selectedEvent.timelines && selectedEvent.timelines.length > 0 && (
-                  <div className="mt-4 rounded-[24px] bg-[#f6faff] p-4">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-5 w-5 text-[#1747a6]" />
-                      <p className="font-semibold text-[#132b57]">Timeline sự kiện</p>
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      {selectedEvent.timelines.map((item, index) => (
-                        <div key={index} className="text-sm text-slate-600">
-                          <p className="font-semibold text-slate-700">{new Date(item.dateTime).toLocaleString('vi-VN')}</p>
-                          <p>{item.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  {['Duyệt', 'Yêu cầu chỉnh sửa', 'Từ chối'].map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => {
-                        setDecision(value);
-                        setFeedback('');
-                      }}
-                      className={`rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
-                        decision === value ? 'bg-[#1747a6] text-white' : 'border border-[#dce8f5] bg-white text-slate-600'
+          {displayedEvents.length === 0 ? (
+            <div className="rounded-[28px] border border-[#dce8f5] bg-white p-12 text-center">
+              <p className="text-slate-600">Không có sự kiện nào.</p>
+            </div>
+          ) : (
+            <div className="grid gap-6 xl:grid-cols-[0.88fr_1.12fr]">
+              <section className="space-y-4 max-h-[800px] overflow-y-auto pr-2">
+                {displayedEvents.map((event) => (
+                  <motion.button
+                    key={event.id}
+                    type="button"
+                    whileHover={{ y: -3 }}
+                    onClick={() => setSelectedEventId(event.id)}
+                    className={`profile-panel w-full rounded-[28px] border p-5 text-left transition-all ${
+                      selectedEventId === event.id ? 'border-[#88b2ef] bg-[#eef6ff]' : 'border-[#dce8f5] bg-white'
                     }`}
-                    >
-                      {value}
-                    </button>
-                  ))}
-                </div>
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-lg font-black text-[#132b57]">{event.title}</p>
+                        <p className="mt-1 text-sm text-slate-500">{event.creator?.fullName || 'N/A'}</p>
+                      </div>
+                      <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-none ${statusTone(event.status)}`}>{translateStatus(event.status)}</span>
+                    </div>
+                    <p className="mt-3 text-sm text-slate-600">
+                      {new Date(event.startTime).toLocaleString('vi-VN')}
+                    </p>
+                  </motion.button>
+                ))}
+              </section>
 
-                <label className="mt-5 block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">
-                    {decision === 'Duyệt' ? 'Ghi chú (tùy chọn)' : 'Nội dung phản hồi *'}
-                  </span>
-                  <textarea
-                    rows="5"
-                    value={feedback}
-                    onChange={(event) => setFeedback(event.target.value)}
-                    className="w-full rounded-[24px] border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
-                    placeholder={
-                      decision === 'Duyệt'
-                        ? 'Nhập ghi chú nếu có (không bắt buộc)...'
-                        : 'Nhập lý do từ chối hoặc các điểm cần chỉnh sửa...'
-                    }
-                  />
-                </label>
+              <section className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
+                {selectedEvent && (
+                  <>
+                    <div className="flex flex-col gap-4 border-b border-[#e7eff8] pb-5 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Chi tiết hồ sơ</p>
+                        <h2 className="mt-2 text-3xl font-black text-[#132b57]">{selectedEvent.title}</h2>
+                        <p className="mt-2 text-sm text-slate-500">{selectedEvent.creator?.fullName || 'N/A'}</p>
+                      </div>
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">{selectedEvent.category}</span>
+                    </div>
+
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-[24px] bg-[#f6faff] p-4">
+                        <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Thời gian bắt đầu</p>
+                        <p className="mt-2 font-semibold text-slate-700">{new Date(selectedEvent.startTime).toLocaleString('vi-VN')}</p>
+                      </div>
+                      <div className="rounded-[24px] bg-[#f6faff] p-4">
+                        <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Địa điểm</p>
+                        <p className="mt-2 font-semibold text-slate-700">{selectedEvent.location}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-[24px] bg-[#f6faff] p-4">
+                      <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Mô tả sự kiện</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{selectedEvent.description}</p>
+                    </div>
+
+                    {selectedEvent.timelines && selectedEvent.timelines.length > 0 && (
+                      <div className="mt-4 rounded-[24px] bg-[#f6faff] p-4">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-5 w-5 text-[#1747a6]" />
+                          <p className="font-semibold text-[#132b57]">Timeline sự kiện</p>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {selectedEvent.timelines.map((item, index) => (
+                            <div key={index} className="text-sm text-slate-600">
+                              <p className="font-semibold text-slate-700">{new Date(item.dateTime).toLocaleString('vi-VN')}</p>
+                              <p>{item.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {activeTab === 'history' && selectedEvent.reviewHistory && selectedEvent.reviewHistory.length > 0 && (
+                      <div className="mt-4 rounded-[24px] bg-[#f6faff] p-4">
+                        <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Lịch sử duyệt</p>
+                        <div className="mt-3 space-y-3">
+                          {selectedEvent.reviewHistory.map((historyItem, index) => (
+                            <div key={index} className="text-sm text-slate-600 border-l-2 border-[#dce8f5] pl-3 py-1">
+                              <p className="font-semibold text-slate-700">
+                                {new Date(historyItem.at).toLocaleString('vi-VN')} -{' '}
+                                {historyItem.action === 'approved' ? 'Đã duyệt' : historyItem.action === 'rejected' ? 'Từ chối' : 'Yêu cầu chỉnh sửa'}
+                              </p>
+                              {historyItem.message && <p className="italic mt-1 text-slate-500">"{historyItem.message}"</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === 'pending' && (
+                      <>
+                        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                          {['Duyệt', 'Yêu cầu chỉnh sửa', 'Từ chối'].map((value) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => {
+                                setDecision(value);
+                                setFeedback('');
+                              }}
+                              className={`rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+                                decision === value ? 'bg-[#1747a6] text-white' : 'border border-[#dce8f5] bg-white text-slate-600'
+                            }`}
+                            >
+                              {value}
+                            </button>
+                          ))}
+                        </div>
+
+                        <label className="mt-5 block">
+                          <span className="mb-2 block text-sm font-semibold text-slate-700">
+                            {decision === 'Duyệt' ? 'Ghi chú (tùy chọn)' : 'Nội dung phản hồi *'}
+                          </span>
+                          <textarea
+                            rows="5"
+                            value={feedback}
+                            onChange={(event) => setFeedback(event.target.value)}
+                            className="w-full rounded-[24px] border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
+                            placeholder={
+                              decision === 'Duyệt'
+                                ? 'Nhập ghi chú nếu có (không bắt buộc)...'
+                                : 'Nhập lý do từ chối hoặc các điểm cần chỉnh sửa...'
+                            }
+                          />
+                        </label>
+                      </>
+                    )}
 
                 {notice && (
                   <div
@@ -247,31 +327,35 @@ export default function AdminEventApprovalPage() {
                   </div>
                 )}
 
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button
-                    onClick={handleSubmit}
-                    disabled={submitting}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white transition-all hover:bg-[#205fd8] disabled:opacity-50"
-                  >
-                    <CheckCheck className="h-5 w-5" />
-                    {submitting ? 'Đang xử lý...' : 'Gửi quyết định'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFeedback('');
-                      setNotice('');
-                    }}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-slate-600 transition-all hover:bg-[#f3f8ff]"
-                  >
-                    <XCircle className="h-5 w-5" />
-                    Hủy thao tác
-                  </button>
-                </div>
+                {activeTab === 'pending' && (
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <button
+                      onClick={handleSubmit}
+                      disabled={submitting}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white transition-all hover:bg-[#205fd8] disabled:opacity-50"
+                    >
+                      <CheckCheck className="h-5 w-5" />
+                      {submitting ? 'Đang xử lý...' : 'Gửi quyết định'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFeedback('');
+                        setNotice('');
+                      }}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-slate-600 transition-all hover:bg-[#f3f8ff]"
+                    >
+                      <XCircle className="h-5 w-5" />
+                      Hủy thao tác
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </section>
         </div>
+          )}
+        </>
       )}
     </AdminLayout>
   );

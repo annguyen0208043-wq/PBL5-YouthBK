@@ -15,7 +15,7 @@ import { isBeforeStart, isApproved, isRegistrationOpen, hasSlots, noActiveReques
 
 export const createEvent = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, description, location, startDate, endDate, startTime, endTime, capacity, maxParticipants, maxSlots, category, timeline, registrationDeadline } = req.body;
+    const { title, description, location, startDate, endDate, startTime, endTime, capacity, maxParticipants, maxSlots, category, timeline, registrationDeadline, communityPoints } = req.body;
     const userId = req.user?.id;
     const role = req.user?.role;
 
@@ -37,9 +37,10 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       maxParticipants: maxParticipants || capacity,
       maxSlots: maxSlots || maxParticipants || capacity,
       category,
+      communityPoints: communityPoints ? parseInt(communityPoints) : 0,
       createdBy: userId,
       createdByRole: role === 'admin' ? 'admin' : 'lienchi',
-      status: role === 'admin' ? 'approved' : 'draft', // lienchi create as draft
+      status: role === 'admin' ? 'approved' : 'pending', // lienchi create as pending to wait for admin approval
       currentSlots: 0,
       reviewHistory: []
     });
@@ -85,7 +86,7 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
-export const getAllEvents = async (req: Request, res: Response) => {
+export const getEvents = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { status, category, createdBy } = req.query;
 
@@ -97,14 +98,28 @@ export const getAllEvents = async (req: Request, res: Response) => {
     const events = await Event.findAll({
       where,
       include: [
-        { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
+        { model: User, as: 'creator', attributes: ['id', 'name', 'email', 'role', 'faculty'] },
         { model: EventTimeline, as: 'timelines' },
-        { model: EventImage, as: 'images' }
+        { model: EventImage, as: 'images' },
+        ...(req.user ? [{ 
+          model: require('../models/EventRegistration').default, 
+          as: 'registrations',
+          where: { userId: req.user.id, status: 'registered' },
+          required: false
+        }] : [])
       ],
       order: [['createdAt', 'DESC']]
     });
 
-    res.json({ events });
+    const formattedEvents = events.map(e => {
+      const data = e.toJSON() as any;
+      if (req.user && data.registrations) {
+        data.isRegistered = data.registrations.length > 0;
+      }
+      return data;
+    });
+
+    res.json({ events: formattedEvents });
   } catch (error) {
     console.error('Get all events error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -138,7 +153,7 @@ export const getEventById = async (req: Request, res: Response): Promise<void> =
 export const updateEvent = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { title, description, location, startDate, endDate, startTime, endTime, maxSlots, category, registrationDeadline } = req.body;
+    const { title, description, location, startDate, endDate, startTime, endTime, maxSlots, category, registrationDeadline, status, communityPoints } = req.body;
 
     const event = await Event.findByPk(id);
     if (!event) {
@@ -169,7 +184,9 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       endTime: endTime || event.endTime,
       registrationDeadline: registrationDeadline || event.registrationDeadline,
       maxSlots: maxSlots !== undefined ? maxSlots : event.maxSlots,
-      category: category !== undefined ? category : event.category
+      category: category !== undefined ? category : event.category,
+      communityPoints: communityPoints !== undefined ? parseInt(communityPoints) : event.communityPoints,
+      status: status || event.status
     });
 
     // Handle timeline & images similar to createEvent (omitted for brevity, assume unchanged or keep standard logic)
@@ -261,33 +278,6 @@ export const deleteEvent = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
-// ----------------------------------------------------------------------
-// 2. REGISTRATION
-// ----------------------------------------------------------------------
-
-export const registerForEvent = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const { eventId } = req.body;
-    const userId = req.user?.id;
-
-    const event = await Event.findByPk(eventId);
-    if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
-
-    if (!isApproved(event)) { res.status(400).json({ message: 'Sự kiện chưa mở đăng ký' }); return; }
-    if (!isRegistrationOpen(event)) { res.status(400).json({ message: 'Đã hết hạn đăng ký' }); return; }
-    if (!hasSlots(event)) { res.status(400).json({ message: 'Sự kiện đã đủ người' }); return; }
-
-    const existingRegistration = await EventRegistration.findOne({ where: { eventId, userId, status: 'registered' } });
-    if (existingRegistration) { res.status(409).json({ message: 'Bạn đã đăng ký sự kiện này' }); return; }
-
-    const registration = await EventRegistration.create({ eventId, userId, status: 'registered' });
-    await event.increment('currentSlots', { by: 1 });
-
-    res.status(201).json({ message: 'Registered for event successfully', registration });
-  } catch (error) {
-    res.status(500).json({ message: 'Internal server error' });
-  }
-};
 
 // ----------------------------------------------------------------------
 // 3. ADMIN REVIEW ENDPOINTS
@@ -507,4 +497,349 @@ export const requestPostpone = async (req: AuthRequest, res: Response): Promise<
     });
     res.json({ message: 'Đã gửi yêu cầu hoãn sự kiện', event });
   } catch (error) { res.status(500).json({ message: 'Internal error' }); }
+};
+
+// ----------------------------------------------------------------------
+// 6. REGISTRATION ENDPOINTS (STUDENTS)
+// ----------------------------------------------------------------------
+
+export const registerForEvent = async (req: AuthRequest, res: Response): Promise<void> => {
+  const transaction = await Event.sequelize!.transaction();
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      await transaction.rollback();
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const event = await Event.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!event) {
+      await transaction.rollback();
+      res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+      return;
+    }
+
+    if (event.status !== 'approved' && event.status !== 'ongoing') {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Sự kiện chưa mở đăng ký' });
+      return;
+    }
+
+    if (event.registrationDeadline && new Date() > new Date(event.registrationDeadline)) {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Đã hết hạn đăng ký' });
+      return;
+    }
+
+    const existingRegistration = await EventRegistration.findOne({
+      where: { eventId: id, userId },
+      transaction,
+      lock: transaction.LOCK.UPDATE
+    });
+
+    if (existingRegistration && existingRegistration.status === 'registered') {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Bạn đã đăng ký sự kiện này rồi' });
+      return;
+    }
+
+    if (event.maxSlots && event.currentSlots >= event.maxSlots) {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Sự kiện đã đủ số lượng' });
+      return;
+    }
+
+    if (existingRegistration && existingRegistration.status === 'cancelled') {
+      existingRegistration.status = 'registered';
+      existingRegistration.registrationDate = new Date();
+      await existingRegistration.save({ transaction });
+    } else {
+      await EventRegistration.create({
+        eventId: event.id,
+        userId,
+        status: 'registered',
+        registrationDate: new Date()
+      }, { transaction });
+    }
+
+    event.currentSlots += 1;
+    await event.save({ transaction });
+
+    await transaction.commit();
+    res.json({ message: 'Đăng ký thành công', currentSlots: event.currentSlots });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Register for event error:', error);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+};
+
+export const cancelRegistration = async (req: AuthRequest, res: Response): Promise<void> => {
+  const transaction = await Event.sequelize!.transaction();
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      await transaction.rollback();
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const event = await Event.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!event) {
+      await transaction.rollback();
+      res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+      return;
+    }
+
+    const existingRegistration = await EventRegistration.findOne({
+      where: { eventId: id, userId },
+      transaction,
+      lock: transaction.LOCK.UPDATE
+    });
+
+    if (!existingRegistration || existingRegistration.status !== 'registered') {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Bạn chưa đăng ký sự kiện này' });
+      return;
+    }
+
+    const startTime = event.startTime || event.startDate;
+    if (startTime) {
+      const startDateTime = new Date(startTime).getTime();
+      const nowTime = new Date().getTime();
+      const diffHours = (startDateTime - nowTime) / (1000 * 60 * 60);
+
+      if (diffHours < 12) {
+        await transaction.rollback();
+        res.status(400).json({ message: 'Không thể hủy đăng ký khi sự kiện sắp diễn ra trong vòng 12 tiếng' });
+        return;
+      }
+    }
+
+    existingRegistration.status = 'cancelled';
+    await existingRegistration.save({ transaction });
+
+    if (event.currentSlots > 0) {
+      event.currentSlots -= 1;
+      await event.save({ transaction });
+    }
+
+    await transaction.commit();
+    res.json({ message: 'Hủy đăng ký thành công', currentSlots: event.currentSlots });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Cancel registration error:', error);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+};
+
+// ----------------------------------------------------------------------
+// 7. LIEN CHI / ADMIN REGISTRATION MANAGEMENT
+// ----------------------------------------------------------------------
+
+export const getEventRegistrations = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const event = await Event.findByPk(id);
+    
+    if (!event) {
+      res.status(404).json({ message: 'Event not found' });
+      return;
+    }
+
+    if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) {
+      res.status(403).json({ message: 'Not authorized to view registrations for this event' });
+      return;
+    }
+
+    const registrations = await EventRegistration.findAll({
+      where: { eventId: id },
+      include: [{
+        model: User,
+        attributes: ['id', 'name', 'fullName', 'studentId', 'department', 'faculty', 'email', 'phone', 'communityPoints']
+      }],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json({ registrations });
+  } catch (error) {
+    console.error('Get event registrations error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const manuallyAddRegistration = async (req: AuthRequest, res: Response): Promise<void> => {
+  const transaction = await Event.sequelize!.transaction();
+  try {
+    const { id } = req.params;
+    const { studentId } = req.body;
+
+    const event = await Event.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!event) {
+      await transaction.rollback();
+      res.status(404).json({ message: 'Event not found' });
+      return;
+    }
+
+    if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) {
+      await transaction.rollback();
+      res.status(403).json({ message: 'Not authorized to manage registrations for this event' });
+      return;
+    }
+
+    const student = await User.findOne({ where: { studentId }, transaction });
+    if (!student) {
+      await transaction.rollback();
+      res.status(404).json({ message: `Không tìm thấy sinh viên với MSSV: ${studentId}` });
+      return;
+    }
+
+    if (event.maxSlots && event.currentSlots >= event.maxSlots) {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Sự kiện đã đủ số lượng' });
+      return;
+    }
+
+    const existingRegistration = await EventRegistration.findOne({
+      where: { eventId: id, userId: student.id },
+      transaction,
+      lock: transaction.LOCK.UPDATE
+    });
+
+    if (existingRegistration && existingRegistration.status !== 'cancelled') {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Sinh viên này đã có trong danh sách' });
+      return;
+    }
+
+    let registration;
+    if (existingRegistration && existingRegistration.status === 'cancelled') {
+      existingRegistration.status = 'registered';
+      existingRegistration.registrationDate = new Date();
+      registration = await existingRegistration.save({ transaction });
+    } else {
+      registration = await EventRegistration.create({
+        eventId: id,
+        userId: student.id,
+        status: 'registered',
+        registrationDate: new Date()
+      }, { transaction });
+    }
+
+    event.currentSlots += 1;
+    await event.save({ transaction });
+
+    await transaction.commit();
+
+    // Fetch full registration to return
+    const fullRegistration = await EventRegistration.findByPk(registration.id, {
+      include: [{ model: User, attributes: ['id', 'name', 'fullName', 'studentId', 'department', 'faculty', 'email'] }]
+    });
+
+    res.json({ message: 'Thêm sinh viên thành công', registration: fullRegistration });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Manually add registration error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const updateRegistrationStatus = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { registrationId } = req.params;
+    const { status } = req.body;
+
+    const registration = await EventRegistration.findByPk(registrationId, { include: [Event] });
+    if (!registration) {
+      res.status(404).json({ message: 'Registration not found' });
+      return;
+    }
+
+    const event = registration.getDataValue('Event') as any;
+    if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) {
+      res.status(403).json({ message: 'Not authorized to manage this registration' });
+      return;
+    }
+
+    if (!['registered', 'attended', 'cancelled'].includes(status)) {
+      res.status(400).json({ message: 'Invalid status' });
+      return;
+    }
+
+    // Nếu chuyển từ cancelled -> registered/attended thì tăng slot
+    // Nếu chuyển từ registered/attended -> cancelled thì giảm slot
+    const transaction = await Event.sequelize!.transaction();
+    try {
+      const lockEvent = await Event.findByPk(event.id, { transaction, lock: transaction.LOCK.UPDATE });
+      
+      if (registration.status === 'cancelled' && status !== 'cancelled') {
+        if (lockEvent && lockEvent.maxSlots && lockEvent.currentSlots >= lockEvent.maxSlots) {
+           await transaction.rollback();
+           res.status(400).json({ message: 'Sự kiện đã đầy, không thể khôi phục đăng ký' });
+           return;
+        }
+        lockEvent!.currentSlots += 1;
+        await lockEvent!.save({ transaction });
+      } else if (registration.status !== 'cancelled' && status === 'cancelled') {
+        lockEvent!.currentSlots -= 1;
+        await lockEvent!.save({ transaction });
+      }
+
+      registration.status = status;
+      await registration.save({ transaction });
+      
+      await transaction.commit();
+      res.json({ message: 'Cập nhật trạng thái thành công', registration });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('Update registration status error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const deleteRegistration = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { registrationId } = req.params;
+
+    const registration = await EventRegistration.findByPk(registrationId, { include: [Event] });
+    if (!registration) {
+      res.status(404).json({ message: 'Registration not found' });
+      return;
+    }
+
+    const event = registration.getDataValue('Event') as any;
+    if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) {
+      res.status(403).json({ message: 'Not authorized to manage this registration' });
+      return;
+    }
+
+    const transaction = await Event.sequelize!.transaction();
+    try {
+      const lockEvent = await Event.findByPk(event.id, { transaction, lock: transaction.LOCK.UPDATE });
+      
+      if (registration.status !== 'cancelled') {
+        lockEvent!.currentSlots -= 1;
+        await lockEvent!.save({ transaction });
+      }
+
+      await registration.destroy({ transaction });
+      await transaction.commit();
+      
+      res.json({ message: 'Xóa sinh viên thành công' });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('Delete registration error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 };

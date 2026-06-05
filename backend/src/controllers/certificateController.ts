@@ -9,7 +9,8 @@ export const getCertificateRequests = async (req: AuthRequest, res: Response) =>
     const certificates = await Certificate.findAll({
       include: [
         { model: User, as: 'student', attributes: ['id', 'name', 'email', 'studentId'] },
-        { model: User, as: 'approver', attributes: ['id', 'name', 'email'] }
+        { model: User, as: 'approver', attributes: ['id', 'name', 'email'] },
+        { model: require('../models/Event').default, attributes: ['communityPoints'] }
       ],
       order: [['createdAt', 'DESC']]
     });
@@ -42,7 +43,31 @@ export const approveCertificate = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
+    if (certificate.status === 'approved') {
+      res.status(400).json({ message: 'Certificate is already approved' });
+      return;
+    }
+
     const admin = await User.findByPk(adminId, { attributes: ['id', 'name'] });
+    
+    // Process community points
+    let pointsToAdd = 0;
+    if (certificate.eventId) {
+      const { default: Event } = await import('../models/Event');
+      const event = await Event.findByPk(certificate.eventId);
+      if (event && event.communityPoints) {
+        pointsToAdd = event.communityPoints;
+      }
+    }
+
+    if (pointsToAdd > 0) {
+      const student = await User.findByPk(certificate.userId);
+      if (student) {
+        await student.update({
+          communityPoints: (student.communityPoints || 0) + pointsToAdd
+        });
+      }
+    }
 
     await certificate.update({
       status: 'approved',
@@ -50,7 +75,8 @@ export const approveCertificate = async (req: AuthRequest, res: Response): Promi
       approvedAt: new Date(),
       approverName: admin?.name || '',
       stampCode: 'BKYOUTH-DOANTRUONG-APPROVED',
-      note: 'Đã được Đoàn trường duyệt, có hiệu lực cấp chứng nhận điện tử.'
+      note: 'Đã được Đoàn trường duyệt, có hiệu lực cấp chứng nhận điện tử.',
+      earnedPoints: pointsToAdd
     });
 
     res.json({ message: 'Đã duyệt chứng nhận', certificate });
