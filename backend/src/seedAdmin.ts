@@ -14,9 +14,22 @@ const seedAdmin = async () => {
 
     const existingAdmin = await User.findOne({ where: { email: 'admin@pbl5.edu.vn' } });
     if (existingAdmin) {
-      console.log('⚠️  Admin account already exists:');
-      console.log(`   Email: admin@pbl5.edu.vn`);
-      console.log(`   Role: ${existingAdmin.role}`);
+      console.log('⚠️  Admin account already exists. Updating its role to admin and resetting password...');
+      const hashedPassword = await hashPassword('admin123');
+      await existingAdmin.update({
+        name: 'Đoàn trường ĐH Bách Khoa',
+        role: 'admin',
+        password: hashedPassword,
+        status: 'Hoạt động',
+        isActive: true
+      });
+      console.log('✅ Updated existing account to Admin (Đoàn trường) successfully!');
+      console.log('──────────────────────────────────');
+      console.log(`   Họ tên:    Đoàn trường ĐH Bách Khoa`);
+      console.log(`   Email:     admin@pbl5.edu.vn`);
+      console.log(`   Mật khẩu: admin123`);
+      console.log(`   Role:      admin (Đoàn trường)`);
+      console.log('──────────────────────────────────');
       process.exit(0);
     }
 
