@@ -183,12 +183,53 @@ function buildAttendanceGate(event, attendanceWindowConfig) {
   };
 }
 
+function normalizeAudienceText(value) {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\b(khoa|lien chi doan|lien chi|doan khoa)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getStudentEventStatus(status) {
+  if (status === 'open_registration') return 'Đang mở đăng ký';
+  if (status === 'ongoing') return 'Đang tham gia';
+  if (status === 'ended' || status === 'completed') return 'Đã kết thúc';
+  return 'Sắp diễn ra';
+}
+
+function isPublicEvent(event) {
+  return event.createdByRole === 'admin' || normalizeAudienceText(event.creator?.faculty).includes('doan truong');
+}
+
+function isEventForStudentFaculty(event, studentFaculty) {
+  if (isPublicEvent(event)) return true;
+  const creatorFaculty = normalizeAudienceText(event.creator?.faculty || event.creator?.department);
+  return Boolean(studentFaculty && creatorFaculty && creatorFaculty === studentFaculty);
+}
+
 export default function StudentEventsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const mainRef = useRef(null);
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
+  const studentFaculty = normalizeAudienceText(user.faculty || user.department);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('Tất cả');
   const [attendanceCheckins, setAttendanceCheckins] = useState(getInitialAttendanceCheckins);
@@ -202,6 +243,8 @@ export default function StudentEventsPage() {
   const [feedbackRating, setFeedbackRating] = useState(5);
   const [selectedEventForFeedback, setSelectedEventForFeedback] = useState(null);
   const [feedback, setFeedback] = useState('');
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [eventsError, setEventsError] = useState('');
   const toastTimerRef = useRef(null);
   const qrVideoRef = useRef(null);
   const qrStreamRef = useRef(null);

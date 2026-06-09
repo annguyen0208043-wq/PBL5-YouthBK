@@ -30,6 +30,20 @@ function statusTone(status) {
   return 'bg-blue-100 text-blue-700';
 }
 
+function approvalStatusLabel(status) {
+  if (status === 'approved') return 'Đã duyệt';
+  if (status === 'rejected') return 'Từ chối';
+  if (status === 'revision_requested') return 'Yêu cầu sửa';
+  return status;
+}
+
+function approvalStatusTone(status) {
+  if (status === 'approved') return 'bg-emerald-100 text-emerald-700';
+  if (status === 'rejected') return 'bg-rose-100 text-rose-700';
+  if (status === 'revision_requested') return 'bg-orange-100 text-orange-700';
+  return 'bg-slate-100 text-slate-700';
+}
+
 export default function LienChiManagedEventsPage() {
   const navigate = useNavigate();
   const user = getStoredUserProfile();
@@ -490,6 +504,44 @@ export default function LienChiManagedEventsPage() {
                       <p className="text-sm font-bold uppercase tracking-[0.16em] text-amber-700">XỬ LÝ DƯỚI TỐI THIỂU</p>
                       <p className="mt-1 text-sm text-amber-900 leading-relaxed font-medium">Quyết định: {selectedEvent.belowMinAction === 'proceed' ? 'Tiếp tục tổ chức' : 'Hủy bỏ'}</p>
                       <p className="mt-1 text-sm text-slate-600">Ghi chú: {selectedEvent.belowMinNote}</p>
+                    </div>
+                  )}
+
+                  {selectedEvent.approvals && selectedEvent.approvals.length > 0 && (
+                    <div className="mt-5 rounded-2xl border border-[#e4effc] bg-[#f8fbff] p-5">
+                      <div className="mb-3 flex items-center gap-2 text-[#132b57]">
+                        <MessageSquare className="h-5 w-5 text-[#1747a6]" />
+                        <p className="font-bold">Lịch sử duyệt sự kiện</p>
+                      </div>
+                      <div className="space-y-2">
+                        {[...selectedEvent.approvals]
+                          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                          .map((approval) => (
+                            <div key={approval.id} className="rounded-xl border border-slate-100 bg-white p-3 text-xs">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <p className="font-bold text-slate-700">Đoàn trường: {approval.approver?.name || 'Admin'}</p>
+                                  <p className="mt-1 font-mono text-[10px] text-slate-400">
+                                    {new Date(approval.createdAt).toLocaleString('vi-VN')}
+                                  </p>
+                                </div>
+                                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${approvalStatusTone(approval.status)}`}>
+                                  {approvalStatusLabel(approval.status)}
+                                </span>
+                              </div>
+                              {approval.note && (
+                                <p className="mt-2 rounded-lg bg-slate-50 p-2 text-slate-700">
+                                  &quot;{approval.note}&quot;
+                                </p>
+                              )}
+                              {approval.revisionDeadline && (
+                                <p className="mt-2 text-[10px] font-bold text-orange-700">
+                                  Hạn chỉnh sửa: {new Date(approval.revisionDeadline).toLocaleString('vi-VN')}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                      </div>
                     </div>
                   )}
 

@@ -30,6 +30,32 @@ function deg2rad(deg: number) {
   return deg * (Math.PI / 180);
 }
 
+function normalizeAudienceText(value?: string | null) {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\b(khoa|lien chi doan|lien chi|doan khoa)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function canStudentAccessEvent(event: Event, userId: number) {
+  if (event.createdByRole === 'admin') {
+    return true;
+  }
+
+  const [student, creator] = await Promise.all([
+    User.findByPk(userId, { attributes: ['faculty', 'department'] }),
+    User.findByPk(event.createdBy, { attributes: ['faculty', 'department'] })
+  ]);
+
+  const studentFaculty = normalizeAudienceText(student?.faculty || student?.department);
+  const creatorFaculty = normalizeAudienceText(creator?.faculty || creator?.department);
+
+  return Boolean(studentFaculty && creatorFaculty && studentFaculty === creatorFaculty);
+}
+
 // 1. PUBLIC / GENERAL ENDPOINTS
 export const getEvents = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -85,6 +111,7 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
 export const getEventById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const canViewApprovalMessages = ['admin', 'lienchi'].includes(req.user?.role || '');
 
     const event = await Event.findByPk(id, {
       include: [
@@ -97,7 +124,11 @@ export const getEventById = async (req: AuthRequest, res: Response): Promise<voi
         },
         { model: EventImage, as: 'images' },
         { model: EventDocument, as: 'documents', include: [{ model: User, as: 'uploader', attributes: ['name'] }] },
-        { model: EventApproval, as: 'approvals', include: [{ model: User, as: 'approver', attributes: ['name'] }] },
+        ...(canViewApprovalMessages ? [{
+          model: EventApproval,
+          as: 'approvals',
+          include: [{ model: User, as: 'approver', attributes: ['name'] }]
+        }] : []),
         ...(req.user ? [{
           model: EventRegistration,
           as: 'registrations',
@@ -711,6 +742,12 @@ export const registerForEvent = async (req: AuthRequest, res: Response): Promise
     if (!event) {
       await transaction.rollback();
       res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+      return;
+    }
+
+    if (req.user?.role === 'student' && !(await canStudentAccessEvent(event, userId))) {
+      await transaction.rollback();
+      res.status(403).json({ message: 'Sá»± kiá»‡n nÃ y chá»‰ dÃ nh cho sinh viÃªn thuá»™c khoa phÃ¹ há»£p' });
       return;
     }
 
