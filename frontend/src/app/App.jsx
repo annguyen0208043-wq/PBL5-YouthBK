@@ -36,6 +36,7 @@ export default function App() {
       <Route path="/admin/events/create" element={<AdminCreateEventPage />} />
       <Route path="/admin/event-approvals" element={<AdminEventApprovalPage />} />
       <Route path="/admin/certificates" element={<AdminCertificateApprovalPage />} />
+      <Route path="/admin/registrations" element={<LienChiRegistrationsPage />} />
       <Route path="/admin/users" element={<AdminUserManagementPage />} />
       <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
       <Route path="/admin/settings" element={<AdminSystemSettingsPage />} />

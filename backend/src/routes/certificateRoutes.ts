@@ -12,6 +12,7 @@ router.put('/:id/approve', authMiddleware, adminMiddleware, approveCertificate);
 router.put('/:id/reject', authMiddleware, adminMiddleware, rejectCertificate);
 
 // Student: Yêu cầu chứng nhận
+router.get('/mine', authMiddleware, require('../controllers/certificateController').getMyCertificates);
 router.post('/request', authMiddleware, requestCertificate);
 
 export default router;

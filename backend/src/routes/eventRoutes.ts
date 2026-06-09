@@ -4,7 +4,9 @@ import {
   registerForEvent, cancelRegistration, getPendingEvents, approveEvent, rejectEvent, requestEventRevision,
   approveUpdate, approveCancel, approvePostpone, rejectRequest,
   requestUpdate, requestCancel, requestPostpone,
-  getEventRegistrations, manuallyAddRegistration, updateRegistrationStatus, deleteRegistration
+  getEventRegistrations, manuallyAddRegistration, updateRegistrationStatus, deleteRegistration,
+  toggleEventQR, checkInQR,
+  submitEventFeedback, getEventFeedbacks
 } from '../controllers/eventController';
 import { authMiddleware, adminMiddleware, adminOrLienChiMiddleware } from '../middlewares/authMiddleware';
 import { uploadEventImages } from '../config/multer';
@@ -33,9 +35,15 @@ router.post('/:id/request-update', authMiddleware, adminOrLienChiMiddleware, req
 router.post('/:id/request-cancel', authMiddleware, adminOrLienChiMiddleware, requestCancel);
 router.post('/:id/request-postpone', authMiddleware, adminOrLienChiMiddleware, requestPostpone);
 
-// Đăng ký sự kiện (student)
+// Đăng ký sự kiện & Điểm danh (student)
 router.post('/:id/register', authMiddleware, registerForEvent);
 router.post('/:id/cancel-registration', authMiddleware, cancelRegistration);
+router.post('/:id/attendance/qr', authMiddleware, checkInQR);
+router.post('/:id/feedback', authMiddleware, submitEventFeedback);
+
+// Admin/LienChi quản lý QR & Feedback
+router.put('/:id/qr/toggle', authMiddleware, adminOrLienChiMiddleware, toggleEventQR);
+router.get('/:id/feedbacks', authMiddleware, adminOrLienChiMiddleware, getEventFeedbacks);
 
 // Admin: Duyệt / Từ chối / Yêu cầu chỉnh sửa
 router.put('/:id/approve', authMiddleware, adminMiddleware, approveEvent);

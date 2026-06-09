@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { BellRing, CalendarClock, PencilLine, XCircle, Loader, X, MapPin, Users, Tag, Clock } from 'lucide-react';
+import { BellRing, CalendarClock, PencilLine, XCircle, Loader, X, MapPin, Users, Tag, Clock, QrCode, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import QRCode from 'react-qr-code';
 
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
 import { getStoredUserProfile } from '../../shared/user/session';
@@ -41,6 +42,9 @@ export default function LienChiManagedEventsPage() {
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showPostponeModal, setShowPostponeModal] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbacks, setFeedbacks] = useState([]);
   const [actionReason, setActionReason] = useState('');
   const [newStartTime, setNewStartTime] = useState('');
   const [newEndTime, setNewEndTime] = useState('');
@@ -164,6 +168,46 @@ export default function LienChiManagedEventsPage() {
       setEvents(current => current.map(item => item.id === selectedEventId ? { ...item, ...payload } : item));
       setShowPostponeModal(false);
       setActionReason('');
+    } catch (err) {
+      setNotice(err.message);
+    }
+  };
+
+  const handleToggleQR = async (active) => {
+    try {
+      const token = localStorage.getItem('token');
+      // For demo purposes, we can hardcode default university coordinates or ask user for GPS.
+      // We'll just pass a mock location (DUT: 16.074061, 108.150720) when turning ON
+      const payload = { active };
+      if (active) {
+        payload.latitude = 16.074061;
+        payload.longitude = 108.150720;
+      }
+      const res = await fetch(`/api/events/${selectedEventId}/qr/toggle`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi khi thao tác mã QR');
+      
+      setNotice(data.message);
+      setEvents(current => current.map(item => item.id === selectedEventId ? { ...item, qrActive: data.qrActive, qrCode: data.qrCode } : item));
+    } catch (err) {
+      setNotice(err.message);
+    }
+  };
+
+  const handleViewFeedbacks = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/events/${selectedEventId}/feedbacks`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi lấy feedbacks');
+      setFeedbacks(data.feedbacks || []);
+      setShowFeedbackModal(true);
     } catch (err) {
       setNotice(err.message);
     }
@@ -383,6 +427,19 @@ export default function LienChiManagedEventsPage() {
                     <BellRing className="h-5 w-5" />
                     Thông báo đến sinh viên
                   </button>
+
+                  {['approved', 'ongoing', 'completed', 'ended'].includes(selectedEvent.status) && (
+                    <>
+                      <button type="button" onClick={() => setShowQRModal(true)} className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 font-bold text-white transition-all hover:bg-indigo-700">
+                        <QrCode className="h-5 w-5" />
+                        Quản lý QR & Điểm danh
+                      </button>
+                      <button type="button" onClick={handleViewFeedbacks} className="inline-flex items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-3 font-semibold text-indigo-700 transition-all hover:bg-indigo-100">
+                        <MessageSquare className="h-5 w-5" />
+                        Xem Đánh giá (Feedback)
+                      </button>
+                    </>
+                  )}
                 </div>
               </motion.div>
             </motion.div>
@@ -431,6 +488,84 @@ export default function LienChiManagedEventsPage() {
               <div className="mt-6 flex gap-3">
                 <button onClick={() => setShowPostponeModal(false)} className="flex-1 rounded-2xl border bg-white py-3 font-semibold text-slate-600 hover:bg-slate-50">Hủy bỏ</button>
                 <button onClick={handleRequestPostpone} className="flex-1 rounded-2xl bg-[#1747a6] py-3 font-bold text-white hover:bg-[#205fd8]">Gửi xin hoãn</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* QR Modal */}
+        {showQRModal && selectedEvent && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[32px] bg-white p-8 shadow-2xl text-center relative">
+              <button onClick={() => setShowQRModal(false)} className="absolute right-5 top-5 rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+              <h3 className="text-2xl font-black text-[#132b57] mb-2">Điểm danh QR</h3>
+              <p className="text-slate-500 text-sm mb-6">Sự kiện: {selectedEvent.title}</p>
+
+              {selectedEvent.qrActive && selectedEvent.qrCode ? (
+                <div className="flex flex-col items-center">
+                  <div className="bg-white p-4 rounded-3xl shadow-lg border-2 border-indigo-100 mb-6">
+                    {typeof QRCode === 'function' || typeof QRCode === 'object' ? (
+                      React.createElement(QRCode.default || QRCode, { value: selectedEvent.qrCode, size: 250 })
+                    ) : null}
+                  </div>
+                  <p className="font-mono bg-slate-100 px-4 py-2 rounded-xl text-lg font-bold tracking-widest">{selectedEvent.qrCode}</p>
+                  <div className="text-emerald-600 font-semibold mt-4 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> Mã QR đang hoạt động</div>
+                  <button onClick={() => handleToggleQR(false)} className="mt-6 w-full rounded-2xl bg-rose-100 text-rose-700 py-3 font-bold hover:bg-rose-200 transition-colors">Tắt mã QR</button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center py-8">
+                  <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                    <QrCode className="h-10 w-10 text-slate-400" />
+                  </div>
+                  <p className="text-slate-600 mb-6">Mã QR điểm danh đang tắt.</p>
+                  <button onClick={() => handleToggleQR(true)} className="w-full rounded-2xl bg-indigo-600 text-white py-3 font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Tạo & Bật mã QR</button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Feedback Modal */}
+        {showFeedbackModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-2xl max-h-[80vh] overflow-y-auto rounded-[32px] bg-white p-8 shadow-2xl relative">
+              <button onClick={() => setShowFeedbackModal(false)} className="absolute right-5 top-5 rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+              <h3 className="text-2xl font-black text-[#132b57] mb-2">Đánh giá từ Sinh viên</h3>
+              <p className="text-slate-500 text-sm mb-6">Sự kiện: {selectedEvent?.title}</p>
+              
+              <div className="space-y-4">
+                {feedbacks.length === 0 ? (
+                  <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+                    <MessageSquare className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                    <p className="text-slate-500">Chưa có đánh giá nào cho sự kiện này.</p>
+                  </div>
+                ) : (
+                  feedbacks.map(fb => (
+                    <div key={fb.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50">
+                      <div className="flex items-center gap-3 mb-3">
+                        {fb.user?.avatar ? (
+                          <img src={fb.user.avatar} className="w-10 h-10 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center">{fb.user?.name?.charAt(0) || 'U'}</div>
+                        )}
+                        <div>
+                          <p className="font-semibold text-slate-800">{fb.user?.name}</p>
+                          <p className="text-xs text-slate-500">{new Date(fb.createdAt).toLocaleString('vi-VN')}</p>
+                        </div>
+                        <div className="ml-auto flex gap-1">
+                          {[1,2,3,4,5].map(star => (
+                            <span key={star} className={`text-lg ${star <= fb.rating ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-slate-600 bg-white p-3 rounded-xl border border-slate-100">{fb.content || 'Không có bình luận.'}</p>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

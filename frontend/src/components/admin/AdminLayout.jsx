@@ -17,7 +17,7 @@ const navSections = [
       { to: '/admin/events/create', label: 'Tạo sự kiện', icon: CalendarPlus2 },
       { to: '/admin/event-approvals', label: 'Duyệt sự kiện', icon: CheckCheck },
       { to: '/admin/certificates', label: 'Duyệt chứng nhận', icon: Award },
-      { to: '/lien-chi/registrations', label: 'Người đăng ký', icon: Users },
+      { to: '/admin/registrations', label: 'Người đăng ký', icon: Users },
     ],
   },
   {

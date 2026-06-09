@@ -4,6 +4,8 @@ import { Search, ChevronDown, CheckCircle2, XCircle, Trash2, UserPlus, Save, Ale
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { getStoredUserProfile } from '../../shared/user/session';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function LienChiRegistrationsPage() {
   const user = getStoredUserProfile();
@@ -117,6 +119,83 @@ export default function LienChiRegistrationsPage() {
     }
   };
 
+  const handleIssueCertificate = async (reg) => {
+    const studentUser = reg.User || {};
+    const event = events.find(e => e.id === selectedEventId) || { title: 'Sự kiện BK-Youth' };
+    
+    // Auto-approve in backend if not already requested
+    try {
+      const token = localStorage.getItem('token') || '';
+      await fetch('/api/certificates/request', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: event.id, activityTitle: event.title, studentIdOverride: studentUser.id })
+      });
+    } catch (e) {
+      console.log('Error auto-requesting certificate:', e);
+    }
+    
+    // Generate PDF immediately for Lien Chi to download
+    const exportNode = document.createElement('div');
+    exportNode.style.position = 'fixed';
+    exportNode.style.left = '-99999px';
+    exportNode.style.top = '0';
+    exportNode.style.width = '1200px';
+    exportNode.style.height = '848px';
+    exportNode.style.background = '#f7faff';
+    exportNode.style.border = '6px solid #113b90';
+    exportNode.style.padding = '44px';
+    exportNode.style.fontFamily = '"Segoe UI", Arial, sans-serif';
+    exportNode.style.color = '#132b57';
+    exportNode.innerHTML = `
+      <div style="height:100%; border:2px solid #8cb4eb; position:relative; padding:36px 42px; box-sizing:border-box;">
+        <div style="text-align:center; letter-spacing:2px; font-size:14px; font-weight:700; color:#1f5dcc;">HỆ THỐNG BK-YOUTH</div>
+        <h1 style="margin:18px 0 8px; text-align:center; font-size:48px; color:#113b90; font-weight:900;">GIẤY CHỨNG NHẬN</h1>
+        <p style="margin:0; text-align:center; font-size:24px; color:#334155;">Xác nhận sinh viên đã hoàn thành hoạt động</p>
+        <h2 style="margin:26px 0 0; text-align:center; font-size:38px; color:#132b57; font-weight:900;">${event.title}</h2>
+        <div style="margin-top:42px; font-size:24px; line-height:1.7; color:#1e293b;">
+          <div><strong>Sinh viên:</strong> ${studentUser.fullName || ''}</div>
+          <div><strong>MSSV:</strong> ${studentUser.studentId || ''}</div>
+          <div><strong>Người duyệt:</strong> ${user.fullName || 'Đoàn trường'}</div>
+          <div><strong>Thời điểm duyệt:</strong> ${new Date().toLocaleString('vi-VN')}</div>
+          <div><strong>Mã mộc:</strong> BKYOUTH-${user.role === 'admin' ? 'DOANTRUONG' : 'LIENCHI'}-APPROVED</div>
+        </div>
+        <div style="position:absolute; right:62px; bottom:86px; width:180px; height:180px; border:4px solid #b12020; border-radius:50%; color:#b12020; display:flex; flex-direction:column; align-items:center; justify-content:center; transform:rotate(-12deg); font-weight:800;">
+          <div style="font-size:20px;">ĐÃ DUYỆT</div>
+          <div style="font-size:16px; margin-top:4px;">${user.role === 'admin' ? 'ĐOÀN TRƯỜNG' : 'LIÊN CHI ĐOÀN'}</div>
+          <div style="font-size:16px;">BK-YOUTH</div>
+        </div>
+        <div style="position:absolute; left:42px; right:42px; bottom:34px; text-align:center; font-size:16px; color:#64748b;">
+          Chứng nhận điện tử - phát hành bởi hệ thống BK-YOUTH
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(exportNode);
+    setAddFeedback({ type: 'info', message: 'Đang tạo minh chứng...' });
+
+    html2canvas(exportNode, { scale: 2, useCORS: true, backgroundColor: '#f7faff' })
+      .then((canvas) => {
+        const imgData = canvas.toDataURL('image/png');
+        const doc = new jsPDF({
+          orientation: 'landscape',
+          unit: 'mm',
+          format: 'a4',
+        });
+        doc.addImage(imgData, 'PNG', 0, 0, 297, 210);
+        const safeTitle = event.title.replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
+        doc.save(`chung-nhan-${safeTitle}-${studentUser.studentId}.pdf`);
+        setAddFeedback({ type: 'success', message: 'Cấp minh chứng thành công!' });
+      })
+      .catch(() => {
+        setAddFeedback({ type: 'error', message: 'Lỗi khi tạo PDF' });
+      })
+      .finally(() => {
+        document.body.removeChild(exportNode);
+        setTimeout(() => setAddFeedback({ type: '', message: '' }), 3000);
+      });
+  };
+
   const handleAddStudent = async (e) => {
     e.preventDefault();
     if (!newStudentId.trim()) return;
@@ -158,7 +237,7 @@ export default function LienChiRegistrationsPage() {
   });
 
   return (
-    <Layout currentPath="/lien-chi/registrations" title="Quản lý người đăng ký" subtitle="Xem, chỉnh sửa, thêm hoặc xoá sinh viên trong danh sách đăng ký.">
+    <Layout currentPath={isAdmin ? "/admin/registrations" : "/lien-chi/registrations"} title="Quản lý người đăng ký" subtitle="Xem, chỉnh sửa, thêm hoặc xoá sinh viên trong danh sách đăng ký.">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 grid gap-6 md:grid-cols-12">
           {/* Cột chọn sự kiện */}
@@ -248,6 +327,15 @@ export default function LienChiRegistrationsPage() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
+                            {reg.status === 'attended' && (
+                              <button
+                                onClick={() => handleIssueCertificate(reg)}
+                                className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                                title="Cấp minh chứng ngay"
+                              >
+                                <Award className="h-5 w-5" />
+                              </button>
+                            )}
                             {reg.status !== 'cancelled' && (
                               <button
                                 onClick={() => handleUpdateStatus(reg.id, reg.status === 'attended' ? 'registered' : 'attended')}

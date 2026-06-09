@@ -42,34 +42,49 @@ export default function StudentActivityHistoryPage() {
   const mainRef = useRef(null);
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
-  const registeredEventIds = getRegisteredEventIds();
-  const [certificateRequests, setCertificateRequests] = useState(getCertificateRequests);
+  const [certificateRequests, setCertificateRequests] = useState([]);
   const [certificateNotice, setCertificateNotice] = useState('');
+  const [dbEvents, setDbEvents] = useState([]);
+
+  const fetchHistoryData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const [eventsRes, certsRes] = await Promise.all([
+        fetch('/api/events', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/certificates/mine', { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+
+      if (eventsRes.ok) {
+        const data = await eventsRes.json();
+        setDbEvents(data.events || []);
+      }
+      if (certsRes.ok) {
+        const data = await certsRes.json();
+        setCertificateRequests(data.certificates || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, left: 0 });
+    fetchHistoryData();
   }, [location.pathname]);
 
-  useEffect(() => {
-    const syncRequests = () => setCertificateRequests(getCertificateRequests());
-    window.addEventListener('focus', syncRequests);
-    window.addEventListener('storage', syncRequests);
-    return () => {
-      window.removeEventListener('focus', syncRequests);
-      window.removeEventListener('storage', syncRequests);
-    };
-  }, []);
+  const upcomingRegistrations = useMemo(() => {
+    return dbEvents.filter(e => e.isRegistered && !['completed', 'ended'].includes(e.status) && e.userRegistrationStatus === 'registered')
+      .map(event => ({
+        ...event,
+        progressText: event.status === 'approved' ? 'Sắp diễn ra' : 'Đang xử lý',
+      }));
+  }, [dbEvents]);
 
-  const upcomingRegistrations = useMemo(
-    () =>
-      studentEvents
-        .filter((event) => registeredEventIds.includes(event.id))
-        .map((event) => ({
-          ...event,
-          progressText: event.status === 'Sắp diễn ra' ? 'Sẵn sàng check-in' : 'Đang chờ xác nhận cuối',
-        })),
-    [registeredEventIds]
-  );
+  const completedActivities = useMemo(() => {
+    return dbEvents.filter(e => e.userRegistrationStatus === 'attended');
+  }, [dbEvents]);
 
   const certificateSummary = useMemo(() => {
     const approved = certificateRequests.filter((item) => item.status === 'approved').length;
@@ -77,9 +92,8 @@ export default function StudentActivityHistoryPage() {
     return { approved, pending };
   }, [certificateRequests]);
 
-  const requestCertificate = (activity) => {
-    const requestId = `cert-${activity.id}-${user.studentId}`.toLowerCase();
-    const existingRequest = certificateRequests.find((item) => item.id === requestId);
+  const requestCertificate = async (activity) => {
+    const existingRequest = certificateRequests.find((item) => item.eventId === activity.id);
     if (existingRequest?.status === 'approved') {
       setCertificateNotice('Hoạt động này đã có chứng nhận được duyệt. Bạn có thể xuất PDF ngay.');
       return;
@@ -89,19 +103,23 @@ export default function StudentActivityHistoryPage() {
       return;
     }
 
-    const nextRequests = upsertCertificateRequest({
-      id: requestId,
-      activityId: activity.id,
-      activityTitle: activity.title,
-      status: 'pending',
-      requestedAt: new Date().toISOString(),
-      approvedAt: null,
-      approverName: '',
-      stampCode: '',
-      note: 'Hệ thống đã ghi nhận yêu cầu. Chờ admin duyệt chứng nhận.',
-    });
-    setCertificateRequests(nextRequests);
-    setCertificateNotice('Đã gửi yêu cầu cấp chứng nhận. Vui lòng chờ admin duyệt.');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/certificates/request', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: activity.id, activityTitle: activity.title })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCertificateNotice(data.message || 'Lỗi gửi yêu cầu');
+      } else {
+        setCertificateNotice('Đã gửi yêu cầu cấp chứng nhận. Vui lòng chờ admin duyệt.');
+        fetchHistoryData();
+      }
+    } catch (err) {
+      setCertificateNotice('Lỗi kết nối máy chủ');
+    }
   };
 
   const exportCertificatePdf = (request) => {
@@ -289,25 +307,24 @@ export default function StudentActivityHistoryPage() {
 
             <div className="mt-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
               <section className="space-y-4">
-                {activityHistory.map((item) => (
+                {completedActivities.map((item) => (
                   <motion.article
                     key={item.id}
                     whileHover={{ y: -4 }}
                     className="profile-panel relative overflow-hidden rounded-[28px] border border-[#dce8f5] bg-white p-5"
                   >
-                    <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.accent}`} />
+                    <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.accent || 'from-indigo-400 to-indigo-600'}`} />
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div>
-                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${statusTone(item.status)}`}>
-                          {item.status}
+                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${statusTone('Hoàn thành')}`}>
+                          Đã tham gia
                         </span>
                         <h2 className="mt-4 text-2xl font-black text-[#132b57]">{item.title}</h2>
                         <div className="mt-3 flex items-center gap-2 text-sm text-slate-500">
                           <Clock3 className="h-4 w-4" />
-                          <span>{item.time}</span>
+                          <span>{item.startDate}</span>
                         </div>
-                        <p className="mt-4 text-sm font-semibold text-[#1747a6]">{item.result}</p>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">{item.note}</p>
+                        <p className="mt-4 text-sm font-semibold text-[#1747a6]">Hoàn thành điểm danh QR + GPS</p>
                       </div>
                       <div className="rounded-[24px] bg-[#f5f9ff] px-4 py-4 text-sm text-slate-600 lg:w-[220px]">
                         <p className="font-bold text-[#132b57]">Trạng thái hồ sơ</p>

@@ -29,6 +29,10 @@ export class Event extends Model {
   declare pendingChangeReason: string | null;
   declare pendingProposedDate: Date | null;
   declare communityPoints: number;
+  declare qrCode: string | null;
+  declare qrActive: boolean;
+  declare latitude: number | null;
+  declare longitude: number | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -144,6 +148,22 @@ Event.init(
     communityPoints: {
       type: DataTypes.INTEGER,
       defaultValue: 0
+    },
+    qrCode: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    qrActive: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    latitude: {
+      type: DataTypes.FLOAT,
+      allowNull: true
+    },
+    longitude: {
+      type: DataTypes.FLOAT,
+      allowNull: true
     }
   },
   {

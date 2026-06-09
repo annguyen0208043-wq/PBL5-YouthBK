@@ -135,3 +135,31 @@ export const requestCertificate = async (req: AuthRequest, res: Response): Promi
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+export const getMyCertificates = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    const certificates = await Certificate.findAll({
+      where: { userId },
+      include: [
+        { model: User, as: 'approver', attributes: ['name'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    const mapped = certificates.map(c => {
+      const d = c.toJSON() as any;
+      return {
+        ...d,
+        requestedAt: d.createdAt,
+        approverName: d.approver?.name || 'Admin',
+        stampCode: d.status === 'approved' ? `BKY-${d.id}-${new Date(d.createdAt).getFullYear()}` : ''
+      };
+    });
+
+    res.json({ certificates: mapped });
+  } catch (error) {
+    console.error('Get my certificates error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};

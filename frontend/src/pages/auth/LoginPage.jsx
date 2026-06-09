@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import AuthShowcase from '../../components/auth/AuthShowcase';
 import { BachKhoaLogo, DoanLogo } from '../../components/auth/AuthLogos';
 import { authContainerVariants, authItemVariants } from '../../shared/auth/authData';
-const API_URL = 'http://localhost:5000/api/auth';
+const API_URL = '/api/auth';
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);

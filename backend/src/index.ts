@@ -29,6 +29,7 @@ import './models/ConversationMember';
 import './models/ChatInvitation';
 import './models/Message';
 import './models/AuditLog';
+import './models/EventFeedback';
 
 dotenv.config();
 

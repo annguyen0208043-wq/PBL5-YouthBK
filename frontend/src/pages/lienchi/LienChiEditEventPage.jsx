@@ -34,7 +34,12 @@ export default function LienChiEditEventPage() {
   useEffect(() => {
     const fetchEvent = async () => {
       try {
-        const response = await fetch(`/api/events/${id}`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/events/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         if (!response.ok) throw new Error('Không thể tải thông tin sự kiện');
         const data = await response.json();
         const event = data.event;

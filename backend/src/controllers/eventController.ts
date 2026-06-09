@@ -8,6 +8,8 @@ import User from '../models/User';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { Op } from 'sequelize';
 import { isBeforeStart, isApproved, isRegistrationOpen, hasSlots, noActiveRequest, isOwner } from '../guards/event.guards';
+import crypto from 'crypto';
+import EventFeedback from '../models/EventFeedback';
 
 // ----------------------------------------------------------------------
 // 1. PUBLIC / GENERAL ENDPOINTS
@@ -24,6 +26,13 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
+    const pCapacity = (capacity === 'null' || !capacity) ? null : parseInt(capacity, 10);
+    const pMaxParticipants = (maxParticipants === 'null' || !maxParticipants) ? null : parseInt(maxParticipants, 10);
+    const pMaxSlots = (maxSlots === 'null' || !maxSlots) ? null : parseInt(maxSlots, 10);
+    
+    const finalCapacity = pCapacity || pMaxParticipants;
+    const finalMaxSlots = pMaxSlots || pMaxParticipants || pCapacity;
+
     const event = await Event.create({
       title,
       description,
@@ -33,9 +42,9 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       startTime: startTime || startDate,
       endTime: endTime || endDate,
       registrationDeadline,
-      capacity: capacity || maxParticipants,
-      maxParticipants: maxParticipants || capacity,
-      maxSlots: maxSlots || maxParticipants || capacity,
+      capacity: finalCapacity,
+      maxParticipants: finalCapacity,
+      maxSlots: finalMaxSlots,
       category,
       communityPoints: communityPoints ? parseInt(communityPoints) : 0,
       createdBy: userId,
@@ -104,7 +113,7 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
         ...(req.user ? [{ 
           model: require('../models/EventRegistration').default, 
           as: 'registrations',
-          where: { userId: req.user.id, status: 'registered' },
+          where: { userId: req.user.id },
           required: false
         }] : [])
       ],
@@ -113,8 +122,12 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
 
     const formattedEvents = events.map(e => {
       const data = e.toJSON() as any;
-      if (req.user && data.registrations) {
-        data.isRegistered = data.registrations.length > 0;
+      if (req.user && data.registrations && data.registrations.length > 0) {
+        data.isRegistered = true;
+        data.userRegistrationStatus = data.registrations[0].status;
+      } else {
+        data.isRegistered = false;
+        data.userRegistrationStatus = null;
       }
       return data;
     });
@@ -153,7 +166,7 @@ export const getEventById = async (req: Request, res: Response): Promise<void> =
 export const updateEvent = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { title, description, location, startDate, endDate, startTime, endTime, maxSlots, category, registrationDeadline, status, communityPoints } = req.body;
+    const { title, description, location, startDate, endDate, startTime, endTime, capacity, maxParticipants, maxSlots, category, registrationDeadline, status, communityPoints } = req.body;
 
     const event = await Event.findByPk(id);
     if (!event) {
@@ -174,6 +187,13 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       }
     }
 
+    const pCapacity = (capacity === 'null' || capacity === '') ? null : (capacity !== undefined ? parseInt(capacity, 10) : undefined);
+    const pMaxParticipants = (maxParticipants === 'null' || maxParticipants === '') ? null : (maxParticipants !== undefined ? parseInt(maxParticipants, 10) : undefined);
+    const pMaxSlots = (maxSlots === 'null' || maxSlots === '') ? null : (maxSlots !== undefined ? parseInt(maxSlots, 10) : undefined);
+    
+    const finalCapacity = pCapacity !== undefined ? pCapacity : (pMaxParticipants !== undefined ? pMaxParticipants : undefined);
+    const finalMaxSlots = pMaxSlots !== undefined ? pMaxSlots : finalCapacity;
+
     await event.update({
       title: title || event.title,
       description: description !== undefined ? description : event.description,
@@ -183,7 +203,9 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       startTime: startTime || event.startTime,
       endTime: endTime || event.endTime,
       registrationDeadline: registrationDeadline || event.registrationDeadline,
-      maxSlots: maxSlots !== undefined ? maxSlots : event.maxSlots,
+      capacity: finalCapacity !== undefined ? finalCapacity : event.capacity,
+      maxParticipants: finalCapacity !== undefined ? finalCapacity : event.maxParticipants,
+      maxSlots: finalMaxSlots !== undefined ? finalMaxSlots : event.maxSlots,
       category: category !== undefined ? category : event.category,
       communityPoints: communityPoints !== undefined ? parseInt(communityPoints) : event.communityPoints,
       status: status || event.status
@@ -841,5 +863,194 @@ export const deleteRegistration = async (req: AuthRequest, res: Response): Promi
   } catch (error) {
     console.error('Delete registration error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const toggleEventQR = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { active, latitude, longitude } = req.body;
+
+    const event = await Event.findByPk(id);
+    if (!event) {
+      res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+      return;
+    }
+
+    if (req.user?.role !== 'admin' && event.createdBy !== req.user?.id) {
+      res.status(403).json({ message: 'Không có quyền' });
+      return;
+    }
+
+    if (active) {
+      event.qrActive = true;
+      if (!event.qrCode) {
+        event.qrCode = `BKYOUTH-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
+      }
+      if (latitude !== undefined && longitude !== undefined) {
+        event.latitude = latitude;
+        event.longitude = longitude;
+      }
+    } else {
+      event.qrActive = false;
+    }
+
+    await event.save();
+    res.json({ message: active ? 'Đã bật mã QR điểm danh' : 'Đã tắt mã QR điểm danh', qrCode: event.qrCode, qrActive: event.qrActive });
+  } catch (error) {
+    console.error('Toggle QR error:', error);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+};
+
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    ;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c; // Distance in km
+  return d;
+}
+
+function deg2rad(deg: number) {
+  return deg * (Math.PI / 180);
+}
+
+export const checkInQR = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { qrCode, latitude, longitude } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const event = await Event.findByPk(id);
+    if (!event) {
+      res.status(404).json({ message: 'Sự kiện không tồn tại' });
+      return;
+    }
+
+    if (!event.qrActive) {
+      res.status(400).json({ message: 'Điểm danh QR hiện đang bị tắt' });
+      return;
+    }
+
+    if (event.qrCode !== qrCode) {
+      res.status(400).json({ message: 'Mã QR không hợp lệ hoặc đã hết hạn' });
+      return;
+    }
+
+    // Check GPS Distance if event has coordinates (max 500 meters)
+    // Tạm thời tắt check GPS khoảng cách theo yêu cầu của user để test
+    // if (event.latitude && event.longitude && latitude && longitude) {
+    //   const distanceKm = getDistanceFromLatLonInKm(event.latitude, event.longitude, latitude, longitude);
+    //   if (distanceKm > 0.5) { // 500 meters
+    //     res.status(400).json({ message: `Vị trí của bạn quá xa nơi tổ chức sự kiện (${Math.round(distanceKm * 1000)}m). Vui lòng di chuyển lại gần hơn.` });
+    //     return;
+    //   }
+    // }
+
+    const registration = await EventRegistration.findOne({
+      where: { eventId: id, userId }
+    });
+
+    if (!registration) {
+      res.status(400).json({ message: 'Bạn chưa đăng ký tham gia sự kiện này' });
+      return;
+    }
+
+    if (registration.status === 'attended') {
+      res.status(400).json({ message: 'Bạn đã điểm danh rồi' });
+      return;
+    }
+
+    registration.status = 'attended';
+    await registration.save();
+
+    res.json({ message: 'Điểm danh thành công!' });
+  } catch (error) {
+    console.error('Checkin QR error:', error);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+};
+
+export const submitEventFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { rating, content } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const registration = await EventRegistration.findOne({
+      where: { eventId: id, userId, status: 'attended' }
+    });
+
+    if (!registration) {
+      res.status(403).json({ message: 'Chỉ sinh viên đã điểm danh mới được gửi đánh giá' });
+      return;
+    }
+
+    const existingFeedback = await EventFeedback.findOne({
+      where: { eventId: id, userId }
+    });
+
+    if (existingFeedback) {
+      res.status(400).json({ message: 'Bạn đã gửi đánh giá cho sự kiện này rồi' });
+      return;
+    }
+
+    const feedback = await EventFeedback.create({
+      eventId: Number(id),
+      userId,
+      rating,
+      content
+    });
+
+    res.status(201).json({ message: 'Cảm ơn bạn đã gửi đánh giá!', feedback });
+  } catch (error) {
+    console.error('Submit feedback error:', error);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
+  }
+};
+
+export const getEventFeedbacks = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const event = await Event.findByPk(id);
+    if (!event) {
+      res.status(404).json({ message: 'Sự kiện không tồn tại' });
+      return;
+    }
+
+    if (req.user?.role !== 'admin' && event.createdBy !== req.user?.id) {
+      res.status(403).json({ message: 'Không có quyền xem' });
+      return;
+    }
+
+    const feedbacks = await EventFeedback.findAll({
+      where: { eventId: id },
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'name', 'email', 'avatar'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json({ feedbacks });
+  } catch (error) {
+    console.error('Get feedbacks error:', error);
+    res.status(500).json({ message: 'Lỗi máy chủ' });
   }
 };
