@@ -223,6 +223,19 @@ function isEventForStudentFaculty(event, studentFaculty) {
   return Boolean(studentFaculty && creatorFaculty && creatorFaculty === studentFaculty);
 }
 
+function canCancelRegistration(event) {
+  // Check if registration deadline has passed
+  if (event.registrationDeadline) {
+    const now = new Date();
+    const deadline = new Date(event.registrationDeadline);
+    if (now >= deadline) {
+      return { allowed: false, reason: 'Hạn đăng ký đã hết' };
+    }
+  }
+  
+  return { allowed: true, reason: '' };
+}
+
 export default function StudentEventsPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -245,6 +258,7 @@ export default function StudentEventsPage() {
   const [feedback, setFeedback] = useState('');
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState('');
+  const [isTogglingEventId, setIsTogglingEventId] = useState(null);
   const toastTimerRef = useRef(null);
   const qrVideoRef = useRef(null);
   const qrStreamRef = useRef(null);
@@ -298,18 +312,32 @@ export default function StudentEventsPage() {
   const filters = ['Tất cả', 'Đang mở đăng ký', 'Đã đăng ký', 'Sắp diễn ra'];
 
   const [dbEvents, setDbEvents] = useState([]);
+  const displayFilters = ['Tất cả', 'Đang mở đăng ký', 'Đã đăng ký', 'Đang tham gia', 'Đã kết thúc'];
+  const normalizedActiveFilter = displayFilters.includes(activeFilter) ? activeFilter : 'Tất cả';
 
   useEffect(() => {
     const fetchDbEvents = async () => {
       try {
+        setIsLoadingEvents(true);
+        setEventsError('');
         const token = localStorage.getItem('token') || '';
         const response = await fetch('/api/events', {
           headers: token ? { Authorization: `Bearer ${token}` } : {}
         });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || 'Không thể tải danh sách sự kiện');
+        }
+
         if (response.ok) {
-          const data = await response.json();
-          const approvedEvents = data.events.filter(e => e.status === 'approved' || e.status === 'ongoing');
+          const approvedEvents = data.events
+            .filter((event) => ['open_registration', 'ongoing', 'ended', 'completed'].includes(event.status))
+            .filter((event) => isEventForStudentFaculty(event, studentFaculty));
           
+          const newestOpenId = approvedEvents
+            .filter((event) => event.status === 'open_registration')
+            .sort((a, b) => new Date(b.createdAt || b.updatedAt) - new Date(a.createdAt || a.updatedAt))[0]?.id;
+
           const formattedEvents = approvedEvents.map(e => {
             const formatTime = (iso) => {
               if (!iso) return '';
@@ -321,7 +349,11 @@ export default function StudentEventsPage() {
               const YYYY = d.getFullYear();
               return `${hh}:${mm}, ${DD}/${MM}/${YYYY}`;
             };
-            const timeRange = `${formatTime(e.startTime || e.startDate)} - ${formatTime(e.endTime || e.endDate)}`;
+            const startIso = e.actualStartDate || e.plannedStartDate || e.startTime || e.startDate;
+            const endIso = e.actualEndDate || e.plannedEndDate || e.endTime || e.endDate;
+            const timeRange = `${formatDateTime(startIso) || formatTime(startIso)} - ${formatDateTime(endIso) || formatTime(endIso)}`;
+            const publicEvent = isPublicEvent(e);
+            const coverImage = e.images?.find((image) => image.isCover === 1) || e.images?.[0];
 
             return {
               id: `db-${e.id}`,
@@ -344,20 +376,48 @@ export default function StudentEventsPage() {
               accent: 'from-blue-500 to-indigo-500',
               attendanceConfig: { gpsCenter: { lat: 16.074061, lng: 108.150720 }, allowedRadiusMeters: 100, qrValue: `BKYOUTH-${e.id}` },
               imageUrl: e.images && e.images.length > 0 ? e.images[0].imageUrl : null,
+              organizer: publicEvent ? 'Đoàn trường Bách Khoa' : (e.creator?.name || 'Liên chi Đoàn'),
+              organizerFaculty: e.creator?.faculty || '',
+              category: e.category || 'Hoạt động',
+              startAt: startIso ? new Date(startIso) : null,
+              endAt: endIso ? new Date(endIso) : null,
+              location: e.locationName || e.location || 'Đang cập nhật',
+              points: e.communityPoints ? `+${e.communityPoints} điểm` : '+5 ĐRL',
+              userRegistrationStatus: e.userRegistrationStatus,
+              status: getStudentEventStatus(e.status),
+              rawStatus: e.status,
+              description: e.description || 'Đơn vị tổ chức chưa cập nhật mô tả chi tiết.',
+              tags: [publicEvent ? 'Public' : (e.creator?.faculty || user.faculty || 'Theo khoa'), e.category || 'Hoạt động'].filter(Boolean),
+              accent: publicEvent ? 'from-blue-500 via-sky-500 to-emerald-400' : 'from-emerald-500 via-teal-500 to-blue-500',
+              audienceLabel: publicEvent ? 'Public - mọi khoa' : (e.creator?.faculty || 'Theo khoa'),
+              isPublic: publicEvent,
+              isNewestOpen: e.id === newestOpenId,
+              attendanceConfig: { gpsCenter: { lat: 16.074061, lng: 108.150720 }, allowedRadiusMeters: e.attendanceRadius || 100, qrValue: e.qrCode || `BKYOUTH-${e.id}` },
+              imageUrl: coverImage?.imageUrl || null,
               communityPoints: e.communityPoints || 0,
+              createdAt: e.createdAt,
+              registrationDeadline: e.registrationDeadline ? new Date(e.registrationDeadline) : null,
+              registrationDeadlineStr: e.registrationDeadline ? formatDateTime(e.registrationDeadline) : null,
             };
           });
           
-          setDbEvents(formattedEvents);
+          setDbEvents(formattedEvents.sort((a, b) => {
+            if (a.isNewestOpen !== b.isNewestOpen) return a.isNewestOpen ? -1 : 1;
+            if (a.rawStatus === 'open_registration' && b.rawStatus !== 'open_registration') return -1;
+            if (a.rawStatus !== 'open_registration' && b.rawStatus === 'open_registration') return 1;
+            return new Date(b.createdAt || b.startAt || 0) - new Date(a.createdAt || a.startAt || 0);
+          }));
         }
       } catch (err) {
-        console.error(err);
+        setEventsError(err.message || 'Không thể tải danh sách sự kiện');
+      } finally {
+        setIsLoadingEvents(false);
       }
     };
 
     fetchDbEventsRef.current = fetchDbEvents;
     fetchDbEvents();
-  }, []);
+  }, [studentFaculty, user.faculty]);
 
   const visibleEvents = useMemo(() => {
     const allEvents = [...dbEvents];
@@ -558,9 +618,16 @@ export default function StudentEventsPage() {
   const fetchDbEventsRef = useRef(null); // to re-fetch events
 
   const toggleRegistration = async (eventId, eventTitle, isEnrolled, realId) => {
+    // Prevent multiple simultaneous requests
+    if (isTogglingEventId === realId) {
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
+
+      setIsTogglingEventId(realId);
 
       const endpoint = isEnrolled ? `/api/events/${realId}/cancel-registration` : `/api/events/${realId}/register`;
       
@@ -575,15 +642,23 @@ export default function StudentEventsPage() {
       const data = await response.json();
       if (!response.ok) {
         setFeedback(data.message || 'Có lỗi xảy ra');
+        // Reset toggle state on error
+        setIsTogglingEventId(null);
       } else {
         setFeedback(isEnrolled ? `Bạn đã hủy đăng ký: ${eventTitle}` : `Đăng ký thành công: ${eventTitle}`);
+        
+        // Don't do optimistic update - only rely on refetch from backend
         // Re-fetch events to get updated slots and registration status
         if (fetchDbEventsRef.current) {
-          fetchDbEventsRef.current();
+          await fetchDbEventsRef.current();
         }
+        
+        // Clear toggle state after success
+        setIsTogglingEventId(null);
       }
     } catch (err) {
       setFeedback('Lỗi kết nối máy chủ');
+      setIsTogglingEventId(null);
     }
     
     if (toastTimerRef.current) {
@@ -722,14 +797,14 @@ export default function StudentEventsPage() {
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-3">
-                  {filters.map((filter) => (
+                  {displayFilters.map((filter) => (
                     <motion.button
                       key={filter}
                       type="button"
                       whileTap={{ scale: 0.96 }}
                       onClick={() => setActiveFilter(filter)}
                       className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                        activeFilter === filter
+                        normalizedActiveFilter === filter
                           ? 'bg-[#1747a6] text-white shadow-[0_10px_24px_rgba(23,71,166,0.24)]'
                           : 'border border-[#dce8f5] bg-white text-slate-600 hover:border-[#9ec0f0] hover:bg-[#f8fbff]'
                       }`}
@@ -784,6 +859,16 @@ export default function StudentEventsPage() {
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-3">
                           <EventStatus value={displayStatus} />
+                          {event.isNewestOpen && displayStatus === 'Đang mở đăng ký' && (
+                            <motion.span
+                              animate={{ scale: [1, 1.05, 1] }}
+                              transition={{ duration: 2, repeat: Infinity }}
+                              className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-rose-400 to-pink-500 px-3 py-1 text-xs font-bold text-white"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              NEW
+                            </motion.span>
+                          )}
                           <span className="rounded-full bg-[#edf5ff] px-3 py-1 text-xs font-bold text-[#1f5dcc]">{event.points}</span>
                           {event.communityPoints > 0 && (
                             <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">+{event.communityPoints} Điểm cộng đồng</span>
@@ -843,25 +928,62 @@ export default function StudentEventsPage() {
                         </div>
 
                         <div className="mt-5 grid gap-2">
-                          <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.02, y: -1 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => toggleRegistration(event.id, event.title, event.enrolled, event.realId)}
-                            disabled={!event.enrolled && event.registered >= event.slots}
-                            className={`rounded-2xl px-4 py-3 font-bold text-white transition-all ${
-                              event.enrolled
-                                ? 'bg-[#d24c4c] shadow-[0_12px_24px_rgba(210,76,76,0.24)] hover:bg-[#bf3b3b]'
-                                : event.registered >= event.slots
-                                ? 'bg-slate-400 cursor-not-allowed'
-                                : 'bg-[#1747a6] shadow-[0_12px_24px_rgba(23,71,166,0.24)] hover:bg-[#205fd8]'
-                            }`}
-                          >
-                            <span className="inline-flex items-center gap-2">
-                              {event.enrolled && <CheckCircle2 className="h-4 w-4" />}
-                              {event.enrolled ? 'Đã đăng ký (Nhấn để hủy)' : event.registered >= event.slots ? 'Đã đầy' : 'Đăng ký tham gia'}
-                            </span>
-                          </motion.button>
+                          {(() => {
+                            const isRegistrationDeadlineExpired = event.registrationDeadline && new Date() >= event.registrationDeadline;
+                            const cancelCheck = event.enrolled ? canCancelRegistration(event) : { allowed: true };
+                            const cannotCancelReason = !cancelCheck.allowed ? cancelCheck.reason : null;
+                            
+                            return (
+                              <>
+                                <motion.button
+                                  type="button"
+                                  whileHover={{ scale: event.enrolled && !cannotCancelReason ? 1.02 : 1, y: -1 }}
+                                  whileTap={{ scale: event.enrolled && !cannotCancelReason ? 0.97 : 1 }}
+                                  onClick={() => {
+                                    if (event.enrolled && cannotCancelReason) {
+                                      setFeedback(`Không thể hủy: ${cannotCancelReason}`);
+                                      return;
+                                    }
+                                    toggleRegistration(event.id, event.title, event.enrolled, event.realId);
+                                  }}
+                                  disabled={isTogglingEventId === event.realId || (!event.enrolled && event.registered >= event.slots) || (event.enrolled && cannotCancelReason)}
+                                  title={cannotCancelReason ? `Không thể hủy: ${cannotCancelReason}` : ''}
+                                  className={`rounded-2xl px-4 py-3 font-bold text-white transition-all ${
+                                    event.enrolled
+                                      ? (isTogglingEventId === event.realId || cannotCancelReason)
+                                        ? 'bg-slate-400 cursor-not-allowed opacity-60'
+                                        : 'bg-[#d24c4c] shadow-[0_12px_24px_rgba(210,76,76,0.24)] hover:bg-[#bf3b3b]'
+                                      : (isTogglingEventId === event.realId || event.registered >= event.slots)
+                                      ? 'bg-slate-400 cursor-not-allowed opacity-60'
+                                      : isRegistrationDeadlineExpired
+                                      ? 'bg-slate-400 cursor-not-allowed opacity-60'
+                                      : 'bg-[#1747a6] shadow-[0_12px_24px_rgba(23,71,166,0.24)] hover:bg-[#205fd8]'
+                                  }`}
+                                >
+                                  <span className="inline-flex items-center gap-2">
+                                    {event.enrolled && <CheckCircle2 className="h-4 w-4" />}
+                                    {isTogglingEventId === event.realId
+                                      ? 'Đang xử lý...'
+                                      : event.enrolled 
+                                      ? cannotCancelReason 
+                                        ? `Không thể hủy (${cannotCancelReason})`
+                                        : 'Đã đăng ký (Nhấn để hủy)'
+                                      : event.registered >= event.slots
+                                      ? 'Đã đầy'
+                                      : isRegistrationDeadlineExpired
+                                      ? 'Hạn đăng ký hết'
+                                      : 'Đăng ký tham gia'
+                                    }
+                                  </span>
+                                </motion.button>
+                                {isRegistrationDeadlineExpired && !event.enrolled && (
+                                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+                                    Hạn đăng ký: {event.registrationDeadlineStr || 'Hết hạn'}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                           <motion.button
                             type="button"
                             whileHover={{ scale: 1.01 }}
