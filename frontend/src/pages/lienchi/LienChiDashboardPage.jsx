@@ -1,109 +1,97 @@
-import React from 'react';
-import { ArrowRight, BadgeCheck, CalendarDays, ClipboardList } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { Users, CalendarDays, Percent, Bell, Activity, Loader } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
-import { lienChiEvidenceRequests, lienChiEvents, lienChiRegistrations, lienChiSummaryCards } from '../../shared/lienchi/lienChiData';
-
-const summaryIcons = {
-  'my-events': CalendarDays,
-  'pending-evidences': BadgeCheck,
-  'registered-students': ClipboardList,
-};
+import StatCard from './components/dashboard/StatCard';
+import EventFrequencyChart from './components/dashboard/EventFrequencyChart';
+import EventTypeChart from './components/dashboard/EventTypeChart';
+import TopEventsList from './components/dashboard/TopEventsList';
+import NotificationStats from './components/dashboard/NotificationStats';
+import RecentActivity from './components/dashboard/RecentActivity';
 
 export default function LienChiDashboardPage() {
-  const totalRegistrations = Object.values(lienChiRegistrations).reduce((sum, list) => sum + list.length, 0);
-  const highlightedEvent = lienChiEvents[0];
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get('/api/dashboard/lien-chi', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setData(res.data);
+      } catch (err) {
+        console.error('Fetch dashboard error', err);
+        setError('Không thể tải dữ liệu thống kê. Vui lòng thử lại sau.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashboard();
+  }, []);
 
   return (
     <LienChiLayout
       currentPath="/lien-chi"
       title="Tổng quan liên chi"
-      subtitle="Theo dõi các sự kiện của khoa, số lượng đăng ký và những hồ sơ minh chứng cần xử lý."
+      subtitle="Theo dõi số liệu thống kê chi tiết về sinh viên, sự kiện và hiệu suất hoạt động."
     >
-      <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-        <section className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-3">
-            {lienChiSummaryCards.map((card) => {
-              const Icon = summaryIcons[card.id] || CalendarDays;
-              return (
-                <motion.div key={card.id} whileHover={{ y: -4 }} className="admin-summary-card profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5">
-                  <div className="flex items-start gap-3">
-                    <div className="admin-summary-icon rounded-2xl bg-[#f4f8ff] p-3 text-[#1747a6]">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                  </div>
-                  <div className="mt-5">
-                    <p className="admin-summary-label text-sm text-slate-500">{card.label}</p>
-                    <h2 className="mt-3 text-4xl font-black tracking-tight text-[#132b57]">{card.value}</h2>
-                  </div>
-                </motion.div>
-              );
-            })}
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader className="h-8 w-8 animate-spin text-[#1747a6]" />
+          <span className="ml-3 text-slate-500 font-medium">Đang tải dữ liệu...</span>
+        </div>
+      ) : error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-red-600">
+          {error}
+        </div>
+      ) : data && (
+        <div className="space-y-6">
+          {/* Row 1: KPI Cards */}
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            <StatCard label="Tổng sinh viên" value={data.kpi.totalStudents} icon={Users} color="blue" />
+            <StatCard label="Tổng sự kiện" value={data.kpi.totalEvents} icon={CalendarDays} color="green" />
+            <StatCard label="Sự kiện tháng này" value={data.kpi.eventsThisMonth} icon={Activity} color="purple" />
+            <StatCard label="Tỷ lệ tham gia" value={`${data.kpi.participationRate}%`} icon={Percent} color="amber" />
+            <StatCard label="Tổng thông báo" value={data.kpi.totalNotifications} icon={Bell} color="rose" />
           </div>
 
-          <motion.div whileHover={{ y: -4 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Sự kiện ưu tiên</p>
-                <h3 className="mt-2 text-2xl font-black text-[#132b57]">{highlightedEvent.title}</h3>
-              </div>
-              <Link to="/lien-chi/events/manage" className="inline-flex items-center gap-2 rounded-2xl bg-[#1747a6] px-4 py-3 font-bold text-white transition-all hover:bg-[#205fd8]">
-                Mở chi tiết
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
+          {/* Row 2: Charts */}
+          <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+            <motion.div whileHover={{ y: -4 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
+              <h3 className="mb-6 text-xl font-black text-[#132b57]">Tần suất sự kiện</h3>
+              <EventFrequencyChart data={data.charts.eventFrequency} />
+            </motion.div>
+            
+            <motion.div whileHover={{ y: -4 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
+              <h3 className="mb-6 text-xl font-black text-[#132b57]">Phân loại sự kiện</h3>
+              <EventTypeChart data={data.charts.eventTypes} />
+            </motion.div>
+          </div>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-[24px] bg-[#f6faff] p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Trạng thái</p>
-                <p className="mt-2 font-semibold text-[#132b57]">{highlightedEvent.status}</p>
-              </div>
-              <div className="rounded-[24px] bg-[#f6faff] p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Đăng ký hiện tại</p>
-                <p className="mt-2 font-semibold text-[#132b57]">
-                  {highlightedEvent.registrations}/{highlightedEvent.capacity} sinh viên
-                </p>
-              </div>
-            </div>
+          {/* Row 3 & 4: Top Events, Stats, Activity */}
+          <div className="grid gap-6 lg:grid-cols-3">
+            <motion.div whileHover={{ y: -4 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
+              <h3 className="mb-6 text-xl font-black text-[#132b57]">Top Sự Kiện</h3>
+              <TopEventsList events={data.topEvents} />
+            </motion.div>
 
-            <p className="mt-4 text-sm leading-6 text-slate-600">{highlightedEvent.note}</p>
-          </motion.div>
-        </section>
+            <motion.div whileHover={{ y: -4 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
+              <h3 className="mb-6 text-xl font-black text-[#132b57]">Hiệu quả thông báo</h3>
+              <NotificationStats stats={data.notificationStats} />
+            </motion.div>
 
-        <section className="space-y-5">
-          <motion.div whileHover={{ y: -4 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
-            <h3 className="text-xl font-black text-[#132b57]">Nhắc việc cần xử lý</h3>
-            <div className="mt-4 space-y-3">
-              {[
-                `${lienChiEvidenceRequests.filter((item) => item.status === 'Chờ duyệt').length} minh chứng đang chờ duyệt.`,
-                `${lienChiEvents.filter((item) => item.status === 'Cần chỉnh sửa').length} sự kiện bị trả về cần bổ sung hồ sơ.`,
-                `${totalRegistrations} lượt đăng ký đang được liên chi theo dõi.`,
-              ].map((text) => (
-                <div key={text} className="rounded-2xl bg-[#f6faff] p-4 text-sm leading-6 text-slate-600">
-                  {text}
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          <motion.div whileHover={{ y: -4 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
-            <h3 className="text-xl font-black text-[#132b57]">Truy cập nhanh</h3>
-            <div className="mt-4 grid gap-3">
-              <Link to="/lien-chi/events/create" className="rounded-2xl border border-[#dce8f5] bg-white px-4 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]">
-                Tạo hồ sơ sự kiện mới
-              </Link>
-              <Link to="/lien-chi/registrations" className="rounded-2xl border border-[#dce8f5] bg-white px-4 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]">
-                Quản lý danh sách đăng ký
-              </Link>
-              <Link to="/lien-chi/evidences" className="rounded-2xl border border-[#dce8f5] bg-white px-4 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]">
-                Duyệt minh chứng sinh viên
-              </Link>
-            </div>
-          </motion.div>
-        </section>
-      </div>
+            <motion.div whileHover={{ y: -4 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
+              <h3 className="mb-6 text-xl font-black text-[#132b57]">Hoạt động gần đây</h3>
+              <RecentActivity activities={data.recentActivity} />
+            </motion.div>
+          </div>
+        </div>
+      )}
     </LienChiLayout>
   );
 }

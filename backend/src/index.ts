@@ -10,6 +10,7 @@ import eventRoutes from './routes/eventRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import chatRoutes from './routes/chatRoutes';
 import certificateRoutes from './routes/certificateRoutes';
+import dashboardRoutes from './routes/dashboardRoutes';
 import { registerChatSocket } from './sockets/chatSocket';
 import { initCronJobs } from './cron/event-status.cron';
 
@@ -58,6 +59,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/certificates', certificateRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
