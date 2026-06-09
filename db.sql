@@ -263,7 +263,7 @@ CREATE TABLE `events` (
   -- Điểm danh QR
   `qrCode`                VARCHAR(255)          COMMENT 'Mã QR dùng để điểm danh',
   `qrActive`              TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1 = Bật quét QR điểm danh, 0 = Tắt',
-  `leader`                VARCHAR(255)          COMMENT 'Tên người chủ trì sự kiện',
+  `leaderId`              INT                   COMMENT 'ID người chủ trì sự kiện (FK -> users.id)',
 
   `createdAt`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -271,9 +271,11 @@ CREATE TABLE `events` (
   PRIMARY KEY (`id`),
   KEY `idx_events_status` (`status`),
   KEY `idx_events_createdBy` (`createdBy`),
+  KEY `idx_events_leader` (`leaderId`),
   KEY `idx_events_planned` (`plannedStartDate`, `plannedEndDate`),
   KEY `idx_events_regDeadline` (`registrationDeadline`),
-  CONSTRAINT `fk_events_creator` FOREIGN KEY (`createdBy`) REFERENCES `users` (`id`) ON UPDATE CASCADE
+  CONSTRAINT `fk_events_creator` FOREIGN KEY (`createdBy`) REFERENCES `users` (`id`) ON UPDATE CASCADE,
+  CONSTRAINT `fk_events_leader` FOREIGN KEY (`leaderId`) REFERENCES `users` (`id`) ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 

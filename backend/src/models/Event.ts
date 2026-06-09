@@ -37,7 +37,7 @@ export class Event extends Model {
   declare qrCode: string | null;
   declare qrActive: boolean;
 
-  declare leader: string | null;
+  declare leaderId: number | null;
 
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -168,9 +168,13 @@ Event.init(
       allowNull: false,
       defaultValue: false
     },
-    leader: {
-      type: DataTypes.STRING,
-      allowNull: true
+    leaderId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: User,
+        key: 'id'
+      }
     }
   },
   {
@@ -183,5 +187,6 @@ Event.init(
 );
 
 Event.belongsTo(User, { as: 'creator', foreignKey: 'createdBy' });
+Event.belongsTo(User, { as: 'leader', foreignKey: 'leaderId' });
 
 export default Event;

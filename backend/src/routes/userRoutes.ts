@@ -3,7 +3,7 @@ import {
   getUserProfile, updateUserProfile, getAllUsers, getUserById,
   createUser, updateUser, changeUserRole, changeUserStatus
 } from '../controllers/userController';
-import { authMiddleware, adminMiddleware } from '../middlewares/authMiddleware';
+import { authMiddleware, adminMiddleware, adminOrLienChiMiddleware } from '../middlewares/authMiddleware';
 
 const router = Router();
 
@@ -11,8 +11,8 @@ const router = Router();
 router.get('/profile', authMiddleware, getUserProfile);
 router.put('/profile', authMiddleware, updateUserProfile);
 
-// Admin: Quản lý tài khoản
-router.get('/', authMiddleware, adminMiddleware, getAllUsers);
+// Admin / Lien Chi: Quản lý tài khoản và lựa chọn Leader
+router.get('/', authMiddleware, adminOrLienChiMiddleware, getAllUsers);
 router.post('/', authMiddleware, adminMiddleware, createUser);
 router.get('/:id', authMiddleware, getUserById);
 router.put('/:id', authMiddleware, adminMiddleware, updateUser);
