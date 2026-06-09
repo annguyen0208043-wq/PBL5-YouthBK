@@ -82,7 +82,10 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
         ...(req.user ? [{
           model: EventRegistration,
           as: 'registrations',
-          where: { userId: req.user.id },
+          where: { 
+            userId: req.user.id,
+            status: { [Op.in]: ['registered', 'attended', 'confirmed', 'pending'] }
+          },
           required: false
         }] : [])
       ],
@@ -92,6 +95,7 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
     const formattedEvents = events.map(e => {
       const data = e.toJSON() as any;
       if (req.user && data.registrations && data.registrations.length > 0) {
+        // At this point, registrations are already filtered to valid statuses only
         data.isRegistered = true;
         data.userRegistrationStatus = data.registrations[0].status;
       } else {
@@ -132,7 +136,10 @@ export const getEventById = async (req: AuthRequest, res: Response): Promise<voi
         ...(req.user ? [{
           model: EventRegistration,
           as: 'registrations',
-          where: { userId: req.user.id },
+          where: { 
+            userId: req.user.id,
+            status: { [Op.in]: ['registered', 'attended', 'confirmed', 'pending'] }
+          },
           required: false
         }] : [])
       ],
@@ -149,6 +156,7 @@ export const getEventById = async (req: AuthRequest, res: Response): Promise<voi
 
     const data = event.toJSON() as any;
     if (req.user && data.registrations && data.registrations.length > 0) {
+      // At this point, registrations are already filtered to valid statuses only
       data.isRegistered = true;
       data.userRegistrationStatus = data.registrations[0].status;
     } else {
@@ -836,16 +844,13 @@ export const cancelRegistration = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // Constraint: Cancel at least 12 hours before event starts
-    const start = event.actualStartDate || event.plannedStartDate;
-    if (start) {
-      const startDateTime = new Date(start).getTime();
-      const nowTime = new Date().getTime();
-      const diffHours = (startDateTime - nowTime) / (1000 * 60 * 60);
-
-      if (diffHours < 12) {
+    // Check registration deadline
+    if (event.registrationDeadline) {
+      const now = new Date();
+      const deadline = new Date(event.registrationDeadline);
+      if (now >= deadline) {
         await transaction.rollback();
-        res.status(400).json({ message: 'Không thể hủy đăng ký khi sự kiện sắp diễn ra trong vòng 12 tiếng' });
+        res.status(400).json({ message: 'Hạn đăng ký đã hết, không thể hủy đăng ký' });
         return;
       }
     }
