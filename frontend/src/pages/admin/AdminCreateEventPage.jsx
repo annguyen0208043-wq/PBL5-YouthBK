@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 import AdminLayout from '../../components/admin/AdminLayout';
 import CustomDateTimePicker from '../../components/common/CustomDateTimePicker';
-import MapPickerModal from '../../components/common/MapPickerModal';
+import InlineMapPicker from '../../components/common/InlineMapPicker';
 
 export default function AdminCreateEventPage() {
   const [loading, setLoading] = useState(false);
@@ -148,13 +148,48 @@ export default function AdminCreateEventPage() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: false }));
-    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Real-time validation for participant fields
+    setErrors((prev) => {
+      const next = { ...prev, [name]: false };
+      if (name === 'minParticipants' || name === 'maxParticipants') {
+        const minRaw = name === 'minParticipants' ? value : formData.minParticipants;
+        const maxRaw = name === 'maxParticipants' ? value : formData.maxParticipants;
+        const minVal = minRaw !== '' ? parseInt(minRaw, 10) : null;
+        const maxVal = maxRaw !== '' ? parseInt(maxRaw, 10) : null;
+
+        // Validate min
+        if (minRaw !== '') {
+          next.minParticipants = isNaN(minVal) || minVal < 5;
+          next.minParticipantsMsg = next.minParticipants ? 'Tối thiểu phải từ 5 người trở lên' : '';
+        } else {
+          next.minParticipants = false;
+          next.minParticipantsMsg = '';
+        }
+
+        // Validate max
+        if (maxRaw !== '') {
+          next.maxParticipants = isNaN(maxVal) || maxVal > 100000;
+          next.maxParticipantsMsg = next.maxParticipants ? 'Tối đa không vượt quá 100,000 người' : '';
+        } else {
+          next.maxParticipants = false;
+          next.maxParticipantsMsg = '';
+        }
+
+        // Validate min < max
+        if (minVal !== null && maxVal !== null && !isNaN(minVal) && !isNaN(maxVal)) {
+          if (maxVal <= minVal) {
+            next.maxParticipants = true;
+            next.maxParticipantsMsg = 'Số lượng tối đa phải lớn hơn tối thiểu';
+          }
+        }
+      } else if (prev[name]) {
+        // Clear other field errors on change
+        next[name] = false;
+      }
+      return next;
+    });
   };
 
   // Image Upload helpers
@@ -310,25 +345,27 @@ export default function AdminCreateEventPage() {
     if (!formData.plannedStartDate) newErrors.plannedStartDate = true;
     if (!formData.plannedEndDate) newErrors.plannedEndDate = true;
 
-    // Participant range validation: min > 5, max <= 100000
+    // Participant range validation: min >= 5, max <= 100000
     if (formData.minParticipants) {
       const minP = parseInt(formData.minParticipants, 10);
-      if (isNaN(minP) || minP <= 5) {
+      if (isNaN(minP) || minP < 5) {
         newErrors.minParticipants = true;
+        newErrors.minParticipantsMsg = 'Tối thiểu phải từ 5 người trở lên';
       }
     }
     if (formData.maxParticipants) {
       const maxP = parseInt(formData.maxParticipants, 10);
       if (isNaN(maxP) || maxP > 100000) {
         newErrors.maxParticipants = true;
+        newErrors.maxParticipantsMsg = 'Tối đa không vượt quá 100,000 người';
       }
     }
     if (formData.minParticipants && formData.maxParticipants) {
       const minP = parseInt(formData.minParticipants, 10);
       const maxP = parseInt(formData.maxParticipants, 10);
-      if (!isNaN(minP) && !isNaN(maxP) && maxP < minP) {
-        newErrors.minParticipants = true;
+      if (!isNaN(minP) && !isNaN(maxP) && maxP <= minP) {
         newErrors.maxParticipants = true;
+        newErrors.maxParticipantsMsg = 'Số lượng tối đa phải lớn hơn tối thiểu';
       }
     }
 
@@ -337,12 +374,8 @@ export default function AdminCreateEventPage() {
     if (Object.keys(newErrors).length > 0) {
       if (newErrors.title || newErrors.locationName || newErrors.plannedStartDate || newErrors.plannedEndDate) {
         setNotice('❌ Vui lòng điền đầy đủ các trường bắt buộc (các ô viền đỏ).');
-      } else if (newErrors.minParticipants && newErrors.maxParticipants) {
-        setNotice('❌ Số lượng tối đa phải lớn hơn hoặc bằng số lượng tối thiểu.');
-      } else if (newErrors.minParticipants) {
-        setNotice('❌ Số lượng tối thiểu phải lớn hơn 5 người.');
-      } else if (newErrors.maxParticipants) {
-        setNotice('❌ Số lượng tối đa không được vượt quá 100,000 người.');
+      } else if (newErrors.minParticipants || newErrors.maxParticipants) {
+        setNotice('❌ Số lượng sinh viên không hợp lệ. Vui lòng kiểm tra lại (các ô viền đỏ).');
       }
       return;
     }
@@ -556,10 +589,17 @@ export default function AdminCreateEventPage() {
                 name="minParticipants"
                 value={formData.minParticipants}
                 onChange={handleInputChange}
+                min={5}
+                placeholder="Ít nhất 5"
                 className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
-                  errors.minParticipants ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  errors.minParticipants ? 'border-rose-500 bg-rose-50 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
                 }`}
               />
+              {errors.minParticipants && errors.minParticipantsMsg && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.minParticipantsMsg}
+                </p>
+              )}
             </label>
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">SL tối đa</span>
@@ -568,10 +608,17 @@ export default function AdminCreateEventPage() {
                 name="maxParticipants"
                 value={formData.maxParticipants}
                 onChange={handleInputChange}
+                max={100000}
+                placeholder="Tối đa 100,000"
                 className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
-                  errors.maxParticipants ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  errors.maxParticipants ? 'border-rose-500 bg-rose-50 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
                 }`}
               />
+              {errors.maxParticipants && errors.maxParticipantsMsg && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.maxParticipantsMsg}
+                </p>
+              )}
             </label>
           </div>
 
@@ -647,8 +694,8 @@ export default function AdminCreateEventPage() {
                   }`}
                 />
               </label>
-              <div className="sm:col-span-2 flex gap-3 items-end">
-                <label className="block flex-1">
+              <div className="grid grid-cols-2 gap-4 sm:col-span-2">
+                <label className="block">
                   <span className="mb-1 block text-xs font-semibold text-slate-600">Vĩ độ (Latitude) *</span>
                   <input
                     type="number"
@@ -656,11 +703,11 @@ export default function AdminCreateEventPage() {
                     name="locationLat"
                     value={formData.locationLat}
                     readOnly
-                    placeholder="Chọn từ bản đồ"
+                    placeholder="Chưa chọn"
                     className="w-full rounded-xl border border-[#dce8f5] bg-slate-50 px-3 py-2 outline-none text-sm font-mono cursor-not-allowed"
                   />
                 </label>
-                <label className="block flex-1">
+                <label className="block">
                   <span className="mb-1 block text-xs font-semibold text-slate-600">Kinh độ (Longitude) *</span>
                   <input
                     type="number"
@@ -668,18 +715,24 @@ export default function AdminCreateEventPage() {
                     name="locationLng"
                     value={formData.locationLng}
                     readOnly
-                    placeholder="Chọn từ bản đồ"
+                    placeholder="Chưa chọn"
                     className="w-full rounded-xl border border-[#dce8f5] bg-slate-50 px-3 py-2 outline-none text-sm font-mono cursor-not-allowed"
                   />
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowMapPicker(true)}
-                  className="px-4 py-2 bg-[#1747a6] text-white text-xs font-bold rounded-xl hover:bg-[#205fd8] transition-all h-[38px] flex items-center gap-1.5 whitespace-nowrap animate-pulse hover:animate-none"
-                >
-                  <MapPin className="h-4 w-4" />
-                  Mở bản đồ
-                </button>
+              </div>
+              <div className="sm:col-span-2">
+                <span className="mb-1.5 block text-xs font-semibold text-slate-600 font-bold">Bản đồ chọn tọa độ (GPS):</span>
+                <InlineMapPicker
+                  lat={formData.locationLat}
+                  lng={formData.locationLng}
+                  onChange={(coords) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      locationLat: coords.lat,
+                      locationLng: coords.lng
+                    }));
+                  }}
+                />
               </div>
               <label className="block sm:col-span-2">
                 <span className="mb-1 block text-xs font-semibold text-slate-600">Bán kính điểm danh (mét)</span>
@@ -943,7 +996,7 @@ export default function AdminCreateEventPage() {
 
           {/* Action buttons */}
           <motion.div whileHover={{ y: -2 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5">
-            <h3 className="text-sm font-bold text-[#132b57]">Lưu hoặc Gửi duyệt</h3>
+            <h3 className="text-sm font-bold text-[#132b57]">Lưu hoặc Xuất bản</h3>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
@@ -991,21 +1044,6 @@ export default function AdminCreateEventPage() {
           </div>
         </div>
       )}
-      {/* Map Picker Modal */}
-      <MapPickerModal
-        show={showMapPicker}
-        onClose={() => setShowMapPicker(false)}
-        onConfirm={(coords) => {
-          setFormData(prev => ({
-            ...prev,
-            locationLat: coords.lat,
-            locationLng: coords.lng
-          }));
-          setShowMapPicker(false);
-        }}
-        initialLat={formData.locationLat}
-        initialLng={formData.locationLng}
-      />
     </AdminLayout>
   );
 }

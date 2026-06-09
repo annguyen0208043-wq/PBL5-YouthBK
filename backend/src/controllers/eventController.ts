@@ -12,6 +12,7 @@ import User from '../models/User';
 import EventFeedback from '../models/EventFeedback';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { isBeforeStart, isRegistrationOpen, hasSlots, isOwner } from '../guards/event.guards';
+import { writeAuditLog, getClientIp } from '../utils/auditLogHelper';
 
 // Helper to calculate GPS distance
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -301,6 +302,21 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       ]
     });
 
+    // Ghi nhật ký
+    const statusLabel: Record<string, string> = {
+      open_registration: 'Mở đăng ký (không cần duyệt)',
+      pending: 'Chờ duyệt',
+      draft: 'Lưu nháp',
+    };
+    writeAuditLog({
+      userId,
+      action: `Tạo sự kiện "${title}"`,
+      targetType: 'Event',
+      targetId: event.id,
+      details: `Trạng thái ban đầu: ${statusLabel[status] ?? status}`,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
+
     res.status(201).json({ message: 'Tạo sự kiện thành công', event: fullEvent });
   } catch (error) {
     await transaction.rollback();
@@ -577,6 +593,17 @@ export const approveEvent = async (req: AuthRequest, res: Response): Promise<voi
     }, { transaction });
 
     await transaction.commit();
+
+    // Ghi nhật ký
+    writeAuditLog({
+      userId: req.user!.id,
+      action: `Duyệt sự kiện "${event.title}"`,
+      targetType: 'Event',
+      targetId: event.id,
+      details: note ? `Ghi chú: ${note}` : undefined,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
+
     res.json({ message: 'Duyệt sự kiện thành công. Sự kiện đã mở đăng ký.', event });
   } catch (error) {
     await transaction.rollback();
@@ -616,6 +643,17 @@ export const rejectEvent = async (req: AuthRequest, res: Response): Promise<void
     }, { transaction });
 
     await transaction.commit();
+
+    // Ghi nhật ký
+    writeAuditLog({
+      userId: req.user!.id,
+      action: `Từ chối sự kiện "${event.title}"`,
+      targetType: 'Event',
+      targetId: event.id,
+      details: reason ? `Lý do: ${reason}` : undefined,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
+
     res.json({ message: 'Đã từ chối duyệt sự kiện. Trạng thái chuyển thành Hủy.', event });
   } catch (error) {
     await transaction.rollback();
@@ -663,6 +701,17 @@ export const requestEventRevision = async (req: AuthRequest, res: Response): Pro
     }, { transaction });
 
     await transaction.commit();
+
+    // Ghi nhật ký
+    writeAuditLog({
+      userId: req.user!.id,
+      action: `Yêu cầu chỉnh sửa sự kiện "${event.title}"`,
+      targetType: 'Event',
+      targetId: event.id,
+      details: `Lời nhắn: ${message}`,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
+
     res.json({ message: 'Đã gửi yêu cầu chỉnh sửa cho Liên chi đoàn', event });
   } catch (error) {
     await transaction.rollback();
