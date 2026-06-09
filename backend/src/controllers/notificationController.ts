@@ -112,14 +112,24 @@ export const searchRecipients = async (req: AuthRequest, res: Response) => {
     const { q, limit = '10' } = req.query;
     const searchQuery = (q as string || '').trim();
     if (!searchQuery) { res.json({ users: [] }); return; }
+    const whereClause: any = {
+      [Op.or]: [
+        { name: { [Op.like]: `%${searchQuery}%` } },
+        { email: { [Op.like]: `%${searchQuery}%` } },
+        { studentId: { [Op.like]: `%${searchQuery}%` } }
+      ]
+    };
+
+    if (req.user?.role === 'lienchi') {
+      const currentUser = await User.findByPk(req.user.id);
+      if (currentUser && currentUser.faculty) {
+        whereClause.role = 'student';
+        whereClause.faculty = currentUser.faculty;
+      }
+    }
+
     const users = await User.findAll({
-      where: {
-        [Op.or]: [
-          { name: { [Op.like]: `%${searchQuery}%` } },
-          { email: { [Op.like]: `%${searchQuery}%` } },
-          { studentId: { [Op.like]: `%${searchQuery}%` } }
-        ]
-      },
+      where: whereClause,
       attributes: ['id', 'name', 'email', 'studentId', 'faculty', 'role'],
       limit: parseInt(limit as string)
     });
@@ -137,16 +147,30 @@ export const searchRecipients = async (req: AuthRequest, res: Response) => {
 // Admin: Gửi thông báo
 export const sendNotification = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, content, targetType, faculty, recipientUserIds } = req.body;
+    let { title, content, targetType, faculty, recipientUserIds } = req.body;
     const senderId = req.user?.id;
     if (!title || !content) { res.status(400).json({ message: 'Tiêu đề và nội dung là bắt buộc' }); return; }
+
+    if (req.user?.role === 'lienchi') {
+      const currentUser = await User.findByPk(senderId);
+      if (currentUser && currentUser.faculty) {
+        faculty = currentUser.faculty;
+      }
+    }
 
     let recipientIds: number[] = [];
 
     if (targetType === 'all_students') {
       const students = await User.findAll({ where: { role: 'student', isActive: true }, attributes: ['id'] });
       recipientIds = students.map(s => s.id);
+    } else if (targetType === 'lienchi_faculty' && faculty) {
+      const users = await User.findAll({ where: { role: 'lienchi', faculty, isActive: true }, attributes: ['id'] });
+      recipientIds = users.map(u => u.id);
+    } else if (targetType === 'faculty_students' && faculty) {
+      const users = await User.findAll({ where: { role: 'student', faculty, isActive: true }, attributes: ['id'] });
+      recipientIds = users.map(u => u.id);
     } else if (targetType === 'faculty' && faculty) {
+      // Keep for backward compatibility if any old client still sends this
       const users = await User.findAll({ where: { faculty, isActive: true }, attributes: ['id'] });
       recipientIds = users.map(u => u.id);
     } else if (targetType === 'specific_users' && recipientUserIds?.length > 0) {

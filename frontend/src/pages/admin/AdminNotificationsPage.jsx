@@ -6,7 +6,8 @@ import AdminLayout from '../../components/admin/AdminLayout';
 
 const TARGET_OPTIONS = [
   { value: 'all_students', label: 'Toàn bộ sinh viên' },
-  { value: 'faculty', label: 'Liên chi đoàn / khoa cụ thể' },
+  { value: 'lienchi_faculty', label: 'Liên chi đoàn khoa' },
+  { value: 'faculty_students', label: 'Khoa' },
   { value: 'specific_users', label: 'Tài khoản cụ thể' },
 ];
 
@@ -29,8 +30,16 @@ function audienceLabel(notification) {
     return 'Toàn bộ sinh viên';
   }
 
+  if (notification.targetType === 'lienchi_faculty') {
+    return notification.targetValue ? `Liên chi đoàn khoa: ${notification.targetValue}` : 'Liên chi đoàn khoa';
+  }
+
+  if (notification.targetType === 'faculty_students') {
+    return notification.targetValue ? `Sinh viên khoa: ${notification.targetValue}` : 'Sinh viên khoa';
+  }
+
   if (notification.targetType === 'faculty') {
-    return notification.targetValue ? `Liên chi đoàn / khoa: ${notification.targetValue}` : 'Liên chi đoàn / khoa';
+    return notification.targetValue ? `Khoa (cũ): ${notification.targetValue}` : 'Khoa (cũ)';
   }
 
   if (notification.targetType === 'specific_users') {
@@ -45,7 +54,7 @@ function badgeTone(type) {
     return 'bg-[#eef6ff] text-[#1747a6]';
   }
 
-  if (type === 'faculty') {
+  if (type === 'lienchi_faculty' || type === 'faculty' || type === 'faculty_students') {
     return 'bg-amber-100 text-amber-700';
   }
 
@@ -195,7 +204,7 @@ export default function AdminNotificationsPage() {
       [name]: value,
       ...(name === 'targetType'
         ? {
-            faculty: value === 'faculty' ? previous.faculty : '',
+            faculty: (value === 'lienchi_faculty' || value === 'faculty_students' || value === 'faculty') ? previous.faculty : '',
             recipientUserIds: value === 'specific_users' ? previous.recipientUserIds : [],
           }
         : {}),
@@ -259,9 +268,9 @@ export default function AdminNotificationsPage() {
       return;
     }
 
-    if (formData.targetType === 'faculty' && !formData.faculty) {
+    if ((formData.targetType === 'lienchi_faculty' || formData.targetType === 'faculty_students') && !formData.faculty) {
       setNotice('');
-      setError('Vui lòng chọn liên chi đoàn / khoa nhận thông báo');
+      setError('Vui lòng chọn khoa nhận thông báo');
       return;
     }
 
@@ -283,7 +292,7 @@ export default function AdminNotificationsPage() {
         targetType: formData.targetType,
       };
 
-      if (formData.targetType === 'faculty') {
+      if (formData.targetType === 'lienchi_faculty' || formData.targetType === 'faculty_students') {
         payload.faculty = formData.faculty.trim();
       }
 
@@ -381,7 +390,7 @@ export default function AdminNotificationsPage() {
                 </select>
               </label>
 
-              {formData.targetType === 'faculty' ? (
+              {formData.targetType === 'lienchi_faculty' || formData.targetType === 'faculty_students' ? (
                 <div className="block">
                   <span className="mb-2 block text-sm font-semibold text-slate-700">Tìm và chọn liên chi đoàn / khoa</span>
                   <input
