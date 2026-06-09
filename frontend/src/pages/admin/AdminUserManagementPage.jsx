@@ -24,6 +24,8 @@ export default function AdminUserManagementPage() {
   // Form states
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [editError, setEditError] = useState('');
   const [formData, setFormData] = useState({
     fullName: '',
     studentId: '',
@@ -191,16 +193,17 @@ export default function AdminUserManagementPage() {
   const handleCreateUser = async () => {
     // Validation
     if (!formData.fullName || !formData.email || !formData.password) {
-      setNotice('❌ Vui lòng điền đầy đủ: Họ tên, Email, Mật khẩu');
+      setCreateError('❌ Vui lòng điền đầy đủ: Họ tên, Email, Mật khẩu');
       return;
     }
 
     if (formData.password.length < 6) {
-      setNotice('❌ Mật khẩu phải ít nhất 6 ký tự');
+      setCreateError('❌ Mật khẩu phải ít nhất 6 ký tự');
       return;
     }
 
     setSubmitting(true);
+    setCreateError('');
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('/api/users', {
@@ -244,7 +247,7 @@ export default function AdminUserManagementPage() {
       setShowCreateForm(false);
       setTimeout(() => setNotice(''), 3000);
     } catch (err) {
-      setNotice(`❌ Lỗi: ${err.message}`);
+      setCreateError(`❌ Lỗi: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -264,17 +267,19 @@ export default function AdminUserManagementPage() {
         role: selected.role
       });
       setEditCustomFaculty(selectedFaculty && !isPresetFaculty ? selectedFaculty : '');
+      setEditError('');
       setShowEditForm(true);
     }
   };
 
   const handleUpdateUser = async () => {
     if (!editFormData.fullName || !editFormData.email) {
-      setNotice('❌ Vui lòng điền đầy đủ: Họ tên, Email');
+      setEditError('❌ Vui lòng điền đầy đủ: Họ tên, Email');
       return;
     }
 
     setSubmitting(true);
+    setEditError('');
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/users/${selectedUserId}`, {
@@ -304,7 +309,7 @@ export default function AdminUserManagementPage() {
       setShowEditForm(false);
       setTimeout(() => setNotice(''), 3000);
     } catch (err) {
-      setNotice(`❌ Lỗi: ${err.message}`);
+      setEditError(`❌ Lỗi: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -328,7 +333,10 @@ export default function AdminUserManagementPage() {
           {/* Create button */}
           <div className="flex justify-end">
             <button
-              onClick={() => setShowCreateForm(true)}
+              onClick={() => {
+                setCreateError('');
+                setShowCreateForm(true);
+              }}
               className="inline-flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white transition-all hover:bg-[#205fd8]"
             >
               <Plus className="h-5 w-5" />
@@ -513,6 +521,12 @@ export default function AdminUserManagementPage() {
                 </div>
 
                 <div className="space-y-4">
+                  {createError && (
+                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                      {createError}
+                    </div>
+                  )}
+
                   <label className="block">
                     <span className="mb-2 block text-sm font-semibold text-slate-700">Họ và tên *</span>
                     <input
@@ -658,6 +672,12 @@ export default function AdminUserManagementPage() {
                 </div>
 
                 <div className="space-y-4">
+                  {editError && (
+                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                      {editError}
+                    </div>
+                  )}
+
                   <label className="block">
                     <span className="mb-2 block text-sm font-semibold text-slate-700">Họ và tên *</span>
                     <input

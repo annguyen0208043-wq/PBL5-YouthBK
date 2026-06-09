@@ -20,36 +20,65 @@ function statusLabel(status) {
 
 export default function AdminCertificateApprovalPage() {
   const currentAdmin = getStoredUserProfile();
-  const [requests, setRequests] = useState(getCertificateRequests);
-  const [selectedRequestId, setSelectedRequestId] = useState(requests[0]?.id ?? '');
+  const [requests, setRequests] = useState([]);
+  const [selectedRequestId, setSelectedRequestId] = useState('');
   const [notice, setNotice] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // Fetch certificates from API
+  useEffect(() => {
+    const fetchCertificates = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/certificates', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Không thể tải danh sách chứng nhận');
+        const data = await response.json();
+        setRequests(data.certificates || []);
+        if (data.certificates && data.certificates.length > 0) {
+          setSelectedRequestId(data.certificates[0].id);
+        }
+      } catch (err) {
+        setNotice(`❌ Lỗi: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCertificates();
+  }, []);
 
   const selectedRequest = useMemo(() => requests.find((item) => item.id === selectedRequestId) ?? requests[0], [requests, selectedRequestId]);
 
-  const updateRequestStatus = (nextStatus) => {
-    if (!selectedRequest) {
-      return;
+  const updateRequestStatus = async (nextStatus) => {
+    if (!selectedRequest) return;
+    try {
+      const token = localStorage.getItem('token');
+      const action = nextStatus === 'approved' ? 'approve' : 'reject';
+      const response = await fetch(`/api/certificates/${selectedRequest.id}/${action}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Lỗi cập nhật');
+      }
+
+      const data = await response.json();
+      
+      const updatedRequests = requests.map((item) =>
+        item.id !== selectedRequest.id
+          ? item
+          : { ...item, ...data.certificate }
+      );
+
+      setRequests(updatedRequests);
+      setNotice(nextStatus === 'approved' ? '✅ Đã duyệt chứng nhận và cộng điểm.' : '❌ Đã từ chối hồ sơ chứng nhận.');
+    } catch (err) {
+      setNotice(`❌ Lỗi: ${err.message}`);
     }
-
-    const updatedRequests = requests.map((item) =>
-      item.id !== selectedRequest.id
-        ? item
-        : {
-            ...item,
-            status: nextStatus,
-            approvedAt: nextStatus === 'approved' ? new Date().toISOString() : null,
-            approverName: nextStatus === 'approved' ? currentAdmin.fullName : '',
-            stampCode: nextStatus === 'approved' ? 'BKYOUTH-DOANTRUONG-APPROVED' : '',
-            note:
-              nextStatus === 'approved'
-                ? 'Đã được Đoàn trường duyệt, có hiệu lực cấp chứng nhận điện tử.'
-                : 'Hồ sơ chưa đạt yêu cầu. Vui lòng bổ sung minh chứng hoặc liên hệ quản trị viên.',
-          },
-    );
-
-    setRequests(updatedRequests);
-    saveCertificateRequests(updatedRequests);
-    setNotice(nextStatus === 'approved' ? 'Đã duyệt chứng nhận và đóng dấu mộc đỏ.' : 'Đã từ chối hồ sơ chứng nhận.');
   };
 
   return (
@@ -90,7 +119,7 @@ export default function AdminCertificateApprovalPage() {
                 <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-none ${statusTone(selectedRequest.status)}`}>{statusLabel(selectedRequest.status)}</span>
               </div>
 
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="mt-5 grid gap-4 sm:grid-cols-3">
                 <div className="rounded-[24px] bg-[#f6faff] p-4 text-sm text-slate-600">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Thời điểm yêu cầu</p>
                   <p className="mt-2 font-semibold text-slate-700">{new Date(selectedRequest.requestedAt).toLocaleString('vi-VN')}</p>
@@ -98,6 +127,14 @@ export default function AdminCertificateApprovalPage() {
                 <div className="rounded-[24px] bg-[#f6faff] p-4 text-sm text-slate-600">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Người duyệt gần nhất</p>
                   <p className="mt-2 font-semibold text-slate-700">{selectedRequest.approverName || 'Chưa duyệt'}</p>
+                </div>
+                <div className="rounded-[24px] bg-[#f0fdf4] p-4 text-sm text-slate-600">
+                  <p className="text-xs uppercase tracking-[0.16em] text-emerald-600">Điểm cộng đồng</p>
+                  <p className="mt-2 font-semibold text-emerald-700">
+                    {selectedRequest.status === 'approved' 
+                      ? (selectedRequest.earnedPoints > 0 ? `+${selectedRequest.earnedPoints} điểm` : '0 điểm') 
+                      : (selectedRequest.Event?.communityPoints > 0 ? `Dự kiến: +${selectedRequest.Event.communityPoints} điểm` : '0 điểm')}
+                  </p>
                 </div>
               </div>
 

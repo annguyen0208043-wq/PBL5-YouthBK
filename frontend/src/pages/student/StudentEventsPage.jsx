@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, CheckCircle2, Clock3, Filter, MapPin, Navigation, QrCode, Search, Sparkles, Ticket, XCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { CheckCircle2, Clock3, Filter, LogOut, MapPin, Navigation, QrCode, Search, Sparkles, XCircle } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
-import { defaultRegisteredEventIds, STORAGE_ATTENDANCE_CHECKINS_KEY, STORAGE_ATTENDANCE_WINDOW_KEY, STORAGE_REGISTERED_EVENTS_KEY, studentEvents } from '../../shared/student/studentData';
+import { defaultRegisteredEventIds, STORAGE_ATTENDANCE_CHECKINS_KEY, STORAGE_ATTENDANCE_WINDOW_KEY, STORAGE_REGISTERED_EVENTS_KEY } from '../../shared/student/studentData';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
 
 const EARTH_RADIUS_METERS = 6371000;
@@ -135,9 +135,22 @@ function parseEventTimeRange(timeLabel) {
 }
 
 function buildAttendanceGate(event, attendanceWindowConfig) {
+  if (event.qrActive) {
+    return {
+      canCheckIn: true,
+      message: 'Mã QR điểm danh đang mở, bạn có thể điểm danh ngay!',
+    };
+  }
+
   const now = new Date();
-  const eventRange = parseEventTimeRange(event.time);
-  const isEventInProgress = eventRange ? now >= eventRange.startAt && now <= eventRange.endAt : false;
+  
+  let isEventInProgress = false;
+  if (event.startAt && event.endAt) {
+    isEventInProgress = now >= event.startAt && now <= event.endAt;
+  } else if (event.time) {
+    const eventRange = parseEventTimeRange(event.time);
+    isEventInProgress = eventRange ? now >= eventRange.startAt && now <= eventRange.endAt : false;
+  }
 
   const isAdminWindowEnabled = Boolean(attendanceWindowConfig?.enabled);
   const adminStartAt = attendanceWindowConfig?.startAt ? new Date(attendanceWindowConfig.startAt) : null;
@@ -166,22 +179,28 @@ function buildAttendanceGate(event, attendanceWindowConfig) {
 
   return {
     canCheckIn: false,
-    message: 'Chỉ điểm danh khi sự kiện đang diễn ra hoặc admin mở thời gian điểm danh.',
+    message: 'Chỉ điểm danh khi sự kiện đang diễn ra hoặc mã QR được mở.',
   };
 }
 
 export default function StudentEventsPage({ embedded = false } = {}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const mainRef = useRef(null);
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('Tất cả');
-  const [registeredIds, setRegisteredIds] = useState(getInitialRegisteredEvents);
   const [attendanceCheckins, setAttendanceCheckins] = useState(getInitialAttendanceCheckins);
   const [openedAttendanceEventId, setOpenedAttendanceEventId] = useState('');
   const [isCheckingGps, setIsCheckingGps] = useState(false);
   const [qrInput, setQrInput] = useState('');
   const [isScanningQr, setIsScanningQr] = useState(false);
   const [attendanceWindowConfig, setAttendanceWindowConfig] = useState(getInitialAttendanceWindowConfig);
+  const [feedbackInput, setFeedbackInput] = useState('');
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [selectedEventForFeedback, setSelectedEventForFeedback] = useState(null);
   const [feedback, setFeedback] = useState('');
   const toastTimerRef = useRef(null);
   const qrVideoRef = useRef(null);
@@ -189,9 +208,18 @@ export default function StudentEventsPage({ embedded = false } = {}) {
   const qrDetectorRef = useRef(null);
   const qrLoopFrameRef = useRef(null);
 
+  const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    
+    // Redirect to login
+    navigate('/login');
+  };
+
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_REGISTERED_EVENTS_KEY, JSON.stringify(registeredIds));
-  }, [registeredIds]);
+    mainRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [location.pathname]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_ATTENDANCE_CHECKINS_KEY, JSON.stringify(attendanceCheckins));
@@ -226,11 +254,73 @@ export default function StudentEventsPage({ embedded = false } = {}) {
 
   const filters = ['Tất cả', 'Đang mở đăng ký', 'Đã đăng ký', 'Sắp diễn ra'];
 
+  const [dbEvents, setDbEvents] = useState([]);
+
+  useEffect(() => {
+    const fetchDbEvents = async () => {
+      try {
+        const token = localStorage.getItem('token') || '';
+        const response = await fetch('/api/events', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const approvedEvents = data.events.filter(e => e.status === 'approved' || e.status === 'ongoing');
+          
+          const formattedEvents = approvedEvents.map(e => {
+            const formatTime = (iso) => {
+              if (!iso) return '';
+              const d = new Date(iso);
+              const hh = String(d.getHours()).padStart(2, '0');
+              const mm = String(d.getMinutes()).padStart(2, '0');
+              const DD = String(d.getDate()).padStart(2, '0');
+              const MM = String(d.getMonth() + 1).padStart(2, '0');
+              const YYYY = d.getFullYear();
+              return `${hh}:${mm}, ${DD}/${MM}/${YYYY}`;
+            };
+            const timeRange = `${formatTime(e.startTime || e.startDate)} - ${formatTime(e.endTime || e.endDate)}`;
+
+            return {
+              id: `db-${e.id}`,
+              realId: e.id,
+              title: e.title,
+              organizer: e.creator?.name || 'Liên chi Đoàn',
+              category: e.category || 'Hoạt động',
+              time: timeRange,
+              startAt: e.startTime ? new Date(e.startTime) : (e.startDate ? new Date(e.startDate) : null),
+              endAt: e.endTime ? new Date(e.endTime) : (e.endDate ? new Date(e.endDate) : null),
+              qrActive: Boolean(e.qrActive),
+              location: e.location,
+              points: '+5 ĐRL',
+              slots: e.maxSlots || e.maxParticipants || e.capacity || 100,
+              registered: e.currentSlots || 0,
+              enrolled: e.isRegistered || false,
+              status: e.status === 'ongoing' ? 'Sắp diễn ra' : 'Đang mở đăng ký',
+              description: e.description,
+              tags: e.tags || ['Cập nhật mới'],
+              accent: 'from-blue-500 to-indigo-500',
+              attendanceConfig: { gpsCenter: { lat: 16.074061, lng: 108.150720 }, allowedRadiusMeters: 100, qrValue: `BKYOUTH-${e.id}` },
+              imageUrl: e.images && e.images.length > 0 ? e.images[0].imageUrl : null,
+              communityPoints: e.communityPoints || 0,
+            };
+          });
+          
+          setDbEvents(formattedEvents);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchDbEventsRef.current = fetchDbEvents;
+    fetchDbEvents();
+  }, []);
+
   const visibleEvents = useMemo(() => {
-    return studentEvents
+    const allEvents = [...dbEvents];
+    return allEvents
       .map((event) => ({
         ...event,
-        enrolled: registeredIds.includes(event.id),
         attendance: attendanceCheckins[event.id] || null,
         attendanceGate: buildAttendanceGate(event, attendanceWindowConfig),
       }))
@@ -249,7 +339,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
 
         return matchesSearch && matchesFilter;
       });
-  }, [activeFilter, registeredIds, search, attendanceCheckins, attendanceWindowConfig]);
+  }, [dbEvents, activeFilter, search, attendanceCheckins, attendanceWindowConfig]);
 
   const stopQrScanner = () => {
     if (qrLoopFrameRef.current) {
@@ -321,9 +411,11 @@ export default function StudentEventsPage({ embedded = false } = {}) {
     }));
   };
 
-  const verifyEventGps = (event) => {
-    if (!event.attendanceGate.canCheckIn) {
-      setFeedback(event.attendanceGate.message);
+  const handleQRCheckIn = async (event) => {
+    const submittedValue = qrInput.trim();
+
+    if (!submittedValue) {
+      setFeedback('Vui lòng nhập hoặc quét mã QR.');
       return;
     }
 
@@ -333,29 +425,44 @@ export default function StudentEventsPage({ embedded = false } = {}) {
     }
 
     setIsCheckingGps(true);
+    setFeedback('Đang lấy vị trí GPS và điểm danh...');
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const userPoint = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-        const gpsCenter = event.attendanceConfig.gpsCenter;
-        const distanceMeters = calculateDistanceMeters(userPoint, gpsCenter);
-        const isAllowed = distanceMeters <= event.attendanceConfig.allowedRadiusMeters;
+      async (position) => {
+        try {
+          const latitude = position.coords.latitude;
+          const longitude = position.coords.longitude;
+          const token = localStorage.getItem('token');
 
-        saveAttendanceState(event.id, {
-          gpsVerified: isAllowed,
-          lastDistanceMeters: Math.round(distanceMeters),
-          lastGpsCheckAt: new Date().toISOString(),
-        });
+          const response = await fetch(`/api/events/${event.realId}/attendance/qr`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              qrCode: submittedValue,
+              latitude,
+              longitude
+            })
+          });
 
-        setFeedback(
-          isAllowed
-            ? `GPS hợp lệ: bạn cách điểm danh ${Math.round(distanceMeters)}m.`
-            : `Bạn đang ở ngoài phạm vi 100m (${Math.round(distanceMeters)}m).`,
-        );
-        setIsCheckingGps(false);
+          const data = await response.json();
+          if (!response.ok) {
+            setFeedback(data.message || 'Điểm danh thất bại');
+          } else {
+            setFeedback(`Điểm danh thành công: ${event.title}`);
+            setQrInput('');
+            setOpenedAttendanceEventId('');
+            if (fetchDbEventsRef.current) {
+              fetchDbEventsRef.current();
+            }
+          }
+        } catch (error) {
+          setFeedback('Lỗi kết nối máy chủ');
+        } finally {
+          setIsCheckingGps(false);
+        }
       },
       () => {
         setFeedback('Không lấy được vị trí. Vui lòng bật GPS và cho phép quyền truy cập vị trí.');
@@ -363,54 +470,83 @@ export default function StudentEventsPage({ embedded = false } = {}) {
       },
       {
         enableHighAccuracy: true,
-        timeout: 12000,
+        timeout: 15000,
         maximumAge: 0,
-      },
+      }
     );
   };
 
-  const verifyQrForEvent = (event) => {
-    const checkinState = attendanceCheckins[event.id] || {};
-    const submittedValue = qrInput.trim();
-
-    if (!event.attendanceGate.canCheckIn) {
-      setFeedback(event.attendanceGate.message);
+  const handleSubmitFeedback = async () => {
+    if (!feedbackInput.trim()) {
+      setFeedback('Vui lòng nhập nội dung đánh giá.');
       return;
     }
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/events/${selectedEventForFeedback.realId}/feedback`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          rating: feedbackRating,
+          content: feedbackInput
+        })
+      });
 
-    if (!checkinState.gpsVerified) {
-      setFeedback('Cần xác minh GPS trong phạm vi 100m trước khi quét QR.');
-      return;
+      const data = await response.json();
+      if (!response.ok) {
+        setFeedback(data.message || 'Lỗi khi gửi đánh giá');
+      } else {
+        setFeedback('Gửi đánh giá thành công! Cảm ơn bạn.');
+        setShowFeedbackModal(false);
+        setFeedbackInput('');
+        setFeedbackRating(5);
+        if (fetchDbEventsRef.current) {
+          fetchDbEventsRef.current();
+        }
+      }
+    } catch (err) {
+      setFeedback('Lỗi kết nối máy chủ');
     }
-
-    if (!submittedValue) {
-      setFeedback('Vui lòng nhập hoặc quét mã QR.');
-      return;
-    }
-
-    if (submittedValue !== event.attendanceConfig.qrValue) {
-      saveAttendanceState(event.id, { qrVerified: false });
-      setFeedback('Mã QR không hợp lệ cho sự kiện này.');
-      return;
-    }
-
-    saveAttendanceState(event.id, {
-      qrVerified: true,
-      checkedInAt: new Date().toISOString(),
-    });
-    setFeedback(`Điểm danh thành công cho sự kiện: ${event.title}`);
-    setQrInput('');
-    setOpenedAttendanceEventId('');
   };
 
-  const toggleRegistration = (eventId, eventTitle) => {
-    const isEnrolled = registeredIds.includes(eventId);
-    setRegisteredIds((current) => (isEnrolled ? current.filter((id) => id !== eventId) : [...current, eventId]));
-    setFeedback(isEnrolled ? `Bạn đã hủy đăng ký: ${eventTitle}` : `Đăng ký thành công: ${eventTitle}`);
+  const fetchDbEventsRef = useRef(null); // to re-fetch events
+
+  const toggleRegistration = async (eventId, eventTitle, isEnrolled, realId) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const endpoint = isEnrolled ? `/api/events/${realId}/cancel-registration` : `/api/events/${realId}/register`;
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setFeedback(data.message || 'Có lỗi xảy ra');
+      } else {
+        setFeedback(isEnrolled ? `Bạn đã hủy đăng ký: ${eventTitle}` : `Đăng ký thành công: ${eventTitle}`);
+        // Re-fetch events to get updated slots and registration status
+        if (fetchDbEventsRef.current) {
+          fetchDbEventsRef.current();
+        }
+      }
+    } catch (err) {
+      setFeedback('Lỗi kết nối máy chủ');
+    }
+    
     if (toastTimerRef.current) {
       window.clearTimeout(toastTimerRef.current);
     }
-    toastTimerRef.current = window.setTimeout(() => setFeedback(''), 2200);
+    toastTimerRef.current = window.setTimeout(() => setFeedback(''), 3000);
   };
 
   const toggleAttendancePanel = (eventId) => {
@@ -435,13 +571,13 @@ export default function StudentEventsPage({ embedded = false } = {}) {
   return (
     <div className={embedded ? 'w-full' : 'profile-page p-4 sm:p-6'}>
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className={embedded ? 'hidden' : 'hidden w-[280px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col'}>
+        <aside className={embedded ? 'hidden' : 'app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col'}>
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
             <div>
               <p className="text-xs uppercase tracking-[0.25em] text-blue-100">BK-Youth</p>
-              <p className="text-sm font-semibold">Hệ thống Đoàn - Hội</p>
+              <p className="text-sm font-semibold">Không gian sinh viên</p>
             </div>
           </div>
 
@@ -461,42 +597,42 @@ export default function StudentEventsPage({ embedded = false } = {}) {
             </div>
           </div>
 
-          <div className="mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
-            <p className="text-xs uppercase tracking-[0.28em] text-blue-100">Quản lý tham gia</p>
-            <p className="mt-2 text-xl font-bold">Sự kiện của tôi</p>
-            <p className="mt-2 text-sm text-blue-50/85">Theo dõi hoạt động đang mở, đăng ký tham gia và kiểm tra trạng thái của bạn.</p>
-          </div>
-
           <nav className="space-y-2">
-            <Link to="/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+            <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Sự kiện của tôi</div>
+            <Link to="/sinhvien/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Hồ sơ cá nhân
             </Link>
-            <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Sự kiện của tôi</div>
-            <Link to="/student/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+            <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Chat sinh viên
+            </Link>
+            <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Lịch sử hoạt động
             </Link>
           </nav>
 
-          <div className="mt-auto rounded-[24px] border border-white/10 bg-white/10 p-4">
-            <p className="text-sm font-semibold">Cách sử dụng nhanh</p>
-            <ul className="mt-3 space-y-2 text-sm text-blue-50/90">
-              <li>Xem danh sách sự kiện đang mở</li>
-              <li>Đọc thông tin và chỉ tiêu đăng ký</li>
-              <li>Đăng ký hoặc hủy đăng ký</li>
-              <li>Theo dõi trạng thái tham gia</li>
-            </ul>
+          <div className="mt-auto pt-6">
+            <button
+              onClick={handleLogout}
+              className="app-logout-button flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all"
+            >
+              <LogOut className="h-5 w-5 shrink-0" />
+              <span>Đăng xuất</span>
+            </button>
           </div>
         </aside>
 
-        <main className="flex-1">
-          <div className="border-b border-[#dce9f6] bg-white/80 px-5 py-4 backdrop-blur-md sm:px-8">
+        <main ref={mainRef} className="app-main flex-1">
+          <div className="app-page-header border-b border-[#dce9f6] bg-white/90 px-5 py-4 backdrop-blur-md sm:px-8">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#1f5dcc]">BK-Youth Student</p>
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Sự kiện dành cho sinh viên</h1>
                 <p className="mt-1 text-slate-500">Khám phá hoạt động nổi bật và đăng ký tham gia trực tiếp trên hệ thống.</p>
               </div>
-              <div className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3">
+              <div
+                className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3"
+                aria-label="Mở trang chỉnh sửa thông tin cá nhân"
+              >
                 <div className="flex items-center gap-3">
                   {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
@@ -572,30 +708,23 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                   </motion.div>
                   <div>
                     <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Tình trạng hiện tại</p>
-                    <h2 className="mt-1 text-2xl font-black text-[#132b57]">{registeredIds.length} sự kiện đã đăng ký</h2>
+                    <h2 className="mt-1 text-2xl font-black text-[#132b57]">{dbEvents.filter(e => e.enrolled).length} sự kiện đã đăng ký</h2>
                   </div>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-600">
-                  Bạn có thể theo dõi các sự kiện đã đăng ký và chuyển sang lịch sử hoạt động để xem tiến trình tham gia.
+                  Theo dõi các sự kiện đang mở, các sự kiện đã đăng ký và thao tác điểm danh ngay trong danh sách bên dưới.
                 </p>
-                <Link
-                  to="/student/history"
-                  className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-[#f8fbff] px-4 py-3 text-sm font-bold text-[#1747a6] transition-all hover:bg-[#eef6ff]"
-                >
-                  <CalendarDays className="h-4 w-4" />
-                  Xem lịch sử hoạt động
-                </Link>
               </motion.div>
             </div>
 
             <motion.div variants={listVariants} initial="hidden" animate="show" className="grid gap-5">
               {visibleEvents.map((event) => {
-                const usedSlots = event.enrolled ? event.registered + 1 : event.registered;
+                const usedSlots = event.registered;
                 const displayStatus = event.enrolled ? 'Đã đăng ký' : event.status;
                 const progress = Math.min((usedSlots / event.slots) * 100, 100);
                 const checkinState = event.attendance || {};
-                const isCheckedIn = Boolean(checkinState.gpsVerified && checkinState.qrVerified && checkinState.checkedInAt);
-                const showAttendancePanel = openedAttendanceEventId === event.id;
+                const isCheckedIn = event.userRegistrationStatus === 'attended' || Boolean(checkinState.gpsVerified && checkinState.qrVerified && checkinState.checkedInAt);
+                const showAttendancePanel = openedAttendanceEventId === event.id && !isCheckedIn;
 
                 return (
                   <motion.article
@@ -612,9 +741,17 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                         <div className="flex flex-wrap items-center gap-3">
                           <EventStatus value={displayStatus} />
                           <span className="rounded-full bg-[#edf5ff] px-3 py-1 text-xs font-bold text-[#1f5dcc]">{event.points}</span>
+                          {event.communityPoints > 0 && (
+                            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">+{event.communityPoints} Điểm cộng đồng</span>
+                          )}
                           <span className="rounded-full bg-[#fff3e8] px-3 py-1 text-xs font-bold text-[#cb6d13]">{event.category}</span>
                         </div>
 
+                        {event.imageUrl && (
+                          <div className="mb-4 overflow-hidden rounded-2xl">
+                            <img src={event.imageUrl} alt={event.title} className="h-44 w-full object-cover" />
+                          </div>
+                        )}
                         <h2 className="mt-4 text-2xl font-black text-[#132b57]">{event.title}</h2>
                         <p className="mt-2 text-sm font-semibold text-[#1f5dcc]">{event.organizer}</p>
                         <p className="mt-4 text-sm leading-6 text-slate-600">{event.description}</p>
@@ -666,16 +803,19 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                             type="button"
                             whileHover={{ scale: 1.02, y: -1 }}
                             whileTap={{ scale: 0.97 }}
-                            onClick={() => toggleRegistration(event.id, event.title)}
+                            onClick={() => toggleRegistration(event.id, event.title, event.enrolled, event.realId)}
+                            disabled={!event.enrolled && event.registered >= event.slots}
                             className={`rounded-2xl px-4 py-3 font-bold text-white transition-all ${
                               event.enrolled
                                 ? 'bg-[#d24c4c] shadow-[0_12px_24px_rgba(210,76,76,0.24)] hover:bg-[#bf3b3b]'
+                                : event.registered >= event.slots
+                                ? 'bg-slate-400 cursor-not-allowed'
                                 : 'bg-[#1747a6] shadow-[0_12px_24px_rgba(23,71,166,0.24)] hover:bg-[#205fd8]'
                             }`}
                           >
                             <span className="inline-flex items-center gap-2">
                               {event.enrolled && <CheckCircle2 className="h-4 w-4" />}
-                              {event.enrolled ? 'Hủy đăng ký' : 'Đăng ký tham gia'}
+                              {event.enrolled ? 'Đã đăng ký (Nhấn để hủy)' : event.registered >= event.slots ? 'Đã đầy' : 'Đăng ký tham gia'}
                             </span>
                           </motion.button>
                           <motion.button
@@ -683,14 +823,29 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                             whileHover={{ scale: 1.01 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={() => toggleAttendancePanel(event.id)}
-                            disabled={!event.enrolled}
-                            className="rounded-2xl border border-[#dce8f5] bg-white px-4 py-3 font-semibold text-slate-600 transition-all hover:bg-[#f7fbff] disabled:cursor-not-allowed disabled:opacity-70"
+                            disabled={!event.enrolled || isCheckedIn}
+                            className={`rounded-2xl border px-4 py-3 font-semibold transition-all ${isCheckedIn ? 'border-emerald-200 bg-emerald-50 text-emerald-700 cursor-not-allowed opacity-90' : 'border-[#dce8f5] bg-white text-slate-600 hover:bg-[#f7fbff] disabled:cursor-not-allowed disabled:opacity-70'}`}
                           >
                             <span className="inline-flex items-center gap-2">
-                              <QrCode className="h-4 w-4" />
-                              {!event.enrolled ? 'Đăng ký trước khi điểm danh' : 'Điểm danh GPS + QR'}
+                              {isCheckedIn ? <CheckCircle2 className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
+                              {!event.enrolled ? 'Đăng ký trước khi điểm danh' : isCheckedIn ? 'Đã điểm danh thành công' : 'Điểm danh GPS + QR'}
                             </span>
                           </motion.button>
+                          
+                          {['completed', 'ended', 'Đã kết thúc'].includes(event.status) && isCheckedIn && (
+                            <motion.button
+                              type="button"
+                              whileHover={{ scale: 1.01 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => { setSelectedEventForFeedback(event); setShowFeedbackModal(true); }}
+                              className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 font-semibold text-indigo-700 transition-all hover:bg-indigo-100"
+                            >
+                              <span className="inline-flex items-center gap-2">
+                                <Sparkles className="h-4 w-4" />
+                                Gửi đánh giá sự kiện
+                              </span>
+                            </motion.button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -722,67 +877,27 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                               )}
                             </div>
 
-                            <div className="grid gap-3 md:grid-cols-2">
+                            <div className="grid gap-3">
                               <div className="rounded-2xl border border-[#dce8f5] bg-white p-4">
-                                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Bước 1 - GPS</p>
-                                <p className="mt-2 text-sm text-slate-600">
-                                  Yêu cầu trong phạm vi {event.attendanceConfig.allowedRadiusMeters}m quanh điểm tổ chức.
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() => verifyEventGps(event)}
-                                  disabled={isCheckingGps || !event.attendanceGate.canCheckIn}
-                                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#1747a6] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
-                                >
-                                  <Navigation className="h-4 w-4" />
-                                  {isCheckingGps ? 'Đang kiểm tra GPS...' : 'Xác minh vị trí'}
-                                </button>
-                                {typeof checkinState.lastDistanceMeters === 'number' && (
-                                  <p className="mt-3 text-xs text-slate-500">
-                                    Khoảng cách gần nhất: {checkinState.lastDistanceMeters}m
-                                  </p>
-                                )}
-                                <p className={`mt-2 text-sm font-semibold ${checkinState.gpsVerified ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  {checkinState.gpsVerified ? 'GPS hợp lệ' : 'GPS chưa hợp lệ'}
-                                </p>
-                              </div>
-
-                              <div className="rounded-2xl border border-[#dce8f5] bg-white p-4">
-                                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Bước 2 - QR</p>
-                                <p className="mt-2 text-sm text-slate-600">Nhập mã QR hoặc dùng camera để quét mã của sự kiện.</p>
-                                <div className="mt-3 flex gap-2">
+                                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">ĐIỂM DANH (GPS + QR)</p>
+                                <p className="mt-2 text-sm text-slate-600">Nhập mã QR do sự kiện cung cấp. Hệ thống sẽ tự động lấy vị trí GPS để xác minh bạn đang ở sự kiện.</p>
+                                <div className="mt-3 flex flex-col gap-3">
                                   <input
                                     value={qrInput}
                                     onChange={(inputEvent) => setQrInput(inputEvent.target.value)}
-                                    placeholder="Ví dụ: BKYOUTH-...-2026"
+                                    placeholder="Nhập mã QR..."
                                     className="w-full rounded-xl border border-[#dce8f5] bg-[#f8fbff] px-3 py-2 text-sm outline-none focus:border-[#1f5dcc]"
                                   />
                                   <button
                                     type="button"
-                                    onClick={isScanningQr ? stopQrScanner : startQrScanner}
-                                    disabled={!event.attendanceGate.canCheckIn}
-                                    className="rounded-xl border border-[#dce8f5] bg-white px-3 py-2 text-sm font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-70"
+                                    onClick={() => handleQRCheckIn(event)}
+                                    disabled={isCheckingGps}
+                                    className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition-all hover:bg-indigo-700 disabled:opacity-70 flex justify-center items-center gap-2"
                                   >
-                                    {isScanningQr ? 'Tắt camera' : 'Quét'}
+                                    {isCheckingGps ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span> : <Navigation className="h-4 w-4" />}
+                                    {isCheckingGps ? 'Đang điểm danh...' : 'Điểm danh ngay'}
                                   </button>
                                 </div>
-                                {isScanningQr && (
-                                  <div className="mt-3 overflow-hidden rounded-xl border border-[#dce8f5] bg-black">
-                                    <video ref={qrVideoRef} className="h-44 w-full object-cover" muted playsInline />
-                                  </div>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => verifyQrForEvent(event)}
-                                  disabled={!event.attendanceGate.canCheckIn}
-                                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
-                                >
-                                  <QrCode className="h-4 w-4" />
-                                  Xác nhận mã QR
-                                </button>
-                                <p className={`mt-2 text-sm font-semibold ${checkinState.qrVerified ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  {checkinState.qrVerified ? 'QR hợp lệ' : 'QR chưa hợp lệ'}
-                                </p>
                               </div>
                             </div>
 
@@ -837,17 +952,6 @@ export default function StudentEventsPage({ embedded = false } = {}) {
               </div>
             </motion.div>
 
-            <div className="mt-6">
-              <motion.div whileHover={{ x: -2 }} whileTap={{ scale: 0.98 }}>
-                <Link
-                  to="/profile"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]"
-                >
-                  <Ticket className="h-5 w-5" />
-                  Quay lại hồ sơ cá nhân
-                </Link>
-              </motion.div>
-            </div>
           </div>
         </main>
       </div>

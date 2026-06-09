@@ -1,0 +1,165 @@
+import { Response } from 'express';
+import Certificate from '../models/Certificate';
+import User from '../models/User';
+import { AuthRequest } from '../middlewares/authMiddleware';
+
+// Lấy tất cả yêu cầu chứng nhận
+export const getCertificateRequests = async (req: AuthRequest, res: Response) => {
+  try {
+    const certificates = await Certificate.findAll({
+      include: [
+        { model: User, as: 'student', attributes: ['id', 'name', 'email', 'studentId'] },
+        { model: User, as: 'approver', attributes: ['id', 'name', 'email'] },
+        { model: require('../models/Event').default, attributes: ['communityPoints'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    const mapped = certificates.map(c => {
+      const d = c.toJSON() as any;
+      return {
+        ...d,
+        requestedAt: d.createdAt,
+        studentName: d.student?.name
+      };
+    });
+
+    res.json({ certificates: mapped });
+  } catch (error) {
+    console.error('Get certificates error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Duyệt chứng nhận
+export const approveCertificate = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user?.id;
+
+    const certificate = await Certificate.findByPk(id);
+    if (!certificate) {
+      res.status(404).json({ message: 'Certificate not found' });
+      return;
+    }
+
+    if (certificate.status === 'approved') {
+      res.status(400).json({ message: 'Certificate is already approved' });
+      return;
+    }
+
+    const admin = await User.findByPk(adminId, { attributes: ['id', 'name'] });
+    
+    // Process community points
+    let pointsToAdd = 0;
+    if (certificate.eventId) {
+      const { default: Event } = await import('../models/Event');
+      const event = await Event.findByPk(certificate.eventId);
+      if (event && event.communityPoints) {
+        pointsToAdd = event.communityPoints;
+      }
+    }
+
+    if (pointsToAdd > 0) {
+      const student = await User.findByPk(certificate.userId);
+      if (student) {
+        await student.update({
+          communityPoints: (student.communityPoints || 0) + pointsToAdd
+        });
+      }
+    }
+
+    await certificate.update({
+      status: 'approved',
+      approvedBy: adminId,
+      approvedAt: new Date(),
+      approverName: admin?.name || '',
+      stampCode: 'BKYOUTH-DOANTRUONG-APPROVED',
+      note: 'Đã được Đoàn trường duyệt, có hiệu lực cấp chứng nhận điện tử.',
+      earnedPoints: pointsToAdd
+    });
+
+    res.json({ message: 'Đã duyệt chứng nhận', certificate });
+  } catch (error) {
+    console.error('Approve certificate error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Từ chối chứng nhận
+export const rejectCertificate = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user?.id;
+
+    const certificate = await Certificate.findByPk(id);
+    if (!certificate) {
+      res.status(404).json({ message: 'Certificate not found' });
+      return;
+    }
+
+    await certificate.update({
+      status: 'rejected',
+      approvedBy: adminId,
+      note: 'Hồ sơ chưa đạt yêu cầu. Vui lòng bổ sung minh chứng hoặc liên hệ quản trị viên.'
+    });
+
+    res.json({ message: 'Đã từ chối chứng nhận', certificate });
+  } catch (error) {
+    console.error('Reject certificate error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Sinh viên gửi yêu cầu chứng nhận
+export const requestCertificate = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { eventId, activityTitle } = req.body;
+    const userId = req.user?.id;
+
+    if (!activityTitle) {
+      res.status(400).json({ message: 'Tên hoạt động là bắt buộc' });
+      return;
+    }
+
+    const certificate = await Certificate.create({
+      userId,
+      eventId: eventId || null,
+      activityTitle,
+      status: 'pending'
+    });
+
+    res.status(201).json({ message: 'Đã gửi yêu cầu chứng nhận', certificate });
+  } catch (error) {
+    console.error('Request certificate error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const getMyCertificates = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    const certificates = await Certificate.findAll({
+      where: { userId },
+      include: [
+        { model: User, as: 'approver', attributes: ['name'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    const mapped = certificates.map(c => {
+      const d = c.toJSON() as any;
+      return {
+        ...d,
+        requestedAt: d.createdAt,
+        approverName: d.approver?.name || 'Admin',
+        stampCode: d.status === 'approved' ? `BKY-${d.id}-${new Date(d.createdAt).getFullYear()}` : ''
+      };
+    });
+
+    res.json({ certificates: mapped });
+  } catch (error) {
+    console.error('Get my certificates error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};

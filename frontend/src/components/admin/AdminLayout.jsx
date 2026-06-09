@@ -1,6 +1,6 @@
 import React from 'react';
-import { Award, BarChart3, BellRing, CalendarPlus2, CheckCheck, FileClock, Settings2, Users } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Award, BarChart3, BellRing, CalendarPlus2, CheckCheck, FileClock, Settings2, Users, LogOut } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
@@ -17,6 +17,7 @@ const navSections = [
       { to: '/admin/events/create', label: 'Tạo sự kiện', icon: CalendarPlus2 },
       { to: '/admin/event-approvals', label: 'Duyệt sự kiện', icon: CheckCheck },
       { to: '/admin/certificates', label: 'Duyệt chứng nhận', icon: Award },
+      { to: '/admin/registrations', label: 'Người đăng ký', icon: Users },
     ],
   },
   {
@@ -36,13 +37,23 @@ const navSections = [
 ];
 
 export default function AdminLayout({ title, subtitle, currentPath, children }) {
+  const navigate = useNavigate();
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
+
+  const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    
+    // Redirect to login
+    navigate('/login');
+  };
 
   return (
     <div className="profile-page p-4 sm:p-6">
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className="hidden w-[340px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#0f3276_0%,#1849a6_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
+        <aside className="app-sidebar hidden w-[340px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#0f3276_0%,#1849a6_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
@@ -89,10 +100,20 @@ export default function AdminLayout({ title, subtitle, currentPath, children }) 
               </div>
             ))}
           </div>
+
+          <div className="mt-auto pt-6 border-t border-white/20">
+            <button
+              onClick={handleLogout}
+              className="app-logout-button flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all"
+            >
+              <LogOut className="h-5 w-5 shrink-0" />
+              <span>Đăng xuất</span>
+            </button>
+          </div>
         </aside>
 
-        <main className="flex-1">
-          <div className="border-b border-[#dce9f6] bg-white/80 px-5 py-4 backdrop-blur-md sm:px-8">
+        <main className="app-main flex-1">
+          <div className="app-page-header border-b border-[#dce9f6] bg-white/90 px-5 py-4 backdrop-blur-md sm:px-8">
             <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#1f5dcc]">BK-Youth Admin</p>
             <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>

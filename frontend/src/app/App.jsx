@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import LoginPage from '../pages/auth/LoginPage';
 import RegisterPage from '../pages/auth/RegisterPage';
+import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
 import AdminAuditLogsPage from '../pages/admin/AdminAuditLogsPage';
 import AdminCreateEventPage from '../pages/admin/AdminCreateEventPage';
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
@@ -15,10 +16,12 @@ import LienChiCreateEventPage from '../pages/lienchi/LienChiCreateEventPage';
 import LienChiDashboardPage from '../pages/lienchi/LienChiDashboardPage';
 import LienChiEvidenceApprovalPage from '../pages/lienchi/LienChiEvidenceApprovalPage';
 import LienChiManagedEventsPage from '../pages/lienchi/LienChiManagedEventsPage';
+import LienChiEditEventPage from '../pages/lienchi/LienChiEditEventPage';
 import LienChiRegistrationsPage from '../pages/lienchi/LienChiRegistrationsPage';
-import PersonalProfilePage from '../pages/profile/PersonalProfilePage';
 import StudentActivityHistoryPage from '../pages/student/StudentActivityHistoryPage';
+import StudentChatPage from '../pages/student/StudentChatPage';
 import StudentEventsPage from '../pages/student/StudentEventsPage';
+import PersonalProfilePage from '../pages/profile/PersonalProfilePage';
 
 export default function App() {
   return (
@@ -26,25 +29,34 @@ export default function App() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      
+      {/* Admin Routes */}
       <Route path="/admin" element={<AdminDashboardPage />} />
       <Route path="/admin/events/create" element={<AdminCreateEventPage />} />
       <Route path="/admin/event-approvals" element={<AdminEventApprovalPage />} />
       <Route path="/admin/certificates" element={<AdminCertificateApprovalPage />} />
+      <Route path="/admin/registrations" element={<LienChiRegistrationsPage />} />
       <Route path="/admin/users" element={<AdminUserManagementPage />} />
       <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
       <Route path="/admin/settings" element={<AdminSystemSettingsPage />} />
       <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
+      
+      {/* Lien Chi Routes */}
       <Route path="/lien-chi" element={<LienChiDashboardPage />} />
       <Route path="/lien-chi/events/create" element={<LienChiCreateEventPage />} />
       <Route path="/lien-chi/events/manage" element={<LienChiManagedEventsPage />} />
+      <Route path="/lien-chi/events/manage/edit/:id" element={<LienChiEditEventPage />} />
       <Route path="/lien-chi/registrations" element={<LienChiRegistrationsPage />} />
       <Route path="/lien-chi/evidences" element={<LienChiEvidenceApprovalPage />} />
-      <Route path="/profile" element={<PersonalProfilePage />} />
-      <Route path="/sinhvien" element={<PersonalProfilePage />} />
-      <Route path="/doantruong" element={<AdminDashboardPage />} />
-      <Route path="/lienchidoan" element={<AdminDashboardPage />} />
-      <Route path="/student/events" element={<StudentEventsPage />} />
-      <Route path="/student/history" element={<StudentActivityHistoryPage />} />
+      
+      {/* Student Routes */}
+      <Route path="/sinhvien" element={<Navigate to="/sinhvien/event" replace />} />
+      <Route path="/sinhvien/chat" element={<StudentChatPage />} />
+      <Route path="/sinhvien/event" element={<StudentEventsPage />} />
+      <Route path="/sinhvien/history" element={<StudentActivityHistoryPage />} />
+      <Route path="/sinhvien/profile" element={<PersonalProfilePage />} />
     </Routes>
   );
 }
+
