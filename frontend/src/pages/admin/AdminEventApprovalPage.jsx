@@ -44,8 +44,14 @@ export default function AdminEventApprovalPage() {
   const [actualStartDate, setActualStartDate] = useState('');
   const [actualEndDate, setActualEndDate] = useState('');
 
-  const [notice, setNotice] = useState('');
+  const [alertModal, setAlertModal] = useState({ show: false, type: 'error', message: '' });
   const [loading, setLoading] = useState(true);
+
+  const setNotice = (msg) => {
+    if (!msg) return;
+    const type = msg.startsWith('✅') || msg.startsWith('✓') ? 'success' : 'error';
+    setAlertModal({ show: true, type, message: msg });
+  };
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -305,7 +311,7 @@ export default function AdminEventApprovalPage() {
                       <div>
                         <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Hồ sơ đề nghị duyệt</p>
                         <h2 className="mt-2 text-2xl font-black text-[#132b57] leading-snug">{selectedEvent.title}</h2>
-                        <p className="mt-2 text-xs text-slate-500 font-medium">Người tạo: {selectedEvent.creator?.name} ({selectedEvent.creator?.faculty || 'Khoa'})</p>
+                        <p className="mt-2 text-xs text-slate-500 font-medium">Người tạo: {selectedEvent.creator?.name} ({selectedEvent.creator?.faculty || 'Khoa'}){selectedEvent.leader?.name && ` | Người chủ trì: ${selectedEvent.leader.name}`}</p>
                       </div>
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{selectedEvent.category}</span>
                     </div>
@@ -480,17 +486,7 @@ export default function AdminEventApprovalPage() {
                           />
                         </label>
 
-                        {notice && (
-                          <div
-                            className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
-                              notice.startsWith('✅')
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                : 'border-red-200 bg-red-50 text-red-700'
-                            }`}
-                          >
-                            {notice}
-                          </div>
-                        )}
+
 
                         <div className="flex gap-2">
                           <button
@@ -536,6 +532,31 @@ export default function AdminEventApprovalPage() {
             </div>
           )}
         </>
+      )}
+      {/* Custom Alert Modal popup overlay */}
+      {alertModal.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[28px] border border-slate-100 bg-white p-6 shadow-2xl text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl ${
+              alertModal.type === 'success' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'
+            }`}>
+              {alertModal.type === 'success' ? '✓' : '⚠️'}
+            </div>
+            <h3 className="text-lg font-black text-[#132b57]">
+              {alertModal.type === 'success' ? 'Thành công' : 'Thông báo'}
+            </h3>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              {alertModal.message}
+            </p>
+            <button
+              type="button"
+              onClick={() => setAlertModal({ show: false, type: 'error', message: '' })}
+              className="w-full rounded-xl bg-[#1747a6] py-3 text-sm font-bold text-white shadow-md hover:bg-[#205fd8] transition-all"
+            >
+              OK
+            </button>
+          </div>
+        </div>
       )}
     </AdminLayout>
   );

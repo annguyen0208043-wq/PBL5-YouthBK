@@ -51,6 +51,7 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
       where,
       include: [
         { model: User, as: 'creator', attributes: ['id', 'name', 'email', 'role', 'faculty'] },
+        { model: User, as: 'leader', attributes: ['id', 'name', 'email', 'role', 'faculty'] },
         { model: EventImage, as: 'images' },
         ...(req.user ? [{
           model: EventRegistration,
@@ -88,6 +89,7 @@ export const getEventById = async (req: AuthRequest, res: Response): Promise<voi
     const event = await Event.findByPk(id, {
       include: [
         { model: User, as: 'creator', attributes: ['id', 'name', 'email', 'faculty'] },
+        { model: User, as: 'leader', attributes: ['id', 'name', 'email', 'role', 'faculty'] },
         { 
           model: EventTimeline, 
           as: 'timelines',
@@ -148,7 +150,8 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       minParticipants,
       maxParticipants,
       timeline,
-      submit // Boolean flag if immediate submit is requested
+      submit,
+      leaderId
     } = req.body;
     
     const userId = req.user?.id!;
@@ -185,7 +188,8 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       maxParticipants: maxParticipants ? parseInt(maxParticipants, 10) : null,
       status,
       createdBy: userId,
-      createdByRole: role === 'admin' ? 'admin' : 'lienchi'
+      createdByRole: role === 'admin' ? 'admin' : 'lienchi',
+      leaderId: leaderId ? parseInt(leaderId, 10) : null
     }, { transaction });
 
     // Handle Timeline (phases and details)
@@ -315,7 +319,8 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       minParticipants,
       maxParticipants,
       timeline,
-      submit
+      submit,
+      leaderId
     } = req.body;
 
     let updatedStatus = event.status;
@@ -338,7 +343,8 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       attendanceRadius: attendanceRadius !== undefined ? (attendanceRadius ? parseInt(attendanceRadius, 10) : null) : event.attendanceRadius,
       minParticipants: minParticipants !== undefined ? (minParticipants ? parseInt(minParticipants, 10) : null) : event.minParticipants,
       maxParticipants: maxParticipants !== undefined ? (maxParticipants ? parseInt(maxParticipants, 10) : null) : event.maxParticipants,
-      status: updatedStatus
+      status: updatedStatus,
+      leaderId: leaderId !== undefined ? (leaderId ? parseInt(leaderId, 10) : null) : event.leaderId
     }, { transaction });
 
     // Handle Timeline updates (delete and recreate)

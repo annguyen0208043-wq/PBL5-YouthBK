@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import {
-  getNotifications, markAsRead, getSentNotifications,
+  getNotifications, markAsRead, getSentNotifications, getUnreadCount,
   getFaculties, searchRecipients, sendNotification
 } from '../controllers/notificationController';
 import { authMiddleware, adminMiddleware } from '../middlewares/authMiddleware';
@@ -9,6 +9,7 @@ const router = Router();
 
 // User: Thông báo cá nhân
 router.get('/', authMiddleware, getNotifications);
+router.get('/unread-count', authMiddleware, getUnreadCount);
 router.put('/:id/read', authMiddleware, markAsRead);
 
 // Admin: Quản lý thông báo

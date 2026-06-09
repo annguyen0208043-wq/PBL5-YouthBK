@@ -5,6 +5,7 @@ import User from '../models/User';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { Op } from 'sequelize';
 import sequelize from '../config/database';
+import { getIo } from '../sockets/chatSocket';
 
 // Lấy thông báo của user hiện tại
 export const getNotifications = async (req: AuthRequest, res: Response) => {
@@ -22,6 +23,20 @@ export const getNotifications = async (req: AuthRequest, res: Response) => {
     res.json({ notifications });
   } catch (error) {
     console.error('Get notifications error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Lấy số lượng thông báo chưa đọc
+export const getUnreadCount = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const unreadCount = await NotificationRecipient.count({
+      where: { userId, isRead: false }
+    });
+    res.json({ unreadCount });
+  } catch (error) {
+    console.error('Get unread count error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
@@ -46,6 +61,12 @@ export const markAsRead = async (req: AuthRequest, res: Response): Promise<void>
       const readCount = await NotificationRecipient.count({ where: { notificationId: id, isRead: true } });
       await notification.update({ readCount });
     }
+
+    const io = getIo();
+    if (io) {
+      io.to(`user:${userId}`).emit('notification_read', { notificationId: id });
+    }
+
     res.json({ message: 'Notification marked as read' });
   } catch (error) {
     console.error('Mark as read error:', error);
@@ -142,6 +163,18 @@ export const sendNotification = async (req: AuthRequest, res: Response): Promise
       await NotificationRecipient.bulkCreate(
         recipientIds.map(userId => ({ notificationId: notification.id, userId, isRead: false }))
       );
+
+      const io = getIo();
+      if (io) {
+        recipientIds.forEach(userId => {
+          io.to(`user:${userId}`).emit('new_notification', {
+            id: notification.id,
+            title: notification.title,
+            content: notification.content,
+            createdAt: notification.createdAt
+          });
+        });
+      }
     }
 
     res.status(201).json({ message: 'Gửi thông báo thành công', recipientCount: recipientIds.length, notification });

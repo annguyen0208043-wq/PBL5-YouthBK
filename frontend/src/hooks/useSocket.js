@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
+import { connectSocket } from '../shared/student/socket';
 
 const useSocket = (onNewNotification, onNotificationRead) => {
   const socketRef = useRef(null);
@@ -8,33 +8,29 @@ const useSocket = (onNewNotification, onNotificationRead) => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    const socket = io('http://localhost:5000', {
-      auth: { token },
-      transports: ['websocket'],
-    });
-
+    const socket = connectSocket();
     socketRef.current = socket;
 
-    socket.on('connect', () => {
-      // console.log('socket connected', socket.id);
-    });
+    if (onNewNotification) {
+      socket.on('new_notification', onNewNotification);
+    }
 
-    socket.on('new_notification', (payload) => {
-      if (onNewNotification) onNewNotification(payload);
-    });
-
-    socket.on('notification_read', (payload) => {
-      if (onNotificationRead) onNotificationRead(payload);
-    });
+    if (onNotificationRead) {
+      socket.on('notification_read', onNotificationRead);
+    }
 
     socket.on('connect_error', (err) => {
       console.error('Socket connect_error', err.message);
     });
 
     return () => {
-      try {
-        socket.disconnect();
-      } catch (e) { }
+      if (onNewNotification) {
+        socket.off('new_notification', onNewNotification);
+      }
+      if (onNotificationRead) {
+        socket.off('notification_read', onNotificationRead);
+      }
+      // Do not disconnect the global socket here!
     };
   }, [onNewNotification, onNotificationRead]);
 

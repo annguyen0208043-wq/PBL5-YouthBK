@@ -10,6 +10,7 @@ import doanLogo from '../../assets/logo-doan.png';
 import { activityHistory, defaultRegisteredEventIds, STORAGE_REGISTERED_EVENTS_KEY, studentEvents } from '../../shared/student/studentData';
 import { getCertificateRequests, upsertCertificateRequest } from '../../shared/student/certificateStore';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
+import NotificationBell from './NotificationBell';
 
 function getRegisteredEventIds() {
   if (typeof window === 'undefined') {
@@ -223,6 +224,9 @@ export default function StudentActivityHistoryPage({ embedded = false } = {}) {
               Chat sinh viên
             </Link>
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Lịch sử hoạt động</div>
+            <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Thông báo
+            </Link>
           </nav>
 
           <div className="mt-auto pt-6">
@@ -244,7 +248,9 @@ export default function StudentActivityHistoryPage({ embedded = false } = {}) {
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Lịch sử hoạt động của tôi</h1>
                 <p className="mt-1 text-slate-500">Theo dõi các hoạt động đã tham gia và những sự kiện bạn đang chờ diễn ra.</p>
               </div>
-              <div
+              <div className="flex items-center gap-3">
+                <NotificationBell />
+                <div
                 className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3"
                 aria-label="Mở trang chỉnh sửa thông tin cá nhân"
               >
@@ -261,6 +267,7 @@ export default function StudentActivityHistoryPage({ embedded = false } = {}) {
                     <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
                   </div>
                 </div>
+              </div>
               </div>
             </div>
           </div>

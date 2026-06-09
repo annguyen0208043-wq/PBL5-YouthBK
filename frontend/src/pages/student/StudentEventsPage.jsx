@@ -7,6 +7,7 @@ import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
 import { defaultRegisteredEventIds, STORAGE_ATTENDANCE_CHECKINS_KEY, STORAGE_ATTENDANCE_WINDOW_KEY, STORAGE_REGISTERED_EVENTS_KEY } from '../../shared/student/studentData';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
+import NotificationBell from './NotificationBell';
 
 const EARTH_RADIUS_METERS = 6371000;
 
@@ -143,7 +144,7 @@ function buildAttendanceGate(event, attendanceWindowConfig) {
   }
 
   const now = new Date();
-  
+
   let isEventInProgress = false;
   if (event.startAt && event.endAt) {
     isEventInProgress = now >= event.startAt && now <= event.endAt;
@@ -212,7 +213,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
     // Clear localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    
+
     // Redirect to login
     navigate('/login');
   };
@@ -266,7 +267,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
         if (response.ok) {
           const data = await response.json();
           const approvedEvents = data.events.filter(e => e.status === 'approved' || e.status === 'ongoing');
-          
+
           const formattedEvents = approvedEvents.map(e => {
             const formatTime = (iso) => {
               if (!iso) return '';
@@ -304,7 +305,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
               communityPoints: e.communityPoints || 0,
             };
           });
-          
+
           setDbEvents(formattedEvents);
         }
       } catch (err) {
@@ -520,7 +521,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
       if (!token) return;
 
       const endpoint = isEnrolled ? `/api/events/${realId}/cancel-registration` : `/api/events/${realId}/register`;
-      
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -542,7 +543,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
     } catch (err) {
       setFeedback('Lỗi kết nối máy chủ');
     }
-    
+
     if (toastTimerRef.current) {
       window.clearTimeout(toastTimerRef.current);
     }
@@ -608,6 +609,9 @@ export default function StudentEventsPage({ embedded = false } = {}) {
             <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Lịch sử hoạt động
             </Link>
+            <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Thông báo
+            </Link>
           </nav>
 
           <div className="mt-auto pt-6">
@@ -629,7 +633,9 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Sự kiện dành cho sinh viên</h1>
                 <p className="mt-1 text-slate-500">Khám phá hoạt động nổi bật và đăng ký tham gia trực tiếp trên hệ thống.</p>
               </div>
-              <div
+              <div className="flex items-center gap-3">
+                <NotificationBell />
+                <div
                 className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3"
                 aria-label="Mở trang chỉnh sửa thông tin cá nhân"
               >
@@ -646,6 +652,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                     <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
                   </div>
                 </div>
+              </div>
               </div>
             </div>
           </div>
@@ -684,11 +691,10 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                       type="button"
                       whileTap={{ scale: 0.96 }}
                       onClick={() => setActiveFilter(filter)}
-                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                        activeFilter === filter
-                          ? 'bg-[#1747a6] text-white shadow-[0_10px_24px_rgba(23,71,166,0.24)]'
-                          : 'border border-[#dce8f5] bg-white text-slate-600 hover:border-[#9ec0f0] hover:bg-[#f8fbff]'
-                      }`}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${activeFilter === filter
+                        ? 'bg-[#1747a6] text-white shadow-[0_10px_24px_rgba(23,71,166,0.24)]'
+                        : 'border border-[#dce8f5] bg-white text-slate-600 hover:border-[#9ec0f0] hover:bg-[#f8fbff]'
+                        }`}
                     >
                       {filter}
                     </motion.button>
@@ -805,13 +811,12 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                             whileTap={{ scale: 0.97 }}
                             onClick={() => toggleRegistration(event.id, event.title, event.enrolled, event.realId)}
                             disabled={!event.enrolled && event.registered >= event.slots}
-                            className={`rounded-2xl px-4 py-3 font-bold text-white transition-all ${
-                              event.enrolled
-                                ? 'bg-[#d24c4c] shadow-[0_12px_24px_rgba(210,76,76,0.24)] hover:bg-[#bf3b3b]'
-                                : event.registered >= event.slots
+                            className={`rounded-2xl px-4 py-3 font-bold text-white transition-all ${event.enrolled
+                              ? 'bg-[#d24c4c] shadow-[0_12px_24px_rgba(210,76,76,0.24)] hover:bg-[#bf3b3b]'
+                              : event.registered >= event.slots
                                 ? 'bg-slate-400 cursor-not-allowed'
                                 : 'bg-[#1747a6] shadow-[0_12px_24px_rgba(23,71,166,0.24)] hover:bg-[#205fd8]'
-                            }`}
+                              }`}
                           >
                             <span className="inline-flex items-center gap-2">
                               {event.enrolled && <CheckCircle2 className="h-4 w-4" />}
@@ -831,7 +836,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                               {!event.enrolled ? 'Đăng ký trước khi điểm danh' : isCheckedIn ? 'Đã điểm danh thành công' : 'Điểm danh GPS + QR'}
                             </span>
                           </motion.button>
-                          
+
                           {['completed', 'ended', 'Đã kết thúc'].includes(event.status) && isCheckedIn && (
                             <motion.button
                               type="button"

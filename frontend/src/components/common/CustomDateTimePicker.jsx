@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Clock, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function CustomDateTimePicker({ value, onChange, min, disabled, placeholder }) {
+export default function CustomDateTimePicker({ value, onChange, min, max, disabled, placeholder, hasError }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const containerRef = useRef(null);
@@ -111,27 +111,48 @@ export default function CustomDateTimePicker({ value, onChange, min, disabled, p
     }
   }
 
+  // Parsing max logic
+  let maxDateStr = '';
+  let maxH = 23;
+  let maxM = 59;
+  if (max) {
+    const maxD = new Date(max);
+    if (!isNaN(maxD.getTime())) {
+      maxDateStr = max.split('T')[0];
+      maxH = maxD.getHours();
+      maxM = maxD.getMinutes();
+    }
+  }
+
   const isHourDisabled = (h) => {
     if (h === '') return false;
-    if (!minDateStr) return false;
-    if (date === minDateStr && h < minH) return true;
+    if (minDateStr && date === minDateStr && h < minH) return true;
+    if (maxDateStr && date === maxDateStr && h > maxH) return true;
     return false;
   };
 
   const isMinuteDisabled = (m) => {
     if (m === '') return false;
-    if (!minDateStr) return false;
-    if (date === minDateStr && hour === minH && m <= minM) return true;
+    if (minDateStr && date === minDateStr && hour === minH && m <= minM) return true;
+    if (maxDateStr && date === maxDateStr && hour === maxH && m > maxM) return true;
     return false;
   };
 
   const isValidTime = () => {
-    if (!min || !date) return true;
+    if (!date) return true;
     const h = hour === '' ? 0 : hour;
     const m = minute === '' ? 0 : minute;
     const currentDt = new Date(`${date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-    const minDt = new Date(min);
-    return currentDt > minDt;
+    
+    if (min) {
+      const minDt = new Date(min);
+      if (currentDt < minDt) return false;
+    }
+    if (max) {
+      const maxDt = new Date(max);
+      if (currentDt > maxDt) return false;
+    }
+    return true;
   };
 
   // Calendar logic
@@ -170,10 +191,11 @@ export default function CustomDateTimePicker({ value, onChange, min, disabled, p
   };
 
   const isDayDisabled = (d) => {
-    if (!minDateStr) return false;
     const pad = (num) => String(num).padStart(2, '0');
     const dStr = `${calYear}-${pad(calMonth + 1)}-${pad(d)}`;
-    return dStr < minDateStr;
+    if (minDateStr && dStr < minDateStr) return true;
+    if (maxDateStr && dStr > maxDateStr) return true;
+    return false;
   };
 
   const renderCalendarDays = () => {
@@ -210,13 +232,20 @@ export default function CustomDateTimePicker({ value, onChange, min, disabled, p
     return days;
   };
 
-  const displayDate = date ? new Date(date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'dd/mm/yyyy';
+  const displayDate = (() => {
+    if (!date) return 'dd/mm/yyyy';
+    const parts = date.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return date;
+  })();
 
   return (
     <div className="relative w-full" ref={containerRef}>
       {/* Input Box Trigger */}
-      <div 
-        className={`flex items-center justify-between w-full rounded-2xl border px-4 py-3 cursor-pointer transition-all ${disabled ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-70' : 'bg-white border-[#dce8f5] hover:border-[#1f5dcc]'} ${isOpen ? 'border-[#1f5dcc] ring-2 ring-[#eef6ff]' : ''}`}
+      <div
+        className={`flex items-center justify-between w-full rounded-2xl border px-4 py-3 cursor-pointer transition-all ${disabled ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-70' : hasError ? 'bg-white border-rose-500 hover:border-rose-500' : 'bg-white border-[#dce8f5] hover:border-[#1f5dcc]'} ${isOpen ? (hasError ? 'border-rose-500 ring-2 ring-rose-50' : 'border-[#1f5dcc] ring-2 ring-[#eef6ff]') : ''}`}
         onClick={() => {
           if (!disabled) {
             if (!isOpen && !date) {
@@ -247,14 +276,36 @@ export default function CustomDateTimePicker({ value, onChange, min, disabled, p
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute z-50 left-0 mt-2 w-full max-w-sm bg-white rounded-[24px] border border-[#dce8f5] shadow-xl p-4"
+            className="absolute z-50 left-1/2 -translate-x-1/2 mt-2 w-[320px] bg-white rounded-[24px] border border-[#dce8f5] shadow-xl p-4"
           >
             {/* Date Picker */}
             <div className="mb-4 relative" ref={calendarRef}>
               <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Ngày</label>
               <div 
                 className={`flex items-center justify-between w-full rounded-xl border px-4 py-3 cursor-pointer transition-colors ${showCalendar ? 'border-[#1f5dcc] ring-2 ring-[#eef6ff] bg-white' : 'border-[#dce8f5] bg-white hover:border-[#1f5dcc]'}`}
-                onClick={() => setShowCalendar(!showCalendar)}
+                onClick={() => {
+                  if (!showCalendar) {
+                    let targetMonth = calMonth;
+                    let targetYear = calYear;
+                    if (!date) {
+                      const pad = (num) => String(num).padStart(2, '0');
+                      const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+                      setDate(todayStr);
+                      updateValue(todayStr, hour === '' ? 0 : hour, minute === '' ? 0 : minute);
+                      targetMonth = today.getMonth();
+                      targetYear = today.getFullYear();
+                    } else {
+                      const parts = date.split('-');
+                      if (parts.length === 3) {
+                        targetMonth = parseInt(parts[1], 10) - 1;
+                        targetYear = parseInt(parts[0], 10);
+                      }
+                    }
+                    setCalMonth(targetMonth);
+                    setCalYear(targetYear);
+                  }
+                  setShowCalendar(!showCalendar);
+                }}
               >
                 <span className={`text-sm font-medium ${date ? 'text-slate-700' : 'text-slate-400'}`}>
                   {displayDate}
@@ -269,7 +320,7 @@ export default function CustomDateTimePicker({ value, onChange, min, disabled, p
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute z-50 left-0 top-full mt-2 w-full bg-white rounded-xl border border-[#dce8f5] p-3 shadow-xl"
+                    className="mt-2 w-full bg-slate-50 rounded-xl border border-[#dce8f5] p-3 shadow-sm"
                   >
                     <div className="flex items-center justify-between mb-3">
                       <button type="button" onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">

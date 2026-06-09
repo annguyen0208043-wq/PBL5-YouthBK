@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
+import NotificationBell from '../student/NotificationBell';
 
 
 function UserIdentity({ user, subtitle }) {
@@ -82,7 +83,7 @@ function ProfileLayout({ children, title, subtitle, user }) {
           <div className="mb-6">
             <UserIdentity user={user} subtitle={user.studentId} />
           </div>
-          
+
           <div className="mb-6 rounded-3xl bg-white/10 p-4 backdrop-blur-md">
             <p className="text-xs uppercase tracking-[0.28em] text-blue-100">Vai trò hiện tại</p>
             <p className="mt-2 text-xl font-bold">{user.role || 'Sinh viên'}</p>
@@ -109,6 +110,9 @@ function ProfileLayout({ children, title, subtitle, user }) {
               <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
                 Lịch sử hoạt động
               </Link>
+              <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+                Thông báo
+              </Link>
             </nav>
 
             <div className="mt-6">
@@ -131,7 +135,10 @@ function ProfileLayout({ children, title, subtitle, user }) {
                 <h1 className="text-3xl font-black text-[#132b57]">{title}</h1>
                 <p className="mt-1 text-slate-500">{subtitle}</p>
               </div>
-              <HeaderIdentity user={user} />
+              <div className="flex items-center gap-3">
+                <NotificationBell />
+                <HeaderIdentity user={user} />
+              </div>
             </div>
           </div>
 
@@ -188,9 +195,8 @@ export default function PersonalProfilePage() {
             key={id}
             type="button"
             onClick={() => setActiveProfileTab(id)}
-            className={`profile-tab rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${
-              activeProfileTab === id ? 'bg-[#1747a6] text-white shadow-[0_10px_22px_rgba(23,71,166,0.22)]' : 'text-slate-600 hover:bg-[#eef6ff] hover:text-[#1747a6]'
-            }`}
+            className={`profile-tab rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${activeProfileTab === id ? 'bg-[#1747a6] text-white shadow-[0_10px_22px_rgba(23,71,166,0.22)]' : 'text-slate-600 hover:bg-[#eef6ff] hover:text-[#1747a6]'
+              }`}
           >
             {label}
           </button>
@@ -199,158 +205,158 @@ export default function PersonalProfilePage() {
 
       <div className={activeProfileTab === 'overview' ? 'grid gap-6 xl:grid-cols-[0.8fr_1.2fr]' : 'grid gap-6'}>
         {activeProfileTab === 'overview' && (
-        <section className="space-y-5">
-          <div className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
-            <div className="flex flex-col items-center text-center">
-              <div className="profile-avatar-ring">
-                {user.avatarUrl ? (
-                  <img src={user.avatarUrl} alt={user.fullName} className="profile-avatar-image h-28 w-28 rounded-full object-cover" />
-                ) : (
-                  <div className="flex h-28 w-28 items-center justify-center rounded-full bg-[linear-gradient(135deg,#1747a6,#4ba3ff)] text-3xl font-black text-white shadow-lg">
-                    {userInitials}
+          <section className="space-y-5">
+            <div className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
+              <div className="flex flex-col items-center text-center">
+                <div className="profile-avatar-ring">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.fullName} className="profile-avatar-image h-28 w-28 rounded-full object-cover" />
+                  ) : (
+                    <div className="flex h-28 w-28 items-center justify-center rounded-full bg-[linear-gradient(135deg,#1747a6,#4ba3ff)] text-3xl font-black text-white shadow-lg">
+                      {userInitials}
+                    </div>
+                  )}
+                </div>
+                <h3 className="mt-4 text-2xl font-black text-[#132b57]">{user.fullName}</h3>
+                <p className="mt-1 text-sm font-semibold text-[#1f5dcc]">{user.role} {user.faculty}</p>
+                <div className="mt-3">
+                  <StatusPill value="Đã xác nhận" />
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                {[
+                  ['MSSV', user.studentId],
+                  ['Lớp sinh hoạt', user.className],
+                  ['Email', user.email],
+                  ['Vai trò', user.role],
+                  ['Điểm cộng đồng', user.communityPoints !== undefined ? user.communityPoints : 0],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-2xl bg-[#f8fbff] p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+                    <p className="mt-2 font-semibold text-slate-700">{value}</p>
                   </div>
-                )}
-              </div>
-              <h3 className="mt-4 text-2xl font-black text-[#132b57]">{user.fullName}</h3>
-              <p className="mt-1 text-sm font-semibold text-[#1f5dcc]">{user.role} {user.faculty}</p>
-              <div className="mt-3">
-                <StatusPill value="Đã xác nhận" />
+                ))}
               </div>
             </div>
 
-            <div className="mt-6 space-y-3">
-              {[
-                ['MSSV', user.studentId],
-                ['Lớp sinh hoạt', user.className],
-                ['Email', user.email],
-                ['Vai trò', user.role],
-                ['Điểm cộng đồng', user.communityPoints !== undefined ? user.communityPoints : 0],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl bg-[#f8fbff] p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-                  <p className="mt-2 font-semibold text-slate-700">{value}</p>
-                </div>
-              ))}
+            <div className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5">
+              <h3 className="text-xl font-black text-[#132b57]">Trạng thái hồ sơ</h3>
+              <div className="mt-4 space-y-3">
+                {[
+                  'Thông tin học tập đã được đồng bộ từ tài khoản hiện tại.',
+                  'Bạn có thể cập nhật email cá nhân, số điện thoại và địa chỉ liên hệ.',
+                  'Các trường quan trọng như MSSV và vai trò được khóa để đảm bảo thống nhất dữ liệu.',
+                  'Mọi thay đổi sẽ được kiểm tra trước khi lưu vào hệ thống.',
+                ].map((step, index) => (
+                  <div key={step} className="flex gap-3 rounded-2xl bg-[#f6faff] p-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1747a6] text-sm font-bold text-white">{index + 1}</div>
+                    <p className="text-sm text-slate-600">{step}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-
-          <div className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5">
-            <h3 className="text-xl font-black text-[#132b57]">Trạng thái hồ sơ</h3>
-            <div className="mt-4 space-y-3">
-              {[
-                'Thông tin học tập đã được đồng bộ từ tài khoản hiện tại.',
-                'Bạn có thể cập nhật email cá nhân, số điện thoại và địa chỉ liên hệ.',
-                'Các trường quan trọng như MSSV và vai trò được khóa để đảm bảo thống nhất dữ liệu.',
-                'Mọi thay đổi sẽ được kiểm tra trước khi lưu vào hệ thống.',
-              ].map((step, index) => (
-                <div key={step} className="flex gap-3 rounded-2xl bg-[#f6faff] p-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1747a6] text-sm font-bold text-white">{index + 1}</div>
-                  <p className="text-sm text-slate-600">{step}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+          </section>
         )}
 
         {activeProfileTab === 'edit' && (
-        <section className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
-          <div className="flex flex-col gap-4 border-b border-[#e7eff8] pb-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Chỉnh sửa thông tin</p>
-              <h3 className="mt-2 text-2xl font-black text-[#132b57]">Cập nhật hồ sơ người dùng</h3>
-              <p className="mt-2 text-sm text-slate-500">Các trường được điền sẵn theo dữ liệu hiện tại để bạn chỉnh sửa trực tiếp.</p>
-            </div>
-            <button className="rounded-2xl border border-[#dce8f5] bg-[#f7fbff] px-4 py-3 font-semibold text-[#1f5dcc]">
-              Hủy thay đổi
-            </button>
-          </div>
-
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Họ và tên</span>
-              <input className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.fullName} />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Email cá nhân</span>
-              <input type="email" className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.personalEmail} />
-            </label>
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Mã số sinh viên</span>
-              <input className="w-full rounded-2xl border border-[#dce8f5] bg-slate-50 px-4 py-3 text-slate-500 outline-none" defaultValue={user.studentId} disabled />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Vai trò</span>
-              <input className="w-full rounded-2xl border border-[#dce8f5] bg-slate-50 px-4 py-3 text-slate-500 outline-none" defaultValue={user.role} disabled />
-            </label>
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Số điện thoại</span>
-              <input className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.phone} />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Lớp sinh hoạt</span>
-              <input className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.className} />
-            </label>
-          </div>
-
-          <label className="mt-4 block">
-            <span className="mb-2 block text-sm font-semibold text-slate-700">Địa chỉ liên hệ</span>
-            <textarea
-              rows="4"
-              className="w-full rounded-[24px] border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
-              defaultValue={user.address}
-            />
-          </label>
-
-          <div className="mt-5 rounded-[24px] bg-[#eef6ff] p-4">
-            <div className="flex items-start gap-3">
-              <ShieldCheck className="mt-0.5 h-5 w-5 text-[#1f5dcc]" />
+          <section className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
+            <div className="flex flex-col gap-4 border-b border-[#e7eff8] pb-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="font-semibold text-[#14356b]">Lưu ý trước khi cập nhật</p>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  Họ tên không chứa số, email đúng định dạng và các trường bắt buộc không được để trống.
-                </p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Chỉnh sửa thông tin</p>
+                <h3 className="mt-2 text-2xl font-black text-[#132b57]">Cập nhật hồ sơ người dùng</h3>
+                <p className="mt-2 text-sm text-slate-500">Các trường được điền sẵn theo dữ liệu hiện tại để bạn chỉnh sửa trực tiếp.</p>
+              </div>
+              <button className="rounded-2xl border border-[#dce8f5] bg-[#f7fbff] px-4 py-3 font-semibold text-[#1f5dcc]">
+                Hủy thay đổi
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Họ và tên</span>
+                <input className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.fullName} />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Email cá nhân</span>
+                <input type="email" className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.personalEmail} />
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Mã số sinh viên</span>
+                <input className="w-full rounded-2xl border border-[#dce8f5] bg-slate-50 px-4 py-3 text-slate-500 outline-none" defaultValue={user.studentId} disabled />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Vai trò</span>
+                <input className="w-full rounded-2xl border border-[#dce8f5] bg-slate-50 px-4 py-3 text-slate-500 outline-none" defaultValue={user.role} disabled />
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Số điện thoại</span>
+                <input className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.phone} />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Lớp sinh hoạt</span>
+                <input className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.className} />
+              </label>
+            </div>
+
+            <label className="mt-4 block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Địa chỉ liên hệ</span>
+              <textarea
+                rows="4"
+                className="w-full rounded-[24px] border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
+                defaultValue={user.address}
+              />
+            </label>
+
+            <div className="mt-5 rounded-[24px] bg-[#eef6ff] p-4">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 text-[#1f5dcc]" />
+                <div>
+                  <p className="font-semibold text-[#14356b]">Lưu ý trước khi cập nhật</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Họ tên không chứa số, email đúng định dạng và các trường bắt buộc không được để trống.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="mt-5 rounded-[24px] border border-[#dce8f5] bg-[#f8fbff] p-4">
-            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Hoạt động của bạn</p>
-            <h4 className="mt-2 text-lg font-black text-[#132b57]">Đăng ký hoạt động Đoàn - Hội</h4>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Truy cập danh sách sự kiện đang mở để đăng ký tham gia, theo dõi chỉ tiêu còn lại và quản lý các hoạt động bạn đã chọn.
-            </p>
-          </div>
+            <div className="mt-5 rounded-[24px] border border-[#dce8f5] bg-[#f8fbff] p-4">
+              <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Hoạt động của bạn</p>
+              <h4 className="mt-2 text-lg font-black text-[#132b57]">Đăng ký hoạt động Đoàn - Hội</h4>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Truy cập danh sách sự kiện đang mở để đăng ký tham gia, theo dõi chỉ tiêu còn lại và quản lý các hoạt động bạn đã chọn.
+              </p>
+            </div>
 
-          <div className="mt-4 rounded-[24px] border border-[#dce8f5] bg-white p-4">
-            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Theo dõi tham gia</p>
-            <h4 className="mt-2 text-lg font-black text-[#132b57]">Lịch sử hoạt động</h4>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Xem nhanh những hoạt động đã tham gia, trạng thái điểm danh, kết quả cộng điểm và chứng nhận đã nhận.
-            </p>
-          </div>
+            <div className="mt-4 rounded-[24px] border border-[#dce8f5] bg-white p-4">
+              <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Theo dõi tham gia</p>
+              <h4 className="mt-2 text-lg font-black text-[#132b57]">Lịch sử hoạt động</h4>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Xem nhanh những hoạt động đã tham gia, trạng thái điểm danh, kết quả cộng điểm và chứng nhận đã nhận.
+              </p>
+            </div>
 
-          <div className="mt-4 rounded-[24px] border border-[#dce8f5] bg-white p-4">
-            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Kết nối sinh viên</p>
-            <h4 className="mt-2 text-lg font-black text-[#132b57]">Chat và trao đổi nhóm</h4>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Trao đổi với bạn học, nhóm hoạt động và các kênh nội bộ sinh viên ngay trong hệ thống.
-            </p>
-          </div>
+            <div className="mt-4 rounded-[24px] border border-[#dce8f5] bg-white p-4">
+              <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Kết nối sinh viên</p>
+              <h4 className="mt-2 text-lg font-black text-[#132b57]">Chat và trao đổi nhóm</h4>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Trao đổi với bạn học, nhóm hoạt động và các kênh nội bộ sinh viên ngay trong hệ thống.
+              </p>
+            </div>
 
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button className="flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white">
-              <Save className="h-5 w-5" />
-              Lưu thay đổi
-            </button>
-          </div>
-        </section>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button className="flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white">
+                <Save className="h-5 w-5" />
+                Lưu thay đổi
+              </button>
+            </div>
+          </section>
         )}
       </div>
     </ProfileLayout>

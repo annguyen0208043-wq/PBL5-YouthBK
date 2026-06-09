@@ -1,71 +1,241 @@
 -- ============================================================
--- PBL5 - Schema thiết kế lại: Chức năng Quản lý Sự kiện
--- Ngày:    2026-06-09
--- ============================================================
--- Quyết định thiết kế:
---   1. Ảnh bìa: nhiều ảnh, dùng isCover trên event_images (bỏ coverImage trên events)
---   2. belowMinAction: khi hủy do không đủ SL → ghi lý do (belowMinNote) cho Đoàn trường biết
---   3. attendanceRadius: dùng INT (linh hoạt)
---   4. Giữ bảng event_feedbacks
---   5. Không cần cancelledBy/cancelledAt
---   6. Khi revision_required trong lúc open_registration → SV vẫn ĐK bình thường
+-- PBL5 - SCHEMA CƠ SỞ DỮ LIỆU ĐẦY ĐỦ (ĐỒNG BỘ SEQUELIZE MODELS)
+-- Tác giả: Antigravity / Claude
+-- Ngày cập nhật: 2026-06-09
 -- ============================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS `event_feedbacks`;
+DROP TABLE IF EXISTS `certificates`;
+DROP TABLE IF EXISTS `event_registrations`;
+DROP TABLE IF EXISTS `event_approvals`;
 DROP TABLE IF EXISTS `event_timeline_details`;
 DROP TABLE IF EXISTS `event_timelines`;
 DROP TABLE IF EXISTS `event_documents`;
 DROP TABLE IF EXISTS `event_images`;
-DROP TABLE IF EXISTS `event_approvals`;
-DROP TABLE IF EXISTS `event_registrations`;
-DROP TABLE IF EXISTS `certificates`;
 DROP TABLE IF EXISTS `events`;
+DROP TABLE IF EXISTS `notification_recipients`;
+DROP TABLE IF EXISTS `notifications`;
+DROP TABLE IF EXISTS `messages`;
+DROP TABLE IF EXISTS `chat_invitations`;
+DROP TABLE IF EXISTS `conversation_members`;
+DROP TABLE IF EXISTS `conversations`;
+DROP TABLE IF EXISTS `audit_logs`;
+DROP TABLE IF EXISTS `users`;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
+-- ============================================================
+-- 1. BẢNG users (Người dùng)
+-- ============================================================
+CREATE TABLE `users` (
+  `id`              INT          NOT NULL AUTO_INCREMENT,
+  `name`            VARCHAR(255) NOT NULL COMMENT 'Tên hiển thị',
+  `email`           VARCHAR(255) NOT NULL COMMENT 'Email đăng nhập',
+  `password`        VARCHAR(255) NOT NULL COMMENT 'Mật khẩu đã mã hóa',
+  `role`            ENUM('admin', 'lienchi', 'student') NOT NULL DEFAULT 'student' COMMENT 'Vai trò hệ thống',
+  `phone`           VARCHAR(255)          COMMENT 'Số điện thoại',
+  `avatar`          VARCHAR(255)          COMMENT 'Đường dẫn ảnh đại diện',
+  `studentId`       VARCHAR(255)          COMMENT 'Mã số sinh viên',
+  `department`      VARCHAR(255)          COMMENT 'Khoa trực thuộc/Ngành học',
+  `faculty`         VARCHAR(255)          COMMENT 'Liên chi khoa/Khoa',
+  `status`          VARCHAR(255)          DEFAULT 'Hoạt động' COMMENT 'Trạng thái hoạt động',
+  `isActive`        TINYINT(1)            DEFAULT 1 COMMENT '1 = Kích hoạt, 0 = Khóa',
+  `communityPoints` INT                   DEFAULT 0 COMMENT 'Điểm rèn luyện / điểm cộng đồng',
+  `createdAt`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `email` (`email`),
+  UNIQUE KEY `studentId` (`studentId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 -- ============================================================
--- BẢNG events
+-- 2. BẢNG audit_logs (Nhật ký hệ thống)
+-- ============================================================
+CREATE TABLE `audit_logs` (
+  `id`         INT          NOT NULL AUTO_INCREMENT,
+  `userId`     INT          NOT NULL,
+  `action`     VARCHAR(255) NOT NULL COMMENT 'Hành động thực hiện',
+  `targetType` VARCHAR(255)          COMMENT 'Loại đối tượng tác động',
+  `targetId`   INT                   COMMENT 'ID của đối tượng tác động',
+  `details`    TEXT                  COMMENT 'Chi tiết hành động',
+  `ipAddress`  VARCHAR(255)          COMMENT 'Địa chỉ IP thực hiện',
+  `createdAt`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  CONSTRAINT `fk_audit_logs_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 3. BẢNG conversations (Cuộc trò chuyện nhóm/cá nhân)
+-- ============================================================
+CREATE TABLE `conversations` (
+  `id`        INT          NOT NULL AUTO_INCREMENT,
+  `name`      VARCHAR(255) NOT NULL COMMENT 'Tên nhóm chat',
+  `type`      ENUM('direct', 'group') NOT NULL DEFAULT 'group' COMMENT 'Trò chuyện cá nhân (direct) hoặc nhóm (group)',
+  `directKey` VARCHAR(255)          COMMENT 'Key duy nhất xác định chat 1-1 (Ví dụ: id1:id2)',
+  `createdBy` INT          NOT NULL,
+  `createdAt` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `directKey` (`directKey`),
+  KEY `idx_conversations_type` (`type`),
+  KEY `idx_conversations_updatedAt` (`updatedAt`),
+  CONSTRAINT `fk_conversations_creator` FOREIGN KEY (`createdBy`) REFERENCES `users` (`id`) ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 4. BẢNG conversation_members (Thành viên cuộc trò chuyện)
+-- ============================================================
+CREATE TABLE `conversation_members` (
+  `id`                INT      NOT NULL AUTO_INCREMENT,
+  `conversationId`    INT      NOT NULL,
+  `userId`            INT      NOT NULL,
+  `role`              ENUM('owner', 'member') NOT NULL DEFAULT 'member' COMMENT 'Vai trò trong nhóm chat',
+  `joinedAt`          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `lastReadMessageId` INT               COMMENT 'ID tin nhắn cuối cùng đã đọc',
+  `createdAt`         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_conversation_member` (`conversationId`, `userId`),
+  KEY `idx_conv_members_userId` (`userId`),
+  CONSTRAINT `fk_conv_members_conversation` FOREIGN KEY (`conversationId`) REFERENCES `conversations` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_conv_members_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 5. BẢNG chat_invitations (Lời mời vào cuộc trò chuyện)
+-- ============================================================
+CREATE TABLE `chat_invitations` (
+  `id`             INT      NOT NULL AUTO_INCREMENT,
+  `conversationId` INT      NOT NULL,
+  `invitedBy`      INT      NOT NULL COMMENT 'Người gửi lời mời',
+  `invitedUserId`  INT      NOT NULL COMMENT 'Người được mời',
+  `status`         ENUM('pending', 'accepted', 'declined') NOT NULL DEFAULT 'pending',
+  `message`        VARCHAR(255)      COMMENT 'Lời nhắn đi kèm',
+  `respondedAt`    DATETIME          COMMENT 'Thời gian phản hồi',
+  `createdAt`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  KEY `idx_chat_inv_recipient_status` (`invitedUserId`, `status`),
+  KEY `idx_chat_inv_conversation` (`conversationId`),
+  CONSTRAINT `fk_chat_inv_conversation` FOREIGN KEY (`conversationId`) REFERENCES `conversations` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_chat_inv_inviter` FOREIGN KEY (`invitedBy`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_chat_inv_invitee` FOREIGN KEY (`invitedUserId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 6. BẢNG messages (Tin nhắn)
+-- ============================================================
+CREATE TABLE `messages` (
+  `id`             INT      NOT NULL AUTO_INCREMENT,
+  `conversationId` INT      NOT NULL,
+  `senderId`       INT      NOT NULL,
+  `content`        TEXT     NOT NULL COMMENT 'Nội dung tin nhắn',
+  `attachments`    JSON              COMMENT 'Mảng các tệp đính kèm chứa url, tên file...',
+  `createdAt`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  KEY `idx_messages_conversation` (`conversationId`),
+  KEY `idx_messages_sender` (`senderId`),
+  CONSTRAINT `fk_messages_conversation` FOREIGN KEY (`conversationId`) REFERENCES `conversations` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_messages_sender` FOREIGN KEY (`senderId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 7. BẢNG notifications (Thông báo hệ thống chung)
+-- ============================================================
+CREATE TABLE `notifications` (
+  `id`             INT          NOT NULL AUTO_INCREMENT,
+  `title`          VARCHAR(255) NOT NULL COMMENT 'Tiêu đề thông báo',
+  `message`        TEXT                  COMMENT 'Mô tả ngắn',
+  `content`        TEXT                  COMMENT 'Nội dung chi tiết thông báo',
+  `type`           VARCHAR(255)          COMMENT 'Loại thông báo (Hệ thống, Sự kiện, ...)',
+  `targetType`     VARCHAR(255)          COMMENT 'Loại đối tượng điều hướng (event, chat...)',
+  `targetValue`    VARCHAR(255)          COMMENT 'Giá trị đối tượng điều hướng (ID)',
+  `senderId`       INT                   COMMENT 'Người gửi (nếu có)',
+  `isRead`         TINYINT(1)            DEFAULT 0 COMMENT 'Đánh dấu đã đọc chung',
+  `recipientCount` INT                   DEFAULT 0 COMMENT 'Số lượng người nhận',
+  `readCount`      INT                   DEFAULT 0 COMMENT 'Số lượng người đã đọc',
+  `createdAt`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  CONSTRAINT `fk_notifications_sender` FOREIGN KEY (`senderId`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4;
+
+
+-- ============================================================
+-- 8. BẢNG notification_recipients (Chi tiết người nhận thông báo)
+-- ============================================================
+CREATE TABLE `notification_recipients` (
+  `id`             INT      NOT NULL AUTO_INCREMENT,
+  `notificationId` INT      NOT NULL,
+  `userId`         INT      NOT NULL,
+  `isRead`         TINYINT(1)        DEFAULT 0 COMMENT '1 = đã đọc, 0 = chưa đọc',
+  `readAt`         DATETIME          COMMENT 'Thời gian đọc thông báo',
+  `createdAt`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  KEY `idx_notif_rec_notif` (`notificationId`),
+  KEY `idx_notif_rec_user` (`userId`),
+  CONSTRAINT `fk_notif_rec_notif` FOREIGN KEY (`notificationId`) REFERENCES `notifications` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_notif_rec_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 9. BẢNG events (Sự kiện - Quản lý vòng đời đầy đủ)
 -- ============================================================
 CREATE TABLE `events` (
   `id`                    INT          NOT NULL AUTO_INCREMENT,
   `title`                 VARCHAR(255) NOT NULL COMMENT 'Tên sự kiện',
-  `description`           TEXT                  COMMENT 'Mô tả sự kiện',
-  `category`              VARCHAR(100)          COMMENT 'Thể loại (Cộng đồng, Kỹ năng, ...)',
+  `description`           TEXT                  COMMENT 'Mô tả chi tiết',
+  `category`              VARCHAR(100)          COMMENT 'Thể loại (Cộng đồng, Kỹ năng, Học thuật...)',
 
-  -- Thời gian (dự kiến khi tạo, xác nhận sau duyệt)
-  `plannedStartDate`      DATETIME     NOT NULL COMMENT 'Thời gian dự kiến bắt đầu',
-  `plannedEndDate`        DATETIME     NOT NULL COMMENT 'Thời gian dự kiến kết thúc',
-  `actualStartDate`       DATETIME              COMMENT 'Thời gian chính thức bắt đầu (sau duyệt, mặc định = planned)',
-  `actualEndDate`         DATETIME              COMMENT 'Thời gian chính thức kết thúc (sau duyệt, mặc định = planned)',
-  `registrationDeadline`  DATETIME              COMMENT 'Hạn đăng ký tham gia',
-  `revisionDeadline`      DATETIME              COMMENT 'Hạn Đoàn trường yêu cầu chỉnh sửa (phải trước ngày diễn ra)',
+  -- Thời gian dự kiến (dùng khi tạo đề xuất) và thời gian chính thức (sau duyệt)
+  `plannedStartDate`      DATETIME     NOT NULL COMMENT 'Ngày bắt đầu dự kiến',
+  `plannedEndDate`        DATETIME     NOT NULL COMMENT 'Ngày kết thúc dự kiến',
+  `actualStartDate`       DATETIME              COMMENT 'Ngày bắt đầu chính thức (mặc định = planned)',
+  `actualEndDate`         DATETIME              COMMENT 'Ngày kết thúc chính thức (mặc định = planned)',
+  `registrationDeadline`  DATETIME              COMMENT 'Hạn cuối đăng ký tham gia',
+  `revisionDeadline`      DATETIME              COMMENT 'Hạn chót Đoàn trường yêu cầu chỉnh sửa xong',
 
-  -- Địa điểm
-  `locationName`          VARCHAR(255) NOT NULL COMMENT 'Tên/địa chỉ nhập tay',
-  `locationLat`           DECIMAL(10,7)         COMMENT 'Vĩ độ (Google Maps pin)',
-  `locationLng`           DECIMAL(10,7)         COMMENT 'Kinh độ (Google Maps pin)',
-  `attendanceRadius`      INT                   COMMENT 'Phạm vi điểm danh QR (mét), người dùng tự nhập',
+  -- Địa điểm và Điểm danh GPS
+  `locationName`          VARCHAR(255) NOT NULL COMMENT 'Tên địa điểm diễn ra',
+  `locationLat`           DECIMAL(10,7)         COMMENT 'Vĩ độ vị trí sự kiện',
+  `locationLng`           DECIMAL(10,7)         COMMENT 'Kinh độ vị trí sự kiện',
+  `attendanceRadius`      INT                   COMMENT 'Bán kính hợp lệ để quét mã điểm danh (mét)',
 
-  -- Số lượng
-  `minParticipants`       INT                   COMMENT 'Số lượng tham gia tối thiểu để sự kiện diễn ra',
-  `maxParticipants`       INT                   COMMENT 'Số lượng tham gia tối đa',
-  `currentSlots`          INT          NOT NULL DEFAULT 0 COMMENT 'Số đăng ký hiện tại',
+  -- Số lượng thành viên tham gia
+  `minParticipants`       INT                   COMMENT 'Số lượng tối thiểu để duy trì sự kiện',
+  `maxParticipants`       INT                   COMMENT 'Số lượng đăng ký tối đa',
+  `currentSlots`          INT          NOT NULL DEFAULT 0 COMMENT 'Số lượng đã đăng ký hiện tại',
 
-  -- Trạng thái vòng đời
-  -- draft              : Đang soạn thảo (chưa gửi)
-  -- pending            : Đã gửi, chờ Đoàn trường duyệt lần đầu
-  -- revision_required  : Đoàn trường yêu cầu chỉnh sửa (kèm revisionDeadline)
-  --                      * Nếu đang open_registration → SV vẫn ĐK bình thường
-  --                      * Liên chi có thể sửa & gửi lại hoặc không → sự kiện tiếp tục
-  -- open_registration  : Đã duyệt, đang mở đăng ký
-  -- below_minimum      : Hết hạn đăng ký, chưa đủ tối thiểu → chờ quyết định Liên chi
-  -- ongoing            : Đang diễn ra
-  -- ended              : Đã kết thúc (chưa hoàn tất xác nhận)
-  -- completed          : Hoàn tất (đã cấp minh chứng)
-  -- cancelled          : Đã hủy
+  -- Trạng thái vòng đời sự kiện:
+  --   draft: Đang soạn thảo
+  --   pending: Chờ Đoàn trường duyệt lần đầu
+  --   revision_required: Yêu cầu sửa đổi (sinh viên vẫn có thể đăng ký bình thường nếu đã mở đăng ký trước đó)
+  --   open_registration: Đã duyệt & đang mở đăng ký
+  --   below_minimum: Hết hạn đăng ký nhưng không đủ số lượng tối thiểu -> Chờ quyết định tiếp tục/hủy của Liên chi
+  --   ongoing: Đang diễn ra
+  --   ended: Đã kết thúc (chưa xác nhận tham gia chính thức)
+  --   completed: Đã hoàn tất (đã cấp chứng nhận)
+  --   cancelled: Đã hủy bỏ
   `status`                ENUM(
                             'draft',
                             'pending',
@@ -78,241 +248,216 @@ CREATE TABLE `events` (
                             'cancelled'
                           ) NOT NULL DEFAULT 'draft',
 
-  -- Quyết định khi không đủ tối thiểu
-  `belowMinAction`        ENUM('proceed','cancel')  COMMENT 'Liên chi quyết định: tiếp tục hay hủy',
-  `belowMinNote`          TEXT                       COMMENT 'Lý do hủy/tiếp tục (Đoàn trường xem được, không cần duyệt lại)',
+  -- Quyết định khi sự kiện rơi vào below_minimum
+  `belowMinAction`        ENUM('proceed', 'cancel') COMMENT 'Quyết định: proceed (tiếp tục) hoặc cancel (hủy)',
+  `belowMinNote`          TEXT                      COMMENT 'Lý do quyết định tiếp tục/hủy sự kiện',
 
   -- Người tạo
-  `createdBy`             INT          NOT NULL COMMENT 'FK → users.id (lienchi)',
-  `createdByRole`         ENUM('admin','lienchi') NOT NULL DEFAULT 'lienchi',
+  `createdBy`             INT          NOT NULL,
+  `createdByRole`         ENUM('admin', 'lienchi') NOT NULL DEFAULT 'lienchi',
 
-  -- Nội dung revision / rejection
-  `revisionMessage`       TEXT                  COMMENT 'Nội dung yêu cầu chỉnh sửa từ Đoàn trường',
-  `rejectionReason`       TEXT                  COMMENT 'Lý do từ chối',
+  -- Phản hồi từ Đoàn trường
+  `revisionMessage`       TEXT                  COMMENT 'Nội dung phản hồi yêu cầu sửa đổi',
+  `rejectionReason`       TEXT                  COMMENT 'Lý do từ chối sự kiện',
+
+  -- Điểm danh QR
+  `qrCode`                VARCHAR(255)          COMMENT 'Mã QR dùng để điểm danh',
+  `qrActive`              TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1 = Bật quét QR điểm danh, 0 = Tắt',
+  `leaderId`              INT                   COMMENT 'ID người chủ trì sự kiện (FK -> users.id)',
 
   `createdAt`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`id`),
-  KEY `idx_events_status`       (`status`),
-  KEY `idx_events_createdBy`    (`createdBy`),
-  KEY `idx_events_planned`      (`plannedStartDate`, `plannedEndDate`),
-  KEY `idx_events_regDeadline`  (`registrationDeadline`),
-  CONSTRAINT `fk_events_createdBy` FOREIGN KEY (`createdBy`) REFERENCES `users` (`id`) ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Bảng sự kiện – vòng đời đầy đủ từ soạn thảo đến hoàn tất';
+  KEY `idx_events_status` (`status`),
+  KEY `idx_events_createdBy` (`createdBy`),
+  KEY `idx_events_leader` (`leaderId`),
+  KEY `idx_events_planned` (`plannedStartDate`, `plannedEndDate`),
+  KEY `idx_events_regDeadline` (`registrationDeadline`),
+  CONSTRAINT `fk_events_creator` FOREIGN KEY (`createdBy`) REFERENCES `users` (`id`) ON UPDATE CASCADE,
+  CONSTRAINT `fk_events_leader` FOREIGN KEY (`leaderId`) REFERENCES `users` (`id`) ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- ============================================================
--- BẢNG event_images  (ảnh sự kiện – bao gồm ảnh bìa carousel)
--- ============================================================
--- Ảnh bìa: isCover = 1, có thể nhiều ảnh bìa → hiển thị dạng carousel
--- Ảnh phụ: isCover = 0
+-- 10. BẢNG event_images (Bộ sưu tập hình ảnh sự kiện)
 -- ============================================================
 CREATE TABLE `event_images` (
   `id`        INT          NOT NULL AUTO_INCREMENT,
   `eventId`   INT          NOT NULL,
-  `imageUrl`  VARCHAR(500) NOT NULL COMMENT 'URL ảnh',
-  `caption`   VARCHAR(255)          COMMENT 'Chú thích ảnh (tuỳ chọn)',
-  `isCover`   TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1 = ảnh bìa (carousel), 0 = ảnh phụ',
-  `sortOrder` INT          NOT NULL DEFAULT 0 COMMENT 'Thứ tự hiển thị',
+  `imageUrl`  VARCHAR(500) NOT NULL COMMENT 'Đường dẫn ảnh',
+  `caption`   VARCHAR(255)          COMMENT 'Mô tả ảnh',
+  `isCover`   TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1 = Ảnh bìa (carousel), 0 = Ảnh phụ',
+  `sortOrder` INT          NOT NULL DEFAULT 0 COMMENT 'Thứ tự sắp xếp hiển thị',
   `createdAt` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`id`),
-  KEY `idx_event_images_eventId` (`eventId`),
-  KEY `idx_event_images_cover`   (`eventId`, `isCover`),
+  KEY `idx_event_images_event` (`eventId`),
+  KEY `idx_event_images_cover` (`eventId`, `isCover`),
   CONSTRAINT `fk_event_images_event` FOREIGN KEY (`eventId`) REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Ảnh sự kiện: ảnh bìa (isCover=1, carousel) và ảnh phụ (isCover=0)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- ============================================================
--- BẢNG event_documents  (tài liệu đính kèm: PDF, Word, ...)
+-- 11. BẢNG event_documents (Tài liệu đính kèm sự kiện)
 -- ============================================================
 CREATE TABLE `event_documents` (
-  `id`           INT          NOT NULL AUTO_INCREMENT,
-  `eventId`      INT          NOT NULL,
-  `fileName`     VARCHAR(255) NOT NULL COMMENT 'Tên file hiển thị',
-  `fileUrl`      VARCHAR(500) NOT NULL COMMENT 'URL lưu trữ file',
-  `fileType`     VARCHAR(50)           COMMENT 'Loại file: pdf, docx, doc, ...',
-  `fileSize`     BIGINT                COMMENT 'Kích thước file (bytes)',
-  `uploadedBy`   INT          NOT NULL COMMENT 'FK → users.id',
-  `createdAt`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updatedAt`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `id`         INT          NOT NULL AUTO_INCREMENT,
+  `eventId`    INT          NOT NULL,
+  `fileName`   VARCHAR(255) NOT NULL COMMENT 'Tên file hiển thị',
+  `fileUrl`    VARCHAR(500) NOT NULL COMMENT 'Đường dẫn file trên server/cloud',
+  `fileType`   VARCHAR(50)           COMMENT 'Định dạng file (pdf, docx, xlsx...)',
+  `fileSize`   BIGINT                COMMENT 'Kích thước file (bytes)',
+  `uploadedBy` INT          NOT NULL,
+  `createdAt`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`id`),
-  KEY `idx_event_documents_eventId`    (`eventId`),
-  KEY `idx_event_documents_uploadedBy` (`uploadedBy`),
-  CONSTRAINT `fk_event_documents_event` FOREIGN KEY (`eventId`)    REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_event_documents_user`  FOREIGN KEY (`uploadedBy`) REFERENCES `users`  (`id`) ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Tài liệu đính kèm sự kiện (PDF, Word, ...)';
+  KEY `idx_event_docs_event` (`eventId`),
+  CONSTRAINT `fk_event_docs_event` FOREIGN KEY (`eventId`) REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_event_docs_uploader` FOREIGN KEY (`uploadedBy`) REFERENCES `users` (`id`) ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- ============================================================
--- BẢNG event_timelines  (các GIAI ĐOẠN của sự kiện)
--- ============================================================
--- Mỗi sự kiện có nhiều giai đoạn, ví dụ:
---   Giai đoạn 1: Đăng ký  (01/05 → 10/05)
---   Giai đoạn 2: Gây quỹ  (05/05 → 15/05)
---   Giai đoạn 3: Tổ chức  (20/05 → 22/05)
+-- 12. BẢNG event_timelines (Giai đoạn của sự kiện)
 -- ============================================================
 CREATE TABLE `event_timelines` (
   `id`          INT          NOT NULL AUTO_INCREMENT,
   `eventId`     INT          NOT NULL,
-  `title`       VARCHAR(255) NOT NULL COMMENT 'Tên giai đoạn, vd: Gây quỹ, Tổ chức',
+  `title`       VARCHAR(255) NOT NULL COMMENT 'Tên giai đoạn (Ví dụ: Chuẩn bị, Gây quỹ...)',
   `startDate`   DATETIME     NOT NULL COMMENT 'Ngày bắt đầu giai đoạn',
   `endDate`     DATETIME     NOT NULL COMMENT 'Ngày kết thúc giai đoạn',
-  `description` TEXT                  COMMENT 'Mô tả tổng quan giai đoạn',
-  `sortOrder`   INT          NOT NULL DEFAULT 0 COMMENT 'Thứ tự hiển thị',
+  `description` TEXT                  COMMENT 'Mô tả giai đoạn',
+  `sortOrder`   INT          NOT NULL DEFAULT 0,
   `createdAt`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`id`),
-  KEY `idx_event_timelines_eventId` (`eventId`),
+  KEY `idx_event_timelines_event` (`eventId`),
   CONSTRAINT `fk_event_timelines_event` FOREIGN KEY (`eventId`) REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Giai đoạn (phase) của sự kiện';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- ============================================================
--- BẢNG event_timeline_details  (các MỐC chi tiết trong giai đoạn)
--- ============================================================
--- Mỗi giai đoạn có nhiều mốc, ví dụ giai đoạn "Tổ chức":
---   Mốc 1: 07:00 – Khai mạc
---   Mốc 2: 08:00 – Thi đấu vòng bảng
---   Mốc 3: 17:00 – Bế mạc, trao giải
+-- 13. BẢNG event_timeline_details (Mốc thời gian chi tiết trong giai đoạn)
 -- ============================================================
 CREATE TABLE `event_timeline_details` (
-  `id`          INT          NOT NULL AUTO_INCREMENT,
-  `timelineId`  INT          NOT NULL COMMENT 'FK → event_timelines.id',
-  `eventId`     INT          NOT NULL COMMENT 'FK → events.id (denorm để query nhanh)',
-  `dateTime`    DATETIME     NOT NULL COMMENT 'Thời điểm cụ thể (nằm trong startDate–endDate của timeline)',
-  `title`       VARCHAR(255) NOT NULL COMMENT 'Tiêu đề mốc, vd: Khai mạc, Thi đấu vòng bảng',
-  `content`     TEXT                  COMMENT 'Nội dung chi tiết do người dùng nhập',
-  `sortOrder`   INT          NOT NULL DEFAULT 0 COMMENT 'Thứ tự trong giai đoạn',
-  `createdAt`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updatedAt`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `id`         INT          NOT NULL AUTO_INCREMENT,
+  `timelineId` INT          NOT NULL COMMENT 'Thuộc giai đoạn nào',
+  `eventId`    INT          NOT NULL COMMENT 'Thuộc sự kiện nào',
+  `dateTime`   DATETIME     NOT NULL COMMENT 'Thời điểm chính xác',
+  `title`      VARCHAR(255) NOT NULL COMMENT 'Tiêu đề mốc chi tiết (Ví dụ: Đón khách, Khai mạc...)',
+  `content`    TEXT                  COMMENT 'Chi tiết nội dung mốc thời gian',
+  `sortOrder`  INT          NOT NULL DEFAULT 0,
+  `createdAt`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`id`),
-  KEY `idx_etd_timelineId` (`timelineId`),
-  KEY `idx_etd_eventId`    (`eventId`),
+  KEY `idx_etd_timeline` (`timelineId`),
+  KEY `idx_etd_event` (`eventId`),
   CONSTRAINT `fk_etd_timeline` FOREIGN KEY (`timelineId`) REFERENCES `event_timelines` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_etd_event`    FOREIGN KEY (`eventId`)    REFERENCES `events`           (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Mốc thời gian chi tiết bên trong mỗi giai đoạn timeline';
+  CONSTRAINT `fk_etd_event` FOREIGN KEY (`eventId`) REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- ============================================================
--- BẢNG event_approvals  (lịch sử duyệt)
+-- 14. BẢNG event_approvals (Lịch sử xét duyệt sự kiện)
 -- ============================================================
 CREATE TABLE `event_approvals` (
   `id`               INT      NOT NULL AUTO_INCREMENT,
   `eventId`          INT      NOT NULL,
-  `approvedBy`       INT      NOT NULL COMMENT 'FK → users.id (admin/Đoàn trường)',
-  `status`           ENUM('approved','rejected','revision_requested') NOT NULL,
-  `note`             TEXT              COMMENT 'Ghi chú / lý do',
-  `revisionDeadline` DATETIME          COMMENT 'Hạn chỉnh sửa khi status = revision_requested',
+  `approvedBy`       INT      NOT NULL COMMENT 'Đoàn trường duyệt',
+  `status`           ENUM('approved', 'rejected', 'revision_requested') NOT NULL COMMENT 'Trạng thái quyết định',
+  `note`             TEXT              COMMENT 'Ghi chú phê duyệt/lý do yêu cầu sửa',
+  `revisionDeadline` DATETIME          COMMENT 'Hạn chót cần hoàn thành sửa đổi',
   `createdAt`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`id`),
-  KEY `idx_event_approvals_eventId`    (`eventId`),
-  KEY `idx_event_approvals_approvedBy` (`approvedBy`),
-  CONSTRAINT `fk_event_approvals_event` FOREIGN KEY (`eventId`)    REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_event_approvals_user`  FOREIGN KEY (`approvedBy`) REFERENCES `users`  (`id`) ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Lịch sử duyệt sự kiện (có thể nhiều vòng)';
+  KEY `idx_event_appr_event` (`eventId`),
+  KEY `idx_event_appr_approver` (`approvedBy`),
+  CONSTRAINT `fk_event_approvals_event` FOREIGN KEY (`eventId`) REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_event_approvals_approver` FOREIGN KEY (`approvedBy`) REFERENCES `users` (`id`) ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- ============================================================
--- BẢNG event_registrations  (đăng ký tham gia + điểm danh QR)
+-- 15. BẢNG event_registrations (Đăng ký tham gia + Điểm danh QR)
 -- ============================================================
 CREATE TABLE `event_registrations` (
   `id`               INT      NOT NULL AUTO_INCREMENT,
   `eventId`          INT      NOT NULL,
-  `userId`           INT      NOT NULL,
-  `registrationDate` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  -- registered : đã đăng ký, chờ sự kiện
-  -- attended   : đã điểm danh QR (có trong phạm vi)
-  -- confirmed  : Liên chi xác nhận tham gia thực tế
-  -- absent     : vắng mặt
-  -- cancelled  : huỷ đăng ký
-  `status`           ENUM('registered','attended','confirmed','absent','cancelled')
-                     NOT NULL DEFAULT 'registered',
-  `attendedAt`       DATETIME          COMMENT 'Thời điểm quét QR điểm danh',
-  `attendanceLat`    DECIMAL(10,7)     COMMENT 'Vĩ độ thiết bị khi điểm danh',
-  `attendanceLng`    DECIMAL(10,7)     COMMENT 'Kinh độ thiết bị khi điểm danh',
-  `confirmedBy`      INT               COMMENT 'FK → users.id (Liên chi xác nhận)',
-  `confirmedAt`      DATETIME          COMMENT 'Thời điểm Liên chi xác nhận',
+  `userId`           INT      NOT NULL COMMENT 'Sinh viên đăng ký',
+  `registrationDate` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Ngày đăng ký',
+  `status`           ENUM('registered', 'attended', 'confirmed', 'absent', 'cancelled') NOT NULL DEFAULT 'registered' COMMENT 'Trạng thái tham gia',
+  `attendedAt`       DATETIME          COMMENT 'Thời gian điểm danh thành công qua QR',
+  `attendanceLat`    DECIMAL(10,7)     COMMENT 'Vĩ độ khi điểm danh thực tế',
+  `attendanceLng`    DECIMAL(10,7)     COMMENT 'Kinh độ khi điểm danh thực tế',
+  `confirmedBy`      INT               COMMENT 'Liên chi đoàn xác nhận tham gia thực tế',
+  `confirmedAt`      DATETIME          COMMENT 'Thời gian xác nhận tham gia thực tế',
   `createdAt`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_registration` (`eventId`, `userId`),
-  KEY `idx_er_eventId`     (`eventId`),
-  KEY `idx_er_userId`      (`userId`),
-  KEY `idx_er_confirmedBy` (`confirmedBy`),
-  CONSTRAINT `fk_er_event`       FOREIGN KEY (`eventId`)     REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_er_user`        FOREIGN KEY (`userId`)      REFERENCES `users`  (`id`) ON UPDATE CASCADE,
-  CONSTRAINT `fk_er_confirmedBy` FOREIGN KEY (`confirmedBy`) REFERENCES `users`  (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Đăng ký tham gia sự kiện – tích hợp điểm danh QR và xác nhận';
+  KEY `idx_er_event` (`eventId`),
+  KEY `idx_er_user` (`userId`),
+  CONSTRAINT `fk_er_event` FOREIGN KEY (`eventId`) REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_er_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON UPDATE CASCADE,
+  CONSTRAINT `fk_er_confirmer` FOREIGN KEY (`confirmedBy`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- ============================================================
--- BẢNG certificates  (minh chứng tham gia)
+-- 16. BẢNG certificates (Minh chứng tham gia hoạt động)
 -- ============================================================
 CREATE TABLE `certificates` (
-  `id`              INT          NOT NULL AUTO_INCREMENT,
-  `userId`          INT          NOT NULL COMMENT 'Sinh viên được cấp',
-  `eventId`         INT                   COMMENT 'FK → events.id',
-  `registrationId`  INT                   COMMENT 'FK → event_registrations.id',
-  `activityTitle`   VARCHAR(255) NOT NULL COMMENT 'Tên hoạt động trên minh chứng',
-  `status`          ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
-  `approvedBy`      INT                   COMMENT 'FK → users.id',
-  `approvedAt`      DATETIME,
-  `approverName`    VARCHAR(255),
-  `stampCode`       VARCHAR(100)          COMMENT 'Mã đóng dấu xác nhận (duy nhất)',
-  `note`            TEXT,
-  `certificateUrl`  VARCHAR(500)          COMMENT 'URL file minh chứng đã tạo',
-  `isBulk`          TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1 = cấp hàng loạt, 0 = cấp đơn lẻ',
-  `createdAt`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updatedAt`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `id`             INT          NOT NULL AUTO_INCREMENT,
+  `userId`         INT          NOT NULL COMMENT 'Sinh viên nhận minh chứng',
+  `eventId`        INT                   COMMENT 'Sự kiện liên quan',
+  `registrationId` INT                   COMMENT 'Đăng ký liên quan',
+  `activityTitle`  VARCHAR(255) NOT NULL COMMENT 'Tên hoạt động in trên chứng chỉ',
+  `status`         ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending' COMMENT 'Trạng thái minh chứng',
+  `approvedBy`     INT                   COMMENT 'Đoàn trường duyệt cấp',
+  `approvedAt`     DATETIME,
+  `approverName`   VARCHAR(255)          COMMENT 'Tên người ký duyệt chứng chỉ',
+  `stampCode`      VARCHAR(100)          COMMENT 'Mã đóng dấu chứng chỉ duy nhất',
+  `note`           TEXT,
+  `certificateUrl` VARCHAR(500)          COMMENT 'Đường dẫn tải file minh chứng',
+  `isBulk`         TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1 = Cấp hàng loạt, 0 = Cấp đơn lẻ',
+  `createdAt`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_cert_stampCode`  (`stampCode`),
-  KEY `idx_cert_userId`           (`userId`),
-  KEY `idx_cert_eventId`          (`eventId`),
-  KEY `idx_cert_registrationId`   (`registrationId`),
-  KEY `idx_cert_approvedBy`       (`approvedBy`),
-  CONSTRAINT `fk_cert_user`         FOREIGN KEY (`userId`)         REFERENCES `users`               (`id`) ON UPDATE CASCADE,
-  CONSTRAINT `fk_cert_event`        FOREIGN KEY (`eventId`)        REFERENCES `events`              (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_cert_registration` FOREIGN KEY (`registrationId`) REFERENCES `event_registrations` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_cert_approvedBy`   FOREIGN KEY (`approvedBy`)     REFERENCES `users`               (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Minh chứng tham gia sự kiện (cấp đơn lẻ và hàng loạt)';
+  UNIQUE KEY `uq_cert_stampCode` (`stampCode`),
+  KEY `idx_cert_user` (`userId`),
+  KEY `idx_cert_event` (`eventId`),
+  KEY `idx_cert_reg` (`registrationId`),
+  CONSTRAINT `fk_cert_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON UPDATE CASCADE,
+  CONSTRAINT `fk_cert_event` FOREIGN KEY (`eventId`) REFERENCES `events` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_cert_reg` FOREIGN KEY (`registrationId`) REFERENCES `event_registrations` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_cert_approver` FOREIGN KEY (`approvedBy`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- ============================================================
--- BẢNG event_feedbacks  (đánh giá sự kiện sau khi kết thúc)
+-- 17. BẢNG event_feedbacks (Đánh giá sự kiện)
 -- ============================================================
 CREATE TABLE `event_feedbacks` (
   `id`        INT      NOT NULL AUTO_INCREMENT,
   `eventId`   INT      NOT NULL,
   `userId`    INT      NOT NULL COMMENT 'Sinh viên đánh giá',
-  `rating`    INT      NOT NULL COMMENT 'Điểm đánh giá (1-5)',
-  `comment`   TEXT              COMMENT 'Nhận xét',
+  `rating`    INT      NOT NULL COMMENT 'Điểm đánh giá (1-5 sao)',
+  `comment`   TEXT              COMMENT 'Nhận xét chi tiết',
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_feedback` (`eventId`, `userId`),
-  KEY `idx_feedback_eventId` (`eventId`),
-  KEY `idx_feedback_userId`  (`userId`),
+  KEY `idx_feedback_event` (`eventId`),
   CONSTRAINT `fk_feedback_event` FOREIGN KEY (`eventId`) REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_feedback_user`  FOREIGN KEY (`userId`)  REFERENCES `users`  (`id`) ON UPDATE CASCADE,
+  CONSTRAINT `fk_feedback_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON UPDATE CASCADE,
   CONSTRAINT `chk_rating` CHECK (`rating` >= 1 AND `rating` <= 5)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Đánh giá sự kiện sau khi kết thúc (mỗi SV đánh giá 1 lần)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
