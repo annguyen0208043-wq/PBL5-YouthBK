@@ -269,6 +269,20 @@ export default function LienChiEditEventPage() {
   };
 
   // 2-Level Timeline helpers
+  // Compute min for new phase start: next day after last existing phase, or event start
+  const getPhaseStartMin = () => {
+    if (!formData.plannedStartDate) return '';
+    const eventStart = formData.plannedStartDate.split('T')[0];
+    if (phases.length === 0) return eventStart;
+    const lastEnd = phases.reduce((max, p) => p.endDate > max ? p.endDate : max, '');
+    if (!lastEnd) return eventStart;
+    const d = new Date(lastEnd);
+    d.setDate(d.getDate() + 1);
+    const pad = (n) => String(n).padStart(2, '0');
+    const nextDay = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    return nextDay > eventStart ? nextDay : eventStart;
+  };
+
   const handleAddPhase = () => {
     if (!newPhase.title || !newPhase.startDate || !newPhase.endDate) {
       setNotice('❌ Vui lòng điền tiêu đề, ngày bắt đầu và kết thúc của giai đoạn');
@@ -282,26 +296,29 @@ export default function LienChiEditEventPage() {
     const eventEndDateOnly = formData.plannedEndDate.split('T')[0];
 
     if (newPhase.startDate < eventStartDateOnly || newPhase.startDate > eventEndDateOnly) {
-      setNotice(`❌ Ngày bắt đầu của giai đoạn phải nằm trong khoảng thời gian của sự kiện (${new Date(formData.plannedStartDate).toLocaleDateString('vi-VN')} - ${new Date(formData.plannedEndDate).toLocaleDateString('vi-VN')})`);
+      setNotice(`❌ Ngày bắt đầu giai đoạn phải nằm trong khoảng sự kiện (${new Date(formData.plannedStartDate).toLocaleDateString('vi-VN')} – ${new Date(formData.plannedEndDate).toLocaleDateString('vi-VN')})`);
       return;
     }
     if (newPhase.endDate < eventStartDateOnly || newPhase.endDate > eventEndDateOnly) {
-      setNotice(`❌ Ngày kết thúc của giai đoạn phải nằm trong khoảng thời gian của sự kiện (${new Date(formData.plannedStartDate).toLocaleDateString('vi-VN')} - ${new Date(formData.plannedEndDate).toLocaleDateString('vi-VN')})`);
+      setNotice(`❌ Ngày kết thúc giai đoạn phải nằm trong khoảng sự kiện (${new Date(formData.plannedStartDate).toLocaleDateString('vi-VN')} – ${new Date(formData.plannedEndDate).toLocaleDateString('vi-VN')})`);
       return;
     }
     if (newPhase.startDate > newPhase.endDate) {
-      setNotice('❌ Ngày bắt đầu của giai đoạn phải trước hoặc trùng ngày kết thúc.');
+      setNotice('❌ Ngày bắt đầu giai đoạn phải trước hoặc trùng ngày kết thúc.');
+      return;
+    }
+
+    // Overlap check
+    const overlapping = phases.find(p =>
+      newPhase.startDate <= p.endDate && newPhase.endDate >= p.startDate
+    );
+    if (overlapping) {
+      setNotice(`❌ Giai đoạn mới bị trùng với "${overlapping.title}" (${new Date(overlapping.startDate + 'T00:00').toLocaleDateString('vi-VN')} – ${new Date(overlapping.endDate + 'T00:00').toLocaleDateString('vi-VN')}). Vui lòng chọn khoảng không chồng nhau.`);
       return;
     }
 
     setPhases(prev => [...prev, { ...newPhase }]);
-    setNewPhase({
-      title: '',
-      startDate: '',
-      endDate: '',
-      description: '',
-      details: []
-    });
+    setNewPhase({ title: '', startDate: '', endDate: '', description: '', details: [] });
     setNotice('');
   };
 
@@ -911,16 +928,18 @@ export default function LienChiEditEventPage() {
 
                     {/* Add Milestone Sub-form */}
                     {activePhaseIndexForMilestone === phaseIdx && (
-                      <div className="border-t border-slate-100 pt-2 space-y-2 mt-2">
-                        <p className="font-bold text-[#132b57] text-[11px]">Thêm mốc chi tiết vào Giai đoạn:</p>
+                      <div className="border-t border-slate-100 pt-3 space-y-2 mt-2">
+                        <p className="font-bold text-[#132b57] text-[11px]">Thêm mốc vào: <span className="text-[#1747a6]">{phases[phaseIdx]?.title}</span></p>
+                        <p className="text-[10px] text-slate-400">Trong khoảng {new Date(phases[phaseIdx]?.startDate + 'T00:00').toLocaleDateString('vi-VN')} – {new Date(phases[phaseIdx]?.endDate + 'T00:00').toLocaleDateString('vi-VN')}</p>
                         <div className="grid gap-2">
                           <label className="block">
                             <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Thời gian diễn ra mốc *</span>
-                            <input 
-                              type="datetime-local" 
+                            <CustomDateTimePicker
                               value={newMilestone.dateTime}
-                              onChange={(e) => setNewMilestone(prev => ({ ...prev, dateTime: e.target.value }))}
-                              className="rounded border p-1 w-full text-xs"
+                              onChange={(val) => setNewMilestone(prev => ({ ...prev, dateTime: val }))}
+                              min={phases[phaseIdx] ? `${phases[phaseIdx].startDate}T00:00` : ''}
+                              max={phases[phaseIdx] ? `${phases[phaseIdx].endDate}T23:59` : ''}
+                              placeholder="Chọn thời điểm mốc"
                             />
                           </label>
                           <label className="block">
@@ -929,24 +948,24 @@ export default function LienChiEditEventPage() {
                               type="text" 
                               value={newMilestone.title}
                               onChange={(e) => setNewMilestone(prev => ({ ...prev, title: e.target.value }))}
-                              className="rounded border p-1 w-full text-xs"
+                              className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
                             />
                           </label>
                           <label className="block">
-                            <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Nội dung chi tiết mốc</span>
+                            <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Nội dung mốc</span>
                             <textarea 
                               value={newMilestone.content}
                               onChange={(e) => setNewMilestone(prev => ({ ...prev, content: e.target.value }))}
-                              className="rounded border p-1 w-full text-xs"
+                              className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
                               rows="2"
                             />
                           </label>
                           <button 
                             type="button" 
                             onClick={() => handleAddMilestone(phaseIdx)}
-                            className="bg-[#1747a6] text-white py-1 rounded font-bold hover:bg-[#215cd1]"
+                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#1747a6] py-2 text-white text-xs font-bold hover:bg-[#215cd1] transition-colors"
                           >
-                            Xác nhận thêm mốc
+                            <Plus className="h-3.5 w-3.5" /> Xác nhận thêm mốc
                           </button>
                         </div>
                       </div>
@@ -958,34 +977,51 @@ export default function LienChiEditEventPage() {
 
             {/* Add Phase form */}
             <div className="border-t border-slate-100 pt-3 space-y-3">
-              <p className="font-bold text-[#132b57] text-sm">Thêm Giai đoạn mới</p>
-              <div className="grid gap-2">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-[#132b57] text-sm">Thêm Giai đoạn mới</p>
+                {!formData.plannedStartDate || !formData.plannedEndDate ? (
+                  <span className="text-[10px] text-amber-500 font-semibold">⚠ Chọn ngày sự kiện trước</span>
+                ) : (
+                  <span className="text-[10px] text-slate-400">Trong khoảng: {new Date(formData.plannedStartDate).toLocaleDateString('vi-VN')} – {new Date(formData.plannedEndDate).toLocaleDateString('vi-VN')}</span>
+                )}
+              </div>
+              <div className="grid gap-3">
                 <label className="block">
                   <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Tiêu đề giai đoạn *</span>
                   <input 
                     type="text" 
                     value={newPhase.title}
                     onChange={(e) => setNewPhase(prev => ({ ...prev, title: e.target.value }))}
-                    className="rounded-xl border p-2 text-xs w-full"
+                    className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
                   />
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="block">
-                    <span className="text-[10px] text-slate-500">Bắt đầu giai đoạn</span>
-                    <input 
-                      type="date" 
+                    <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Bắt đầu giai đoạn *</span>
+                    <CustomDateTimePicker
+                      dateOnly
                       value={newPhase.startDate}
-                      onChange={(e) => setNewPhase(prev => ({ ...prev, startDate: e.target.value }))}
-                      className="rounded-xl border p-2 text-xs w-full"
+                      onChange={(val) => setNewPhase(prev => ({
+                        ...prev,
+                        startDate: val,
+                        endDate: prev.endDate && prev.endDate < val ? '' : prev.endDate
+                      }))}
+                      min={getPhaseStartMin()}
+                      max={newPhase.endDate || (formData.plannedEndDate ? formData.plannedEndDate.split('T')[0] : '')}
+                      disabled={!formData.plannedStartDate || !formData.plannedEndDate}
+                      placeholder="Ngày bắt đầu"
                     />
                   </label>
                   <label className="block">
-                    <span className="text-[10px] text-slate-500">Kết thúc giai đoạn</span>
-                    <input 
-                      type="date" 
+                    <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Kết thúc giai đoạn *</span>
+                    <CustomDateTimePicker
+                      dateOnly
                       value={newPhase.endDate}
-                      onChange={(e) => setNewPhase(prev => ({ ...prev, endDate: e.target.value }))}
-                      className="rounded-xl border p-2 text-xs w-full"
+                      onChange={(val) => setNewPhase(prev => ({ ...prev, endDate: val }))}
+                      min={newPhase.startDate || getPhaseStartMin()}
+                      max={formData.plannedEndDate ? formData.plannedEndDate.split('T')[0] : ''}
+                      disabled={!formData.plannedStartDate || !formData.plannedEndDate}
+                      placeholder="Ngày kết thúc"
                     />
                   </label>
                 </div>
@@ -994,17 +1030,18 @@ export default function LienChiEditEventPage() {
                   <textarea 
                     value={newPhase.description}
                     onChange={(e) => setNewPhase(prev => ({ ...prev, description: e.target.value }))}
-                    className="rounded-xl border p-2 text-xs w-full"
+                    className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
                     rows="2"
                   />
                 </label>
                 <button 
                   type="button" 
                   onClick={handleAddPhase}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#dce8f5] bg-white py-2 font-semibold text-[#1747a6] text-xs transition-all hover:bg-[#f3f8ff]"
+                  disabled={!formData.plannedStartDate || !formData.plannedEndDate}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#dce8f5] bg-white py-2.5 font-semibold text-[#1747a6] text-xs transition-all hover:bg-[#f3f8ff] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="h-4 w-4" />
-                  Xác nhận Giai đoạn
+                  Xác nhận thêm Giai đoạn
                 </button>
               </div>
             </div>
