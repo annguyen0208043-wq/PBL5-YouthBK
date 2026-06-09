@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ChevronDown, CheckCircle2, XCircle, Trash2, UserPlus, Save, AlertCircle, X, MapPin, Mail, Phone, Award } from 'lucide-react';
+import { Search, ChevronDown, CheckCircle2, XCircle, Trash2, UserPlus, Save, AlertCircle, X, MapPin, Mail, Phone, Award, ClipboardCheck } from 'lucide-react';
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { getStoredUserProfile } from '../../shared/user/session';
@@ -45,10 +45,20 @@ export default function LienChiRegistrationsPage() {
       });
       if (response.ok) {
         const data = await response.json();
-        let approvedEvents = data.events.filter(e => e.status === 'approved' || e.status === 'ongoing');
+        // Updated filter to match the new 9-status lifecycle: open_registration, ongoing, ended, completed
+        let approvedEvents = data.events.filter(e => 
+          ['open_registration', 'ongoing', 'ended', 'completed'].includes(e.status)
+        );
 
         setEvents(approvedEvents);
-        if (approvedEvents.length > 0) {
+        
+        // Try to read eventId from query params first
+        const params = new URLSearchParams(window.location.search);
+        const urlEventId = params.get('eventId');
+        
+        if (urlEventId && approvedEvents.some(e => String(e.id) === String(urlEventId))) {
+          setSelectedEventId(urlEventId);
+        } else if (approvedEvents.length > 0) {
           setSelectedEventId(approvedEvents[0].id);
         }
       }
@@ -228,16 +238,16 @@ export default function LienChiRegistrationsPage() {
   const filteredRegistrations = registrations.filter((reg) => {
     if (!search) return true;
     const s = search.toLowerCase();
-    const user = reg.User || {};
+    const studentUser = reg.User || {};
     return (
-      (user.fullName || '').toLowerCase().includes(s) ||
-      (user.studentId || '').toLowerCase().includes(s) ||
-      (user.department || '').toLowerCase().includes(s)
+      (studentUser.fullName || '').toLowerCase().includes(s) ||
+      (studentUser.studentId || '').toLowerCase().includes(s) ||
+      (studentUser.department || '').toLowerCase().includes(s)
     );
   });
 
   return (
-    <Layout currentPath={isAdmin ? "/admin/registrations" : "/lien-chi/registrations"} title="Quản lý người đăng ký" subtitle="Xem, chỉnh sửa, thêm hoặc xoá sinh viên trong danh sách đăng ký.">
+    <Layout currentPath={isAdmin ? "/admin/registrations" : "/lien-chi/registrations"} title="Quản lý sinh viên tham gia" subtitle="Điểm danh, phê duyệt thực tế, đánh dấu vắng mặt sinh viên tham gia sự kiện.">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 grid gap-6 md:grid-cols-12">
           {/* Cột chọn sự kiện */}
@@ -249,7 +259,7 @@ export default function LienChiRegistrationsPage() {
                 onChange={(e) => setSelectedEventId(e.target.value)}
                 className="w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 py-3 pr-10 outline-none transition-all focus:border-[#1747a6] focus:ring-4 focus:ring-[#1747a6]/10 text-sm"
               >
-                {events.length === 0 && <option value="">Không có sự kiện</option>}
+                {events.length === 0 && <option value="">Không có sự kiện hoạt động</option>}
                 {events.map((e) => (
                   <option key={e.id} value={e.id}>{e.title}</option>
                 ))}
@@ -263,7 +273,7 @@ export default function LienChiRegistrationsPage() {
             <div className="relative w-full">
               <input
                 type="text"
-                placeholder="Tìm theo tên, MSSV hoặc lớp..."
+                placeholder="Tìm sinh viên theo tên, MSSV hoặc lớp..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 outline-none transition-all focus:border-[#1747a6] focus:ring-4 focus:ring-[#1747a6]/10"
@@ -282,78 +292,100 @@ export default function LienChiRegistrationsPage() {
                   <th className="px-6 py-4">Sinh viên</th>
                   <th className="px-6 py-4">Lớp</th>
                   <th className="px-6 py-4">Khoa</th>
-                  <th className="px-6 py-4">Trạng thái</th>
-                  <th className="px-6 py-4">Điểm danh</th>
-                  <th className="px-6 py-4 text-right">Thao tác</th>
+                  <th className="px-6 py-4">Trạng thái đăng ký</th>
+                  <th className="px-6 py-4">Chi tiết điểm danh</th>
+                  <th className="px-6 py-4 text-right">Thao tác phê duyệt</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {isLoading ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center text-slate-500">Đang tải dữ liệu...</td>
+                    <td colSpan="6" className="px-6 py-8 text-center text-slate-500">Đang tải dữ liệu đăng ký...</td>
                   </tr>
                 ) : filteredRegistrations.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center text-slate-500">Không có dữ liệu phù hợp.</td>
+                    <td colSpan="6" className="px-6 py-8 text-center text-slate-500">Không có dữ liệu sinh viên đăng ký sự kiện này.</td>
                   </tr>
                 ) : (
                   filteredRegistrations.map((reg) => {
-                    const user = reg.User || {};
-                    const isCancelled = reg.status === 'cancelled';
+                    const studentUser = reg.User || {};
                     return (
                       <tr key={reg.id} className="transition-colors hover:bg-slate-50">
                         <td className="px-6 py-4">
                           <button
-                            onClick={() => setSelectedStudent(user)}
+                            onClick={() => setSelectedStudent(studentUser)}
                             className="font-bold text-[#132b57] text-left hover:text-[#1747a6] hover:underline transition-all"
                           >
-                            {user.fullName}
+                            {studentUser.fullName}
                           </button>
-                          <div className="mt-1 text-xs text-slate-500">MSSV: {user.studentId}</div>
+                          <div className="mt-1 text-xs text-slate-500">MSSV: {studentUser.studentId}</div>
                         </td>
-                        <td className="px-6 py-4 font-medium text-slate-600">{user.department || '-'}</td>
-                        <td className="px-6 py-4 text-slate-600">{user.faculty || '-'}</td>
+                        <td className="px-6 py-4 font-medium text-slate-600">{studentUser.department || '-'}</td>
+                        <td className="px-6 py-4 text-slate-600">{studentUser.faculty || '-'}</td>
                         <td className="px-6 py-4">
                           {reg.status === 'registered' && <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-600">Đã đăng ký</span>}
-                          {reg.status === 'attended' && <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-600">Đã tham gia</span>}
-                          {reg.status === 'cancelled' && <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">Đã hủy</span>}
+                          {reg.status === 'attended' && <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-600">Đã điểm danh QR</span>}
+                          {reg.status === 'confirmed' && <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-600">Đã xác nhận thực tế</span>}
+                          {reg.status === 'absent' && <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">Vắng mặt</span>}
+                          {reg.status === 'cancelled' && <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">Đã hủy ĐK</span>}
                         </td>
                         <td className="px-6 py-4">
-                          {reg.status === 'attended' ? (
-                            <span className="font-semibold text-emerald-600">Đã check-in</span>
+                          {reg.status === 'attended' || reg.status === 'confirmed' ? (
+                            <div className="text-xs">
+                              <p className="font-semibold text-emerald-600">✓ Đã quét QR</p>
+                              {reg.attendedAt && <p className="text-[10px] text-slate-400">{new Date(reg.attendedAt).toLocaleTimeString('vi-VN')}</p>}
+                            </div>
                           ) : (
-                            <span className="text-slate-400">Chưa check-in</span>
+                            <span className="text-slate-400 text-xs">Chưa quét mã</span>
                           )}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            {reg.status === 'attended' && (
+                          <div className="flex justify-end gap-1.5">
+                            {/* Confirmed Action */}
+                            {['registered', 'attended', 'absent'].includes(reg.status) && (
+                              <button
+                                onClick={() => handleUpdateStatus(reg.id, 'confirmed')}
+                                className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50"
+                                title="Xác nhận tham gia thực tế"
+                              >
+                                <ClipboardCheck className="h-5 w-5" />
+                              </button>
+                            )}
+                            
+                            {/* Certificate creation shortcut */}
+                            {reg.status === 'confirmed' && (
                               <button
                                 onClick={() => handleIssueCertificate(reg)}
-                                className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
-                                title="Cấp minh chứng ngay"
+                                className="rounded-lg p-2 text-[#1747a6] transition-colors hover:bg-blue-50"
+                                title="Xuất chứng nhận PDF"
                               >
                                 <Award className="h-5 w-5" />
                               </button>
                             )}
-                            {reg.status !== 'cancelled' && (
+
+                            {/* Mark Attended (Manual QR bypass) */}
+                            {['registered', 'absent', 'cancelled'].includes(reg.status) && (
                               <button
-                                onClick={() => handleUpdateStatus(reg.id, reg.status === 'attended' ? 'registered' : 'attended')}
-                                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-[#1747a6]"
-                                title={reg.status === 'attended' ? 'Hủy check-in' : 'Check-in'}
+                                onClick={() => handleUpdateStatus(reg.id, 'attended')}
+                                className="rounded-lg p-2 text-indigo-500 transition-colors hover:bg-indigo-50"
+                                title="Điểm danh thủ công"
                               >
                                 <CheckCircle2 className="h-5 w-5" />
                               </button>
                             )}
-                            {reg.status !== 'cancelled' && (
+
+                            {/* Mark Absent */}
+                            {['registered', 'attended', 'confirmed'].includes(reg.status) && (
                               <button
-                                onClick={() => handleUpdateStatus(reg.id, 'cancelled')}
-                                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                                title="Hủy đăng ký"
+                                onClick={() => handleUpdateStatus(reg.id, 'absent')}
+                                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                                title="Đánh dấu vắng mặt"
                               >
                                 <XCircle className="h-5 w-5" />
                               </button>
                             )}
+
+                            {/* Delete Registration */}
                             <button
                               onClick={() => handleDeleteRegistration(reg.id)}
                               className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
@@ -381,8 +413,8 @@ export default function LienChiRegistrationsPage() {
                 <UserPlus className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-[#132b57]">Thêm người đăng ký thủ công</h3>
-                <p className="text-sm text-slate-500">Mô phỏng luồng bổ sung sinh viên vào sự kiện do liên chi quản lý.</p>
+                <h3 className="text-lg font-bold text-[#132b57]">Bổ sung sinh viên thủ công</h3>
+                <p className="text-sm text-slate-500">Thêm sinh viên trực tiếp vào danh sách bằng MSSV.</p>
               </div>
             </div>
             <form onSubmit={handleAddStudent} className="space-y-4">
@@ -420,12 +452,11 @@ export default function LienChiRegistrationsPage() {
                 disabled={!selectedEventId}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1747a6] px-4 py-3 font-bold text-white transition-all hover:bg-[#205fd8] active:scale-[0.98] disabled:opacity-50"
               >
-                Thêm sinh viên
+                Thêm sinh viên vào sự kiện
               </button>
             </form>
           </div>
         </div>
-
       </div>
 
       {/* Student Details Modal */}

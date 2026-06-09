@@ -1,106 +1,49 @@
 import { Request, Response } from 'express';
+import { Op } from 'sequelize';
+import crypto from 'crypto';
 import Event from '../models/Event';
 import EventRegistration from '../models/EventRegistration';
 import EventTimeline from '../models/EventTimeline';
+import EventTimelineDetail from '../models/EventTimelineDetail';
 import EventImage from '../models/EventImage';
+import EventDocument from '../models/EventDocument';
 import EventApproval from '../models/EventApproval';
 import User from '../models/User';
-import { AuthRequest } from '../middlewares/authMiddleware';
-import { Op } from 'sequelize';
-import { isBeforeStart, isApproved, isRegistrationOpen, hasSlots, noActiveRequest, isOwner } from '../guards/event.guards';
-import crypto from 'crypto';
 import EventFeedback from '../models/EventFeedback';
+import { AuthRequest } from '../middlewares/authMiddleware';
+import { isBeforeStart, isRegistrationOpen, hasSlots, isOwner } from '../guards/event.guards';
 
-// ----------------------------------------------------------------------
+// Helper to calculate GPS distance
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Earth radius in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function deg2rad(deg: number) {
+  return deg * (Math.PI / 180);
+}
+
 // 1. PUBLIC / GENERAL ENDPOINTS
-// ----------------------------------------------------------------------
-
-export const createEvent = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const { title, description, location, startDate, endDate, startTime, endTime, capacity, maxParticipants, maxSlots, category, timeline, registrationDeadline, communityPoints } = req.body;
-    const userId = req.user?.id;
-    const role = req.user?.role;
-
-    if (!title || !location || (!startDate && !startTime) || (!endDate && !endTime)) {
-      res.status(400).json({ message: 'Missing required fields' });
-      return;
-    }
-
-    const pCapacity = (capacity === 'null' || !capacity) ? null : parseInt(capacity, 10);
-    const pMaxParticipants = (maxParticipants === 'null' || !maxParticipants) ? null : parseInt(maxParticipants, 10);
-    const pMaxSlots = (maxSlots === 'null' || !maxSlots) ? null : parseInt(maxSlots, 10);
-    
-    const finalCapacity = pCapacity || pMaxParticipants;
-    const finalMaxSlots = pMaxSlots || pMaxParticipants || pCapacity;
-
-    const event = await Event.create({
-      title,
-      description,
-      location,
-      startDate: startDate || startTime,
-      endDate: endDate || endTime,
-      startTime: startTime || startDate,
-      endTime: endTime || endDate,
-      registrationDeadline,
-      capacity: finalCapacity,
-      maxParticipants: finalCapacity,
-      maxSlots: finalMaxSlots,
-      category,
-      communityPoints: communityPoints ? parseInt(communityPoints) : 0,
-      createdBy: userId,
-      createdByRole: role === 'admin' ? 'admin' : 'lienchi',
-      status: role === 'admin' ? 'approved' : 'pending', // lienchi create as pending to wait for admin approval
-      currentSlots: 0,
-      reviewHistory: []
-    });
-
-    if (timeline) {
-      const timelineItems = typeof timeline === 'string' ? JSON.parse(timeline) : timeline;
-      if (Array.isArray(timelineItems) && timelineItems.length > 0) {
-        await Promise.all(
-          timelineItems.map((item: any) =>
-            EventTimeline.create({
-              eventId: event.id,
-              dateTime: item.dateTime,
-              description: item.description
-            })
-          )
-        );
-      }
-    }
-
-    if (req.files && Array.isArray(req.files)) {
-      await Promise.all(
-        (req.files as Express.Multer.File[]).map((file) =>
-          EventImage.create({
-            eventId: event.id,
-            imageUrl: `/uploads/events/${file.filename}`
-          })
-        )
-      );
-    }
-
-    const fullEvent = await Event.findByPk(event.id, {
-      include: [
-        { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
-        { model: EventTimeline, as: 'timelines' },
-        { model: EventImage, as: 'images' }
-      ]
-    });
-
-    res.status(201).json({ message: 'Event created successfully', event: fullEvent });
-  } catch (error) {
-    console.error('Create event error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-};
-
 export const getEvents = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { status, category, createdBy } = req.query;
 
     const where: any = {};
-    if (status) where.status = status;
+    if (status) {
+      where.status = status;
+    } else {
+      // Exclude draft from public/students list if requested by student
+      if (req.user?.role === 'student') {
+        where.status = { [Op.ne]: 'draft' };
+      }
+    }
     if (category) where.category = category;
     if (createdBy) where.createdBy = createdBy;
 
@@ -108,10 +51,9 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
       where,
       include: [
         { model: User, as: 'creator', attributes: ['id', 'name', 'email', 'role', 'faculty'] },
-        { model: EventTimeline, as: 'timelines' },
         { model: EventImage, as: 'images' },
-        ...(req.user ? [{ 
-          model: require('../models/EventRegistration').default, 
+        ...(req.user ? [{
+          model: EventRegistration,
           as: 'registrations',
           where: { userId: req.user.id },
           required: false
@@ -139,15 +81,31 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
   }
 };
 
-export const getEventById = async (req: Request, res: Response): Promise<void> => {
+export const getEventById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
 
     const event = await Event.findByPk(id, {
       include: [
-        { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
-        { model: EventTimeline, as: 'timelines' },
-        { model: EventImage, as: 'images' }
+        { model: User, as: 'creator', attributes: ['id', 'name', 'email', 'faculty'] },
+        { 
+          model: EventTimeline, 
+          as: 'timelines',
+          include: [{ model: EventTimelineDetail, as: 'details' }]
+        },
+        { model: EventImage, as: 'images' },
+        { model: EventDocument, as: 'documents', include: [{ model: User, as: 'uploader', attributes: ['name'] }] },
+        { model: EventApproval, as: 'approvals', include: [{ model: User, as: 'approver', attributes: ['name'] }] },
+        ...(req.user ? [{
+          model: EventRegistration,
+          as: 'registrations',
+          where: { userId: req.user.id },
+          required: false
+        }] : [])
+      ],
+      order: [
+        [{ model: EventTimeline, as: 'timelines' }, 'sortOrder', 'ASC'],
+        [{ model: EventTimeline, as: 'timelines' }, { model: EventTimelineDetail, as: 'details' }, 'sortOrder', 'ASC']
       ]
     });
 
@@ -156,103 +114,326 @@ export const getEventById = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    res.json({ event });
+    const data = event.toJSON() as any;
+    if (req.user && data.registrations && data.registrations.length > 0) {
+      data.isRegistered = true;
+      data.userRegistrationStatus = data.registrations[0].status;
+    } else {
+      data.isRegistered = false;
+      data.userRegistrationStatus = null;
+    }
+
+    res.json({ event: data });
   } catch (error) {
     console.error('Get event by id error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
-export const updateEvent = async (req: AuthRequest, res: Response): Promise<void> => {
+// 2. LIEN CHI / ADMIN CREATION & UPDATE
+export const createEvent = async (req: AuthRequest, res: Response): Promise<void> => {
+  const transaction = await Event.sequelize!.transaction();
   try {
-    const { id } = req.params;
-    const { title, description, location, startDate, endDate, startTime, endTime, capacity, maxParticipants, maxSlots, category, registrationDeadline, status, communityPoints } = req.body;
-
-    const event = await Event.findByPk(id);
-    if (!event) {
-      res.status(404).json({ message: 'Event not found' });
-      return;
-    }
-
-    if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) {
-      res.status(403).json({ message: 'Not authorized to update this event' });
-      return;
-    }
-
-    // lienchi only allowed to update when in draft or revision_required
-    if (req.user?.role !== 'admin') {
-      if (!['draft', 'revision_required'].includes(event.status)) {
-        res.status(400).json({ message: 'Chỉ được sửa khi sự kiện đang ở trạng thái nháp hoặc yêu cầu sửa. Nếu đã duyệt, vui lòng dùng requestUpdate' });
-        return;
-      }
-    }
-
-    const pCapacity = (capacity === 'null' || capacity === '') ? null : (capacity !== undefined ? parseInt(capacity, 10) : undefined);
-    const pMaxParticipants = (maxParticipants === 'null' || maxParticipants === '') ? null : (maxParticipants !== undefined ? parseInt(maxParticipants, 10) : undefined);
-    const pMaxSlots = (maxSlots === 'null' || maxSlots === '') ? null : (maxSlots !== undefined ? parseInt(maxSlots, 10) : undefined);
+    const {
+      title,
+      description,
+      category,
+      plannedStartDate,
+      plannedEndDate,
+      registrationDeadline,
+      locationName,
+      locationLat,
+      locationLng,
+      attendanceRadius,
+      minParticipants,
+      maxParticipants,
+      timeline,
+      submit // Boolean flag if immediate submit is requested
+    } = req.body;
     
-    const finalCapacity = pCapacity !== undefined ? pCapacity : (pMaxParticipants !== undefined ? pMaxParticipants : undefined);
-    const finalMaxSlots = pMaxSlots !== undefined ? pMaxSlots : finalCapacity;
+    const userId = req.user?.id!;
+    const role = req.user?.role!;
 
-    await event.update({
-      title: title || event.title,
-      description: description !== undefined ? description : event.description,
-      location: location || event.location,
-      startDate: startDate || event.startDate,
-      endDate: endDate || event.endDate,
-      startTime: startTime || event.startTime,
-      endTime: endTime || event.endTime,
-      registrationDeadline: registrationDeadline || event.registrationDeadline,
-      capacity: finalCapacity !== undefined ? finalCapacity : event.capacity,
-      maxParticipants: finalCapacity !== undefined ? finalCapacity : event.maxParticipants,
-      maxSlots: finalMaxSlots !== undefined ? finalMaxSlots : event.maxSlots,
-      category: category !== undefined ? category : event.category,
-      communityPoints: communityPoints !== undefined ? parseInt(communityPoints) : event.communityPoints,
-      status: status || event.status
-    });
+    if (!title || !locationName || !plannedStartDate || !plannedEndDate) {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Tiêu đề, địa điểm và thời gian dự kiến là bắt buộc' });
+      return;
+    }
 
-    // Handle timeline & images similar to createEvent (omitted for brevity, assume unchanged or keep standard logic)
-    const { timeline } = req.body;
+    // Determine initial status
+    let status: any = 'draft';
+    if (role === 'admin') {
+      status = 'open_registration'; // Admin bypasses approval
+    } else if (submit === 'true' || submit === true) {
+      status = 'pending';
+    }
+
+    const event = await Event.create({
+      title,
+      description,
+      category,
+      plannedStartDate,
+      plannedEndDate,
+      actualStartDate: role === 'admin' ? plannedStartDate : null,
+      actualEndDate: role === 'admin' ? plannedEndDate : null,
+      registrationDeadline: registrationDeadline || null,
+      locationName,
+      locationLat: locationLat ? parseFloat(locationLat) : null,
+      locationLng: locationLng ? parseFloat(locationLng) : null,
+      attendanceRadius: attendanceRadius ? parseInt(attendanceRadius, 10) : null,
+      minParticipants: minParticipants ? parseInt(minParticipants, 10) : null,
+      maxParticipants: maxParticipants ? parseInt(maxParticipants, 10) : null,
+      status,
+      createdBy: userId,
+      createdByRole: role === 'admin' ? 'admin' : 'lienchi'
+    }, { transaction });
+
+    // Handle Timeline (phases and details)
     if (timeline) {
-      const timelineItems = typeof timeline === 'string' ? JSON.parse(timeline) : timeline;
-      if (Array.isArray(timelineItems)) {
-        await EventTimeline.destroy({ where: { eventId: id } });
-        if (timelineItems.length > 0) {
-          await Promise.all(
-            timelineItems.map((item: any) =>
-              EventTimeline.create({
+      const parsedTimeline = typeof timeline === 'string' ? JSON.parse(timeline) : timeline;
+      if (Array.isArray(parsedTimeline)) {
+        for (let i = 0; i < parsedTimeline.length; i++) {
+          const phase = parsedTimeline[i];
+          const createdPhase = await EventTimeline.create({
+            eventId: event.id,
+            title: phase.title,
+            startDate: phase.startDate,
+            endDate: phase.endDate,
+            description: phase.description || null,
+            sortOrder: phase.sortOrder || i
+          }, { transaction });
+
+          if (phase.details && Array.isArray(phase.details)) {
+            for (let j = 0; j < phase.details.length; j++) {
+              const detail = phase.details[j];
+              await EventTimelineDetail.create({
+                timelineId: createdPhase.id,
                 eventId: event.id,
-                dateTime: item.dateTime,
-                description: item.description
-              })
-            )
-          );
+                dateTime: detail.dateTime,
+                title: detail.title,
+                content: detail.content || null,
+                sortOrder: detail.sortOrder || j
+              }, { transaction });
+            }
+          }
         }
       }
     }
 
-    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-      await EventImage.destroy({ where: { eventId: id } });
-      await Promise.all(
-        (req.files as Express.Multer.File[]).map((file) =>
-          EventImage.create({
-            eventId: event.id,
-            imageUrl: `/uploads/events/${file.filename}`
-          })
-        )
-      );
+    // Handle uploaded files
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+    
+    // Save cover and other images
+    if (files && files.images) {
+      const captions = req.body.imageCaptions ? (typeof req.body.imageCaptions === 'string' ? JSON.parse(req.body.imageCaptions) : req.body.imageCaptions) : [];
+      const covers = req.body.imageIsCovers ? (typeof req.body.imageIsCovers === 'string' ? JSON.parse(req.body.imageIsCovers) : req.body.imageIsCovers) : [];
+
+      for (let i = 0; i < files.images.length; i++) {
+        const file = files.images[i];
+        await EventImage.create({
+          eventId: event.id,
+          imageUrl: `/uploads/events/${file.filename}`,
+          caption: captions[i] || null,
+          isCover: covers[i] === true || covers[i] === 'true' || covers[i] === 1 ? 1 : 0,
+          sortOrder: i
+        }, { transaction });
+      }
     }
 
-    const fullEvent = await Event.findByPk(id, {
+    // Save attachments
+    if (files && files.documents) {
+      for (let i = 0; i < files.documents.length; i++) {
+        const file = files.documents[i];
+        await EventDocument.create({
+          eventId: event.id,
+          fileName: file.originalname,
+          fileUrl: `/uploads/events/${file.filename}`,
+          fileType: file.filename.split('.').pop() || null,
+          fileSize: file.size,
+          uploadedBy: userId
+        }, { transaction });
+      }
+    }
+
+    await transaction.commit();
+
+    const fullEvent = await Event.findByPk(event.id, {
       include: [
-        { model: User, as: 'creator', attributes: ['id', 'name'] },
-        { model: EventTimeline, as: 'timelines' },
-        { model: EventImage, as: 'images' }
+        { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
+        { model: EventTimeline, as: 'timelines', include: [{ model: EventTimelineDetail, as: 'details' }] },
+        { model: EventImage, as: 'images' },
+        { model: EventDocument, as: 'documents' }
       ]
     });
 
-    res.json({ message: 'Event updated successfully', event: fullEvent });
+    res.status(201).json({ message: 'Tạo sự kiện thành công', event: fullEvent });
   } catch (error) {
+    await transaction.rollback();
+    console.error('Create event error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const updateEvent = async (req: AuthRequest, res: Response): Promise<void> => {
+  const transaction = await Event.sequelize!.transaction();
+  try {
+    const { id } = req.params;
+    const event = await Event.findByPk(id, { transaction });
+    if (!event) {
+      await transaction.rollback();
+      res.status(404).json({ message: 'Event not found' });
+      return;
+    }
+
+    const userId = req.user?.id!;
+    const role = req.user?.role!;
+
+    if (role !== 'admin' && !isOwner(event, userId)) {
+      await transaction.rollback();
+      res.status(403).json({ message: 'Không có quyền chỉnh sửa sự kiện này' });
+      return;
+    }
+
+    // Lien Chi can only edit during draft or revision_required
+    if (role !== 'admin' && !['draft', 'revision_required'].includes(event.status)) {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Chỉ được sửa đổi sự kiện ở trạng thái Nháp hoặc Yêu cầu chỉnh sửa' });
+      return;
+    }
+
+    const {
+      title,
+      description,
+      category,
+      plannedStartDate,
+      plannedEndDate,
+      registrationDeadline,
+      locationName,
+      locationLat,
+      locationLng,
+      attendanceRadius,
+      minParticipants,
+      maxParticipants,
+      timeline,
+      submit
+    } = req.body;
+
+    let updatedStatus = event.status;
+    if (role !== 'admin' && (submit === 'true' || submit === true)) {
+      updatedStatus = 'pending';
+    } else if (role === 'admin') {
+      updatedStatus = 'open_registration';
+    }
+
+    await event.update({
+      title: title || event.title,
+      description: description !== undefined ? description : event.description,
+      category: category !== undefined ? category : event.category,
+      plannedStartDate: plannedStartDate || event.plannedStartDate,
+      plannedEndDate: plannedEndDate || event.plannedEndDate,
+      registrationDeadline: registrationDeadline !== undefined ? (registrationDeadline || null) : event.registrationDeadline,
+      locationName: locationName || event.locationName,
+      locationLat: locationLat !== undefined ? (locationLat ? parseFloat(locationLat) : null) : event.locationLat,
+      locationLng: locationLng !== undefined ? (locationLng ? parseFloat(locationLng) : null) : event.locationLng,
+      attendanceRadius: attendanceRadius !== undefined ? (attendanceRadius ? parseInt(attendanceRadius, 10) : null) : event.attendanceRadius,
+      minParticipants: minParticipants !== undefined ? (minParticipants ? parseInt(minParticipants, 10) : null) : event.minParticipants,
+      maxParticipants: maxParticipants !== undefined ? (maxParticipants ? parseInt(maxParticipants, 10) : null) : event.maxParticipants,
+      status: updatedStatus
+    }, { transaction });
+
+    // Handle Timeline updates (delete and recreate)
+    if (timeline) {
+      const parsedTimeline = typeof timeline === 'string' ? JSON.parse(timeline) : timeline;
+      if (Array.isArray(parsedTimeline)) {
+        await EventTimelineDetail.destroy({ where: { eventId: id }, transaction });
+        await EventTimeline.destroy({ where: { eventId: id }, transaction });
+
+        for (let i = 0; i < parsedTimeline.length; i++) {
+          const phase = parsedTimeline[i];
+          const createdPhase = await EventTimeline.create({
+            eventId: event.id,
+            title: phase.title,
+            startDate: phase.startDate,
+            endDate: phase.endDate,
+            description: phase.description || null,
+            sortOrder: phase.sortOrder || i
+          }, { transaction });
+
+          if (phase.details && Array.isArray(phase.details)) {
+            for (let j = 0; j < phase.details.length; j++) {
+              const detail = phase.details[j];
+              await EventTimelineDetail.create({
+                timelineId: createdPhase.id,
+                eventId: event.id,
+                dateTime: detail.dateTime,
+                title: detail.title,
+                content: detail.content || null,
+                sortOrder: detail.sortOrder || j
+              }, { transaction });
+            }
+          }
+        }
+      }
+    }
+
+    // Handle uploaded files
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+    
+    // Manage image uploads: optionally replace or append images.
+    // Here we will keep old files, unless user explicitly sends replacement.
+    // If new images are sent: append them. Or if 'replaceImages' flag is true, delete old.
+    if (files && files.images) {
+      if (req.body.replaceImages === 'true' || req.body.replaceImages === true) {
+        await EventImage.destroy({ where: { eventId: id }, transaction });
+      }
+      
+      const captions = req.body.imageCaptions ? (typeof req.body.imageCaptions === 'string' ? JSON.parse(req.body.imageCaptions) : req.body.imageCaptions) : [];
+      const covers = req.body.imageIsCovers ? (typeof req.body.imageIsCovers === 'string' ? JSON.parse(req.body.imageIsCovers) : req.body.imageIsCovers) : [];
+
+      for (let i = 0; i < files.images.length; i++) {
+        const file = files.images[i];
+        await EventImage.create({
+          eventId: event.id,
+          imageUrl: `/uploads/events/${file.filename}`,
+          caption: captions[i] || null,
+          isCover: covers[i] === true || covers[i] === 'true' || covers[i] === 1 ? 1 : 0,
+          sortOrder: i
+        }, { transaction });
+      }
+    }
+
+    // Append attachments
+    if (files && files.documents) {
+      if (req.body.replaceDocuments === 'true' || req.body.replaceDocuments === true) {
+        await EventDocument.destroy({ where: { eventId: id }, transaction });
+      }
+      for (let i = 0; i < files.documents.length; i++) {
+        const file = files.documents[i];
+        await EventDocument.create({
+          eventId: event.id,
+          fileName: file.originalname,
+          fileUrl: `/uploads/events/${file.filename}`,
+          fileType: file.filename.split('.').pop() || null,
+          fileSize: file.size,
+          uploadedBy: userId
+        }, { transaction });
+      }
+    }
+
+    await transaction.commit();
+
+    const fullEvent = await Event.findByPk(id, {
+      include: [
+        { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
+        { model: EventTimeline, as: 'timelines', include: [{ model: EventTimelineDetail, as: 'details' }] },
+        { model: EventImage, as: 'images' },
+        { model: EventDocument, as: 'documents' }
+      ]
+    });
+
+    res.json({ message: 'Cập nhật sự kiện thành công', event: fullEvent });
+  } catch (error) {
+    await transaction.rollback();
     console.error('Update event error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
@@ -264,16 +445,20 @@ export const submitEvent = async (req: AuthRequest, res: Response): Promise<void
     const event = await Event.findByPk(id);
     if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
 
-    if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) { res.status(403).json({ message: 'Not authorized' }); return; }
+    if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) {
+      res.status(403).json({ message: 'Không có quyền thao tác' });
+      return;
+    }
     
     if (!['draft', 'revision_required'].includes(event.status)) {
-      res.status(400).json({ message: 'Sự kiện không ở trạng thái hợp lệ để gửi duyệt' }); return;
+      res.status(400).json({ message: 'Trạng thái sự kiện không hợp lệ để gửi duyệt' });
+      return;
     }
 
     await event.update({ status: 'pending' });
-    res.json({ message: 'Đã gửi duyệt sự kiện', event });
+    res.json({ message: 'Đã gửi duyệt sự kiện thành công', event });
   } catch (error) {
-    res.status(500).json({ message: 'Internal error' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -285,30 +470,33 @@ export const deleteEvent = async (req: AuthRequest, res: Response): Promise<void
 
     if (req.user?.role !== 'admin') {
       if (!isOwner(event, req.user?.id!) || event.status !== 'draft') {
-        res.status(403).json({ message: 'Chỉ được xóa sự kiện nháp của chính mình' }); return;
+        res.status(403).json({ message: 'Chỉ được xóa sự kiện nháp của chính mình' });
+        return;
       }
     }
 
+    // Cascade delete is handled by database, but we clean up dependencies just in case
+    await EventTimelineDetail.destroy({ where: { eventId: id } });
     await EventTimeline.destroy({ where: { eventId: id } });
     await EventImage.destroy({ where: { eventId: id } });
+    await EventDocument.destroy({ where: { eventId: id } });
     await EventRegistration.destroy({ where: { eventId: id } });
+    await EventApproval.destroy({ where: { eventId: id } });
     await event.destroy();
 
-    res.json({ message: 'Event deleted successfully' });
+    res.json({ message: 'Xóa sự kiện thành công' });
   } catch (error) {
+    console.error('Delete event error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
-
-// ----------------------------------------------------------------------
 // 3. ADMIN REVIEW ENDPOINTS
-// ----------------------------------------------------------------------
-
 export const getPendingEvents = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const events = await Event.findAll({
       where: { status: 'pending' },
+      include: [{ model: User, as: 'creator', attributes: ['id', 'name', 'faculty'] }],
       order: [['createdAt', 'ASC']]
     });
     res.json({ events });
@@ -318,213 +506,189 @@ export const getPendingEvents = async (req: AuthRequest, res: Response): Promise
 };
 
 export const approveEvent = async (req: AuthRequest, res: Response): Promise<void> => {
+  const transaction = await Event.sequelize!.transaction();
   try {
     const { id } = req.params;
-    const event = await Event.findByPk(id);
-    if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
-    if (event.status !== 'pending') { res.status(400).json({ message: 'Sự kiện không chờ duyệt' }); return; }
+    const { actualStartDate, actualEndDate, note } = req.body;
+    
+    const event = await Event.findByPk(id, { transaction });
+    if (!event) {
+      await transaction.rollback();
+      res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+      return;
+    }
+    if (event.status !== 'pending') {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Sự kiện không ở trạng thái chờ duyệt' });
+      return;
+    }
 
-    let history = event.reviewHistory || [];
-    history.push({ action: 'approved', by: req.user?.id, at: new Date() });
+    const start = actualStartDate || event.plannedStartDate;
+    const end = actualEndDate || event.plannedEndDate;
 
-    await event.update({ status: 'approved', reviewHistory: history });
-    res.json({ message: 'Đã duyệt sự kiện thành công', event });
-  } catch (error) { res.status(500).json({ message: 'Internal error' }); }
+    await event.update({
+      status: 'open_registration',
+      actualStartDate: start,
+      actualEndDate: end
+    }, { transaction });
+
+    await EventApproval.create({
+      eventId: event.id,
+      approvedBy: req.user?.id!,
+      status: 'approved',
+      note: note || 'Đã duyệt sự kiện'
+    }, { transaction });
+
+    await transaction.commit();
+    res.json({ message: 'Duyệt sự kiện thành công. Sự kiện đã mở đăng ký.', event });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Approve event error:', error);
+    res.status(500).json({ message: 'Internal error' });
+  }
 };
 
 export const rejectEvent = async (req: AuthRequest, res: Response): Promise<void> => {
+  const transaction = await Event.sequelize!.transaction();
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    const event = await Event.findByPk(id);
-    if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
-    if (event.status !== 'pending') { res.status(400).json({ message: 'Sự kiện không chờ duyệt' }); return; }
-
-    let history = event.reviewHistory || [];
-    history.push({ action: 'rejected', by: req.user?.id, at: new Date(), message: reason });
-
-    await event.update({ status: 'cancelled', rejectionReason: reason, reviewHistory: history });
-    res.json({ message: 'Đã từ chối sự kiện', event });
-  } catch (error) { res.status(500).json({ message: 'Internal error' }); }
-};
-
-export const requestEventRevision = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { message } = req.body;
-    const event = await Event.findByPk(id);
-    if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
-    if (event.status !== 'pending') { res.status(400).json({ message: 'Sự kiện không chờ duyệt' }); return; }
-
-    let history = event.reviewHistory || [];
-    history.push({ action: 'revision_requested', by: req.user?.id, at: new Date(), message });
-
-    await event.update({ status: 'revision_required', revisionMessage: message, reviewHistory: history });
-    res.json({ message: 'Đã gửi yêu cầu chỉnh sửa', event });
-  } catch (error) { res.status(500).json({ message: 'Internal error' }); }
-};
-
-export const approveUpdate = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const event = await Event.findByPk(id);
-    if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
-    if (event.status !== 'update_requested') { res.status(400).json({ message: 'Không có yêu cầu sửa nào đang chờ' }); return; }
-
-    let history = event.reviewHistory || [];
-    history.push({ action: 'update_approved', by: req.user?.id, at: new Date() });
-
-    const changes = event.pendingChanges || {};
-    await event.update({
-      ...changes,
-      status: 'approved',
-      pendingChanges: null,
-      pendingChangeType: null,
-      reviewHistory: history
-    });
-    res.json({ message: 'Đã duyệt yêu cầu sửa', event });
-  } catch (error) { res.status(500).json({ message: 'Internal error' }); }
-};
-
-export const approveCancel = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const event = await Event.findByPk(id);
-    if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
-    if (event.status !== 'cancel_requested') { res.status(400).json({ message: 'Không có yêu cầu hủy nào đang chờ' }); return; }
-
-    let history = event.reviewHistory || [];
-    history.push({ action: 'cancel_approved', by: req.user?.id, at: new Date() });
+    
+    const event = await Event.findByPk(id, { transaction });
+    if (!event) {
+      await transaction.rollback();
+      res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+      return;
+    }
+    if (event.status !== 'pending') {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Sự kiện không ở trạng thái chờ duyệt' });
+      return;
+    }
 
     await event.update({
       status: 'cancelled',
-      pendingChanges: null,
-      pendingChangeType: null,
-      reviewHistory: history
-    });
+      rejectionReason: reason
+    }, { transaction });
 
-    // TODO: Send notifications to registered students
-    res.json({ message: 'Đã duyệt yêu cầu hủy', event });
-  } catch (error) { res.status(500).json({ message: 'Internal error' }); }
+    await EventApproval.create({
+      eventId: event.id,
+      approvedBy: req.user?.id!,
+      status: 'rejected',
+      note: reason || 'Từ chối duyệt sự kiện'
+    }, { transaction });
+
+    await transaction.commit();
+    res.json({ message: 'Đã từ chối duyệt sự kiện. Trạng thái chuyển thành Hủy.', event });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Reject event error:', error);
+    res.status(500).json({ message: 'Internal error' });
+  }
 };
 
-export const approvePostpone = async (req: AuthRequest, res: Response): Promise<void> => {
+export const requestEventRevision = async (req: AuthRequest, res: Response): Promise<void> => {
+  const transaction = await Event.sequelize!.transaction();
   try {
     const { id } = req.params;
-    const event = await Event.findByPk(id);
-    if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
-    if (event.status !== 'postpone_requested') { res.status(400).json({ message: 'Không có yêu cầu hoãn' }); return; }
+    const { message, revisionDeadline } = req.body;
 
-    let history = event.reviewHistory || [];
-    history.push({ action: 'postpone_approved', by: req.user?.id, at: new Date() });
-
-    await event.update({
-      status: 'postponed',
-      pendingChanges: null,
-      pendingChangeType: null,
-      reviewHistory: history
-    });
-
-    // TODO: Send notifications to registered students
-    res.json({ message: 'Đã duyệt yêu cầu hoãn', event });
-  } catch (error) { res.status(500).json({ message: 'Internal error' }); }
-};
-
-export const rejectRequest = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { reason } = req.body;
-    const event = await Event.findByPk(id);
-    if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
-    if (!['update_requested', 'cancel_requested', 'postpone_requested'].includes(event.status)) {
-      res.status(400).json({ message: 'Không có yêu cầu nào' }); return;
+    if (!message || !revisionDeadline) {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Lời nhắn và Hạn chỉnh sửa là bắt buộc' });
+      return;
+    }
+    
+    const event = await Event.findByPk(id, { transaction });
+    if (!event) {
+      await transaction.rollback();
+      res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+      return;
+    }
+    if (event.status !== 'pending') {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Sự kiện không ở trạng thái chờ duyệt' });
+      return;
     }
 
-    let history = event.reviewHistory || [];
-    history.push({ action: 'update_rejected', by: req.user?.id, at: new Date(), message: reason });
-
     await event.update({
-      status: 'approved', // back to approved
-      pendingChanges: null,
-      pendingChangeType: null,
-      reviewHistory: history
-    });
-    res.json({ message: 'Đã từ chối yêu cầu, giữ nguyên trạng thái cũ', event });
-  } catch (error) { res.status(500).json({ message: 'Internal error' }); }
+      status: 'revision_required',
+      revisionMessage: message,
+      revisionDeadline
+    }, { transaction });
+
+    await EventApproval.create({
+      eventId: event.id,
+      approvedBy: req.user?.id!,
+      status: 'revision_requested',
+      note: message,
+      revisionDeadline
+    }, { transaction });
+
+    await transaction.commit();
+    res.json({ message: 'Đã gửi yêu cầu chỉnh sửa cho Liên chi đoàn', event });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Revision request error:', error);
+    res.status(500).json({ message: 'Internal error' });
+  }
 };
 
-// ----------------------------------------------------------------------
-// 4. LIEN CHI REQUEST ENDPOINTS
-// ----------------------------------------------------------------------
-
-export const requestUpdate = async (req: AuthRequest, res: Response): Promise<void> => {
+// 4. BELOW MINIMUM RESOLUTION (LIEN CHI)
+export const handleBelowMinimum = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const changes = req.body.changes;
+    const { action, note } = req.body; // action: 'proceed' or 'cancel'
+
+    if (!['proceed', 'cancel'].includes(action)) {
+      res.status(400).json({ message: 'Hành động không hợp lệ. Chỉ chấp nhận proceed hoặc cancel.' });
+      return;
+    }
+
     const event = await Event.findByPk(id);
-    if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
+    if (!event) {
+      res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+      return;
+    }
 
-    if (!isOwner(event, req.user?.id!)) { res.status(403).json({ message: 'Not authorized' }); return; }
-    if (!isApproved(event)) { res.status(400).json({ message: 'Sự kiện chưa được duyệt' }); return; }
-    if (!isBeforeStart(event)) { res.status(400).json({ message: 'Sự kiện đã bắt đầu' }); return; }
-    if (!noActiveRequest(event)) { res.status(400).json({ message: 'Đang có yêu cầu chờ duyệt' }); return; }
+    if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) {
+      res.status(403).json({ message: 'Không có quyền quyết định cho sự kiện này' });
+      return;
+    }
 
-    await event.update({
-      status: 'update_requested',
-      pendingChanges: changes,
-      pendingChangeType: 'update'
-    });
-    res.json({ message: 'Đã gửi yêu cầu sửa sự kiện', event });
-  } catch (error) { res.status(500).json({ message: 'Internal error' }); }
+    if (event.status !== 'below_minimum') {
+      res.status(400).json({ message: 'Sự kiện không nằm ở trạng thái cần xử lý số lượng tối thiểu' });
+      return;
+    }
+
+    if (action === 'proceed') {
+      // If proceeding, reset status to open_registration (to allow transition to ongoing later)
+      // or change to ongoing if starting time already passed.
+      const now = new Date();
+      const start = event.actualStartDate || event.plannedStartDate;
+      const finalStatus = now >= new Date(start) ? 'ongoing' : 'open_registration';
+
+      await event.update({
+        status: finalStatus,
+        belowMinAction: 'proceed',
+        belowMinNote: note || 'Quyết định tiếp tục tổ chức sự kiện'
+      });
+    } else {
+      await event.update({
+        status: 'cancelled',
+        belowMinAction: 'cancel',
+        belowMinNote: note || 'Hủy sự kiện do không đủ số lượng đăng ký tối thiểu'
+      });
+    }
+
+    res.json({ message: 'Xử lý trạng thái dưới số lượng tối thiểu thành công', event });
+  } catch (error) {
+    console.error('Handle below minimum error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 };
 
-export const requestCancel = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { reason } = req.body;
-    const event = await Event.findByPk(id);
-    if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
-
-    if (!isOwner(event, req.user?.id!)) { res.status(403).json({ message: 'Not authorized' }); return; }
-    if (!isApproved(event)) { res.status(400).json({ message: 'Sự kiện chưa được duyệt' }); return; }
-    if (!isBeforeStart(event)) { res.status(400).json({ message: 'Sự kiện đã bắt đầu' }); return; }
-    if (!noActiveRequest(event)) { res.status(400).json({ message: 'Đang có yêu cầu chờ duyệt' }); return; }
-
-    await event.update({
-      status: 'cancel_requested',
-      pendingChangeReason: reason,
-      pendingChangeType: 'cancel'
-    });
-    res.json({ message: 'Đã gửi yêu cầu hủy sự kiện', event });
-  } catch (error) { res.status(500).json({ message: 'Internal error' }); }
-};
-
-export const requestPostpone = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { reason, proposedDate } = req.body;
-    const event = await Event.findByPk(id);
-    if (!event) { res.status(404).json({ message: 'Event not found' }); return; }
-
-    if (!isOwner(event, req.user?.id!)) { res.status(403).json({ message: 'Not authorized' }); return; }
-    if (!isApproved(event)) { res.status(400).json({ message: 'Sự kiện chưa được duyệt' }); return; }
-    if (!isBeforeStart(event)) { res.status(400).json({ message: 'Sự kiện đã bắt đầu' }); return; }
-    if (!noActiveRequest(event)) { res.status(400).json({ message: 'Đang có yêu cầu chờ duyệt' }); return; }
-
-    await event.update({
-      status: 'postpone_requested',
-      pendingChangeReason: reason,
-      pendingProposedDate: proposedDate,
-      pendingChangeType: 'postpone'
-    });
-    res.json({ message: 'Đã gửi yêu cầu hoãn sự kiện', event });
-  } catch (error) { res.status(500).json({ message: 'Internal error' }); }
-};
-
-// ----------------------------------------------------------------------
-// 6. REGISTRATION ENDPOINTS (STUDENTS)
-// ----------------------------------------------------------------------
-
+// 5. REGISTRATION ENDPOINTS (STUDENTS)
 export const registerForEvent = async (req: AuthRequest, res: Response): Promise<void> => {
   const transaction = await Event.sequelize!.transaction();
   try {
@@ -544,15 +708,16 @@ export const registerForEvent = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    if (event.status !== 'approved' && event.status !== 'ongoing') {
+    // Check if registration is allowed using guard
+    if (!isRegistrationOpen(event)) {
       await transaction.rollback();
-      res.status(400).json({ message: 'Sự kiện chưa mở đăng ký' });
+      res.status(400).json({ message: 'Đăng ký sự kiện hiện không mở hoặc đã hết hạn' });
       return;
     }
 
-    if (event.registrationDeadline && new Date() > new Date(event.registrationDeadline)) {
+    if (!hasSlots(event)) {
       await transaction.rollback();
-      res.status(400).json({ message: 'Đã hết hạn đăng ký' });
+      res.status(400).json({ message: 'Sự kiện đã đủ số lượng giới hạn' });
       return;
     }
 
@@ -562,19 +727,17 @@ export const registerForEvent = async (req: AuthRequest, res: Response): Promise
       lock: transaction.LOCK.UPDATE
     });
 
-    if (existingRegistration && existingRegistration.status === 'registered') {
+    if (existingRegistration && ['registered', 'attended', 'confirmed'].includes(existingRegistration.status)) {
       await transaction.rollback();
       res.status(400).json({ message: 'Bạn đã đăng ký sự kiện này rồi' });
       return;
     }
 
-    if (event.maxSlots && event.currentSlots >= event.maxSlots) {
-      await transaction.rollback();
-      res.status(400).json({ message: 'Sự kiện đã đủ số lượng' });
-      return;
-    }
-
     if (existingRegistration && existingRegistration.status === 'cancelled') {
+      existingRegistration.status = 'registered';
+      existingRegistration.registrationDate = new Date();
+      await existingRegistration.save({ transaction });
+    } else if (existingRegistration && existingRegistration.status === 'absent') {
       existingRegistration.status = 'registered';
       existingRegistration.registrationDate = new Date();
       await existingRegistration.save({ transaction });
@@ -591,11 +754,11 @@ export const registerForEvent = async (req: AuthRequest, res: Response): Promise
     await event.save({ transaction });
 
     await transaction.commit();
-    res.json({ message: 'Đăng ký thành công', currentSlots: event.currentSlots });
+    res.json({ message: 'Đăng ký tham gia thành công', currentSlots: event.currentSlots });
   } catch (error) {
     await transaction.rollback();
-    console.error('Register for event error:', error);
-    res.status(500).json({ message: 'Lỗi máy chủ' });
+    console.error('Register error:', error);
+    res.status(500).json({ message: 'Lỗi hệ thống khi đăng ký' });
   }
 };
 
@@ -626,13 +789,14 @@ export const cancelRegistration = async (req: AuthRequest, res: Response): Promi
 
     if (!existingRegistration || existingRegistration.status !== 'registered') {
       await transaction.rollback();
-      res.status(400).json({ message: 'Bạn chưa đăng ký sự kiện này' });
+      res.status(400).json({ message: 'Bạn chưa đăng ký hoặc không thể hủy đăng ký ở trạng thái hiện tại' });
       return;
     }
 
-    const startTime = event.startTime || event.startDate;
-    if (startTime) {
-      const startDateTime = new Date(startTime).getTime();
+    // Constraint: Cancel at least 12 hours before event starts
+    const start = event.actualStartDate || event.plannedStartDate;
+    if (start) {
+      const startDateTime = new Date(start).getTime();
       const nowTime = new Date().getTime();
       const diffHours = (startDateTime - nowTime) / (1000 * 60 * 60);
 
@@ -660,10 +824,7 @@ export const cancelRegistration = async (req: AuthRequest, res: Response): Promi
   }
 };
 
-// ----------------------------------------------------------------------
-// 7. LIEN CHI / ADMIN REGISTRATION MANAGEMENT
-// ----------------------------------------------------------------------
-
+// 6. REGISTRATION MANAGEMENT (LIEN CHI / ADMIN)
 export const getEventRegistrations = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -675,7 +836,7 @@ export const getEventRegistrations = async (req: AuthRequest, res: Response): Pr
     }
 
     if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) {
-      res.status(403).json({ message: 'Not authorized to view registrations for this event' });
+      res.status(403).json({ message: 'Không có quyền xem danh sách đăng ký' });
       return;
     }
 
@@ -690,7 +851,7 @@ export const getEventRegistrations = async (req: AuthRequest, res: Response): Pr
 
     res.json({ registrations });
   } catch (error) {
-    console.error('Get event registrations error:', error);
+    console.error('Get registrations error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
@@ -704,13 +865,13 @@ export const manuallyAddRegistration = async (req: AuthRequest, res: Response): 
     const event = await Event.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
     if (!event) {
       await transaction.rollback();
-      res.status(404).json({ message: 'Event not found' });
+      res.status(404).json({ message: 'Sự kiện không tìm thấy' });
       return;
     }
 
     if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) {
       await transaction.rollback();
-      res.status(403).json({ message: 'Not authorized to manage registrations for this event' });
+      res.status(403).json({ message: 'Không có quyền thao tác' });
       return;
     }
 
@@ -721,9 +882,9 @@ export const manuallyAddRegistration = async (req: AuthRequest, res: Response): 
       return;
     }
 
-    if (event.maxSlots && event.currentSlots >= event.maxSlots) {
+    if (event.maxParticipants && event.currentSlots >= event.maxParticipants) {
       await transaction.rollback();
-      res.status(400).json({ message: 'Sự kiện đã đủ số lượng' });
+      res.status(400).json({ message: 'Sự kiện đã đủ số lượng tối đa' });
       return;
     }
 
@@ -733,14 +894,14 @@ export const manuallyAddRegistration = async (req: AuthRequest, res: Response): 
       lock: transaction.LOCK.UPDATE
     });
 
-    if (existingRegistration && existingRegistration.status !== 'cancelled') {
+    if (existingRegistration && ['registered', 'attended', 'confirmed'].includes(existingRegistration.status)) {
       await transaction.rollback();
-      res.status(400).json({ message: 'Sinh viên này đã có trong danh sách' });
+      res.status(400).json({ message: 'Sinh viên này đã có trong danh sách và có trạng thái hợp lệ' });
       return;
     }
 
     let registration;
-    if (existingRegistration && existingRegistration.status === 'cancelled') {
+    if (existingRegistration && (existingRegistration.status === 'cancelled' || existingRegistration.status === 'absent')) {
       existingRegistration.status = 'registered';
       existingRegistration.registrationDate = new Date();
       registration = await existingRegistration.save({ transaction });
@@ -758,7 +919,6 @@ export const manuallyAddRegistration = async (req: AuthRequest, res: Response): 
 
     await transaction.commit();
 
-    // Fetch full registration to return
     const fullRegistration = await EventRegistration.findByPk(registration.id, {
       include: [{ model: User, attributes: ['id', 'name', 'fullName', 'studentId', 'department', 'faculty', 'email'] }]
     });
@@ -766,106 +926,115 @@ export const manuallyAddRegistration = async (req: AuthRequest, res: Response): 
     res.json({ message: 'Thêm sinh viên thành công', registration: fullRegistration });
   } catch (error) {
     await transaction.rollback();
-    console.error('Manually add registration error:', error);
+    console.error('Manual add registration error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
 export const updateRegistrationStatus = async (req: AuthRequest, res: Response): Promise<void> => {
+  const transaction = await Event.sequelize!.transaction();
   try {
     const { registrationId } = req.params;
-    const { status } = req.body;
+    const { status } = req.body; // 'registered' | 'attended' | 'confirmed' | 'absent' | 'cancelled'
 
-    const registration = await EventRegistration.findByPk(registrationId, { include: [Event] });
+    const registration = await EventRegistration.findByPk(registrationId, { transaction, include: [Event] });
     if (!registration) {
-      res.status(404).json({ message: 'Registration not found' });
+      await transaction.rollback();
+      res.status(404).json({ message: 'Không tìm thấy thông tin đăng ký' });
       return;
     }
 
     const event = registration.getDataValue('Event') as any;
     if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) {
-      res.status(403).json({ message: 'Not authorized to manage this registration' });
+      await transaction.rollback();
+      res.status(403).json({ message: 'Không có quyền thao tác' });
       return;
     }
 
-    if (!['registered', 'attended', 'cancelled'].includes(status)) {
-      res.status(400).json({ message: 'Invalid status' });
+    if (!['registered', 'attended', 'confirmed', 'absent', 'cancelled'].includes(status)) {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Trạng thái không hợp lệ' });
       return;
     }
 
-    // Nếu chuyển từ cancelled -> registered/attended thì tăng slot
-    // Nếu chuyển từ registered/attended -> cancelled thì giảm slot
-    const transaction = await Event.sequelize!.transaction();
-    try {
-      const lockEvent = await Event.findByPk(event.id, { transaction, lock: transaction.LOCK.UPDATE });
-      
-      if (registration.status === 'cancelled' && status !== 'cancelled') {
-        if (lockEvent && lockEvent.maxSlots && lockEvent.currentSlots >= lockEvent.maxSlots) {
-           await transaction.rollback();
-           res.status(400).json({ message: 'Sự kiện đã đầy, không thể khôi phục đăng ký' });
-           return;
-        }
-        lockEvent!.currentSlots += 1;
-        await lockEvent!.save({ transaction });
-      } else if (registration.status !== 'cancelled' && status === 'cancelled') {
+    const oldStatus = registration.status;
+    const lockEvent = await Event.findByPk(event.id, { transaction, lock: transaction.LOCK.UPDATE });
+
+    // Handle slot counters based on transitions
+    // slots increment when transition is from invalid state (cancelled, absent) to valid state (registered, attended, confirmed)
+    // slots decrement when transition is from valid to invalid state
+    const isValid = (s: string) => ['registered', 'attended', 'confirmed'].includes(s);
+
+    if (!isValid(oldStatus) && isValid(status)) {
+      if (lockEvent && lockEvent.maxParticipants && lockEvent.currentSlots >= lockEvent.maxParticipants) {
+        await transaction.rollback();
+        res.status(400).json({ message: 'Sự kiện đã đầy, không thể khôi phục đăng ký này' });
+        return;
+      }
+      lockEvent!.currentSlots += 1;
+      await lockEvent!.save({ transaction });
+    } else if (isValid(oldStatus) && !isValid(status)) {
+      if (lockEvent!.currentSlots > 0) {
         lockEvent!.currentSlots -= 1;
         await lockEvent!.save({ transaction });
       }
-
-      registration.status = status;
-      await registration.save({ transaction });
-      
-      await transaction.commit();
-      res.json({ message: 'Cập nhật trạng thái thành công', registration });
-    } catch (err) {
-      await transaction.rollback();
-      throw err;
     }
+
+    registration.status = status;
+    if (status === 'confirmed') {
+      registration.confirmedBy = req.user?.id!;
+      registration.confirmedAt = new Date();
+    }
+    await registration.save({ transaction });
+    await transaction.commit();
+
+    res.json({ message: 'Cập nhật trạng thái sinh viên thành công', registration });
   } catch (error) {
+    await transaction.rollback();
     console.error('Update registration status error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
 export const deleteRegistration = async (req: AuthRequest, res: Response): Promise<void> => {
+  const transaction = await Event.sequelize!.transaction();
   try {
     const { registrationId } = req.params;
 
-    const registration = await EventRegistration.findByPk(registrationId, { include: [Event] });
+    const registration = await EventRegistration.findByPk(registrationId, { transaction, include: [Event] });
     if (!registration) {
+      await transaction.rollback();
       res.status(404).json({ message: 'Registration not found' });
       return;
     }
 
     const event = registration.getDataValue('Event') as any;
     if (req.user?.role !== 'admin' && !isOwner(event, req.user?.id!)) {
-      res.status(403).json({ message: 'Not authorized to manage this registration' });
+      await transaction.rollback();
+      res.status(403).json({ message: 'Not authorized' });
       return;
     }
 
-    const transaction = await Event.sequelize!.transaction();
-    try {
-      const lockEvent = await Event.findByPk(event.id, { transaction, lock: transaction.LOCK.UPDATE });
-      
-      if (registration.status !== 'cancelled') {
-        lockEvent!.currentSlots -= 1;
-        await lockEvent!.save({ transaction });
-      }
-
-      await registration.destroy({ transaction });
-      await transaction.commit();
-      
-      res.json({ message: 'Xóa sinh viên thành công' });
-    } catch (err) {
-      await transaction.rollback();
-      throw err;
+    const lockEvent = await Event.findByPk(event.id, { transaction, lock: transaction.LOCK.UPDATE });
+    const isValid = ['registered', 'attended', 'confirmed'].includes(registration.status);
+    
+    if (isValid && lockEvent!.currentSlots > 0) {
+      lockEvent!.currentSlots -= 1;
+      await lockEvent!.save({ transaction });
     }
+
+    await registration.destroy({ transaction });
+    await transaction.commit();
+    
+    res.json({ message: 'Xóa sinh viên khỏi danh sách thành công' });
   } catch (error) {
+    await transaction.rollback();
     console.error('Delete registration error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
+// 7. QR CHECKIN & FEEDBACK
 export const toggleEventQR = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -878,7 +1047,7 @@ export const toggleEventQR = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     if (req.user?.role !== 'admin' && event.createdBy !== req.user?.id) {
-      res.status(403).json({ message: 'Không có quyền' });
+      res.status(403).json({ message: 'Không có quyền thao tác' });
       return;
     }
 
@@ -888,38 +1057,24 @@ export const toggleEventQR = async (req: AuthRequest, res: Response): Promise<vo
         event.qrCode = `BKYOUTH-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
       }
       if (latitude !== undefined && longitude !== undefined) {
-        event.latitude = latitude;
-        event.longitude = longitude;
+        event.locationLat = latitude;
+        event.locationLng = longitude;
       }
     } else {
       event.qrActive = false;
     }
 
     await event.save();
-    res.json({ message: active ? 'Đã bật mã QR điểm danh' : 'Đã tắt mã QR điểm danh', qrCode: event.qrCode, qrActive: event.qrActive });
+    res.json({
+      message: active ? 'Đã kích hoạt điểm danh QR' : 'Đã dừng điểm danh QR',
+      qrCode: event.qrCode,
+      qrActive: event.qrActive
+    });
   } catch (error) {
     console.error('Toggle QR error:', error);
-    res.status(500).json({ message: 'Lỗi máy chủ' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
-
-function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371; // Radius of the earth in km
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2)
-    ;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const d = R * c; // Distance in km
-  return d;
-}
-
-function deg2rad(deg: number) {
-  return deg * (Math.PI / 180);
-}
 
 export const checkInQR = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -939,24 +1094,31 @@ export const checkInQR = async (req: AuthRequest, res: Response): Promise<void> 
     }
 
     if (!event.qrActive) {
-      res.status(400).json({ message: 'Điểm danh QR hiện đang bị tắt' });
+      res.status(400).json({ message: 'Chức năng điểm danh QR hiện không bật' });
       return;
     }
 
     if (event.qrCode !== qrCode) {
-      res.status(400).json({ message: 'Mã QR không hợp lệ hoặc đã hết hạn' });
+      res.status(400).json({ message: 'Mã QR không khớp hoặc đã hết hiệu lực' });
       return;
     }
 
-    // Check GPS Distance if event has coordinates (max 500 meters)
-    // Tạm thời tắt check GPS khoảng cách theo yêu cầu của user để test
-    // if (event.latitude && event.longitude && latitude && longitude) {
-    //   const distanceKm = getDistanceFromLatLonInKm(event.latitude, event.longitude, latitude, longitude);
-    //   if (distanceKm > 0.5) { // 500 meters
-    //     res.status(400).json({ message: `Vị trí của bạn quá xa nơi tổ chức sự kiện (${Math.round(distanceKm * 1000)}m). Vui lòng di chuyển lại gần hơn.` });
-    //     return;
-    //   }
-    // }
+    // Check GPS radius if settings allow
+    if (event.locationLat && event.locationLng && event.attendanceRadius && latitude && longitude) {
+      const distKm = getDistanceFromLatLonInKm(
+        Number(event.locationLat),
+        Number(event.locationLng),
+        Number(latitude),
+        Number(longitude)
+      );
+      const distM = distKm * 1000;
+      if (distM > event.attendanceRadius) {
+        res.status(400).json({
+          message: `Vị trí điểm danh của bạn nằm ngoài bán kính cho phép (${Math.round(distM)}m, giới hạn ${event.attendanceRadius}m)`
+        });
+        return;
+      }
+    }
 
     const registration = await EventRegistration.findOne({
       where: { eventId: id, userId }
@@ -967,38 +1129,40 @@ export const checkInQR = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    if (registration.status === 'attended') {
-      res.status(400).json({ message: 'Bạn đã điểm danh rồi' });
+    if (['attended', 'confirmed'].includes(registration.status)) {
+      res.status(400).json({ message: 'Bạn đã hoàn tất điểm danh trước đó' });
       return;
     }
 
     registration.status = 'attended';
+    registration.attendedAt = new Date();
+    if (latitude) registration.attendanceLat = latitude;
+    if (longitude) registration.attendanceLng = longitude;
     await registration.save();
 
-    res.json({ message: 'Điểm danh thành công!' });
+    res.json({ message: 'Điểm danh QR thành công!' });
   } catch (error) {
-    console.error('Checkin QR error:', error);
-    res.status(500).json({ message: 'Lỗi máy chủ' });
+    console.error('Check-in error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
 export const submitEventFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { rating, content } = req.body;
-    const userId = req.user?.id;
-
-    if (!userId) {
-      res.status(401).json({ message: 'Unauthorized' });
-      return;
-    }
+    const { rating, comment } = req.body;
+    const userId = req.user?.id!;
 
     const registration = await EventRegistration.findOne({
-      where: { eventId: id, userId, status: 'attended' }
+      where: {
+        eventId: id,
+        userId,
+        status: { [Op.in]: ['attended', 'confirmed'] }
+      }
     });
 
     if (!registration) {
-      res.status(403).json({ message: 'Chỉ sinh viên đã điểm danh mới được gửi đánh giá' });
+      res.status(403).json({ message: 'Chỉ sinh viên đã tham gia sự kiện mới được quyền đánh giá' });
       return;
     }
 
@@ -1007,7 +1171,7 @@ export const submitEventFeedback = async (req: AuthRequest, res: Response): Prom
     });
 
     if (existingFeedback) {
-      res.status(400).json({ message: 'Bạn đã gửi đánh giá cho sự kiện này rồi' });
+      res.status(400).json({ message: 'Bạn đã đánh giá sự kiện này rồi' });
       return;
     }
 
@@ -1015,42 +1179,39 @@ export const submitEventFeedback = async (req: AuthRequest, res: Response): Prom
       eventId: Number(id),
       userId,
       rating,
-      content
+      comment
     });
 
-    res.status(201).json({ message: 'Cảm ơn bạn đã gửi đánh giá!', feedback });
+    res.status(201).json({ message: 'Gửi đánh giá thành công. Cảm ơn bạn!', feedback });
   } catch (error) {
     console.error('Submit feedback error:', error);
-    res.status(500).json({ message: 'Lỗi máy chủ' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
 export const getEventFeedbacks = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-
     const event = await Event.findByPk(id);
     if (!event) {
-      res.status(404).json({ message: 'Sự kiện không tồn tại' });
+      res.status(404).json({ message: 'Không tìm thấy sự kiện' });
       return;
     }
 
     if (req.user?.role !== 'admin' && event.createdBy !== req.user?.id) {
-      res.status(403).json({ message: 'Không có quyền xem' });
+      res.status(403).json({ message: 'Không có quyền xem các đánh giá của sự kiện này' });
       return;
     }
 
     const feedbacks = await EventFeedback.findAll({
       where: { eventId: id },
-      include: [
-        { model: User, as: 'user', attributes: ['id', 'name', 'email', 'avatar'] }
-      ],
+      include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email', 'avatar'] }],
       order: [['createdAt', 'DESC']]
     });
 
     res.json({ feedbacks });
   } catch (error) {
     console.error('Get feedbacks error:', error);
-    res.status(500).json({ message: 'Lỗi máy chủ' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 };

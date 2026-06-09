@@ -5,34 +5,38 @@ import User from './User';
 export class Event extends Model {
   declare id: number;
   declare title: string;
-  declare description: string;
-  declare location: string;
-  declare startDate: Date;
-  declare endDate: Date;
-  declare startTime: Date;
-  declare endTime: Date;
+  declare description: string | null;
+  declare category: string | null;
+  
+  declare plannedStartDate: Date;
+  declare plannedEndDate: Date;
+  declare actualStartDate: Date | null;
+  declare actualEndDate: Date | null;
   declare registrationDeadline: Date | null;
+  declare revisionDeadline: Date | null;
+
+  declare locationName: string;
+  declare locationLat: number | null;
+  declare locationLng: number | null;
+  declare attendanceRadius: number | null;
+
+  declare minParticipants: number | null;
+  declare maxParticipants: number | null;
+  declare currentSlots: number;
+
+  declare status: 'draft' | 'pending' | 'revision_required' | 'open_registration' | 'below_minimum' | 'ongoing' | 'ended' | 'completed' | 'cancelled';
+  declare belowMinAction: 'proceed' | 'cancel' | null;
+  declare belowMinNote: string | null;
+
   declare createdBy: number;
   declare createdByRole: 'admin' | 'lienchi';
-  declare status: 'draft' | 'pending' | 'revision_required' | 'approved' | 'update_requested' | 'cancel_requested' | 'postpone_requested' | 'cancelled' | 'postponed' | 'ongoing' | 'ended' | 'completed' | 'revision_requested' | 'rejected';
-  declare image: string | null;
-  declare capacity: number | null;
-  declare maxParticipants: number | null;
-  declare maxSlots: number | null;
-  declare currentSlots: number;
-  declare category: string | null;
-  declare reviewHistory: any[] | null;
-  declare rejectionReason: string | null;
+
   declare revisionMessage: string | null;
-  declare pendingChanges: any | null;
-  declare pendingChangeType: 'update' | 'cancel' | 'postpone' | null;
-  declare pendingChangeReason: string | null;
-  declare pendingProposedDate: Date | null;
-  declare communityPoints: number;
+  declare rejectionReason: string | null;
+
   declare qrCode: string | null;
   declare qrActive: boolean;
-  declare latitude: number | null;
-  declare longitude: number | null;
+
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -52,28 +56,84 @@ Event.init(
       type: DataTypes.TEXT,
       allowNull: true
     },
-    location: {
+    category: {
       type: DataTypes.STRING,
+      allowNull: true
+    },
+    plannedStartDate: {
+      type: DataTypes.DATE,
       allowNull: false
     },
-    startDate: {
+    plannedEndDate: {
+      type: DataTypes.DATE,
+      allowNull: false
+    },
+    actualStartDate: {
       type: DataTypes.DATE,
       allowNull: true
     },
-    endDate: {
-      type: DataTypes.DATE,
-      allowNull: true
-    },
-    startTime: {
-      type: DataTypes.DATE,
-      allowNull: true
-    },
-    endTime: {
+    actualEndDate: {
       type: DataTypes.DATE,
       allowNull: true
     },
     registrationDeadline: {
       type: DataTypes.DATE,
+      allowNull: true
+    },
+    revisionDeadline: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    locationName: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    locationLat: {
+      type: DataTypes.DECIMAL(10, 7),
+      allowNull: true
+    },
+    locationLng: {
+      type: DataTypes.DECIMAL(10, 7),
+      allowNull: true
+    },
+    attendanceRadius: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    minParticipants: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    maxParticipants: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    currentSlots: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
+    },
+    status: {
+      type: DataTypes.ENUM(
+        'draft',
+        'pending',
+        'revision_required',
+        'open_registration',
+        'below_minimum',
+        'ongoing',
+        'ended',
+        'completed',
+        'cancelled'
+      ),
+      allowNull: false,
+      defaultValue: 'draft'
+    },
+    belowMinAction: {
+      type: DataTypes.ENUM('proceed', 'cancel'),
+      allowNull: true
+    },
+    belowMinNote: {
+      type: DataTypes.TEXT,
       allowNull: true
     },
     createdBy: {
@@ -86,68 +146,16 @@ Event.init(
     },
     createdByRole: {
       type: DataTypes.ENUM('admin', 'lienchi'),
+      allowNull: false,
       defaultValue: 'lienchi'
-    },
-    status: {
-      type: DataTypes.ENUM('draft', 'pending', 'revision_required', 'approved', 'update_requested', 'cancel_requested', 'postpone_requested', 'cancelled', 'postponed', 'ongoing', 'ended', 'completed', 'revision_requested', 'rejected'),
-      defaultValue: 'draft'
-    },
-    image: {
-      type: DataTypes.STRING,
-      allowNull: true
-    },
-    capacity: {
-      type: DataTypes.INTEGER,
-      allowNull: true
-    },
-    maxParticipants: {
-      type: DataTypes.INTEGER,
-      allowNull: true
-    },
-    maxSlots: {
-      type: DataTypes.INTEGER,
-      allowNull: true
-    },
-    currentSlots: {
-      type: DataTypes.INTEGER,
-      defaultValue: 0
-    },
-    category: {
-      type: DataTypes.STRING,
-      allowNull: true
-    },
-    reviewHistory: {
-      type: DataTypes.JSON,
-      allowNull: true,
-      defaultValue: []
-    },
-    rejectionReason: {
-      type: DataTypes.TEXT,
-      allowNull: true
     },
     revisionMessage: {
       type: DataTypes.TEXT,
       allowNull: true
     },
-    pendingChanges: {
-      type: DataTypes.JSON,
-      allowNull: true
-    },
-    pendingChangeType: {
-      type: DataTypes.ENUM('update', 'cancel', 'postpone'),
-      allowNull: true
-    },
-    pendingChangeReason: {
+    rejectionReason: {
       type: DataTypes.TEXT,
       allowNull: true
-    },
-    pendingProposedDate: {
-      type: DataTypes.DATE,
-      allowNull: true
-    },
-    communityPoints: {
-      type: DataTypes.INTEGER,
-      defaultValue: 0
     },
     qrCode: {
       type: DataTypes.STRING,
@@ -155,22 +163,16 @@ Event.init(
     },
     qrActive: {
       type: DataTypes.BOOLEAN,
+      allowNull: false,
       defaultValue: false
-    },
-    latitude: {
-      type: DataTypes.FLOAT,
-      allowNull: true
-    },
-    longitude: {
-      type: DataTypes.FLOAT,
-      allowNull: true
     }
   },
   {
     sequelize,
     tableName: 'events',
     timestamps: true,
-    charset: 'utf8mb4'
+    charset: 'utf8mb4',
+    collate: 'utf8mb4_unicode_ci'
   }
 );
 
