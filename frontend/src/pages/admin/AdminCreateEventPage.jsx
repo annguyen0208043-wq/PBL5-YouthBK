@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CalendarRange, FileImage, Plus, Save, X } from 'lucide-react';
+import { CalendarRange, FileImage, Plus, Save, X, MapPin, Users, Tag, Clock, FileText } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import AdminLayout from '../../components/admin/AdminLayout';
@@ -8,405 +8,652 @@ import CustomDateTimePicker from '../../components/common/CustomDateTimePicker';
 export default function AdminCreateEventPage() {
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  // Form state
+
   const [formData, setFormData] = useState({
     title: '',
     category: 'Kỹ năng',
+    minParticipants: '',
     maxParticipants: '',
-    startTime: '',
-    endTime: '',
-    location: '',
-    description: '',
-    communityPoints: 0
-  });
-  
-  const [timelineItems, setTimelineItems] = useState([]);
-  
-  const [newTimelineItem, setNewTimelineItem] = useState({
-    dateTime: '',
+    plannedStartDate: '',
+    plannedEndDate: '',
+    registrationDeadline: '',
+    locationName: '',
+    locationLat: '',
+    locationLng: '',
+    attendanceRadius: '',
     description: ''
   });
-  
-  const [imageFiles, setImageFiles] = useState([]);
 
-  // Handle form input change
+  // Timeline phases and milestones state (2-level hierarchy)
+  const [phases, setPhases] = useState([]);
+  const [newPhase, setNewPhase] = useState({
+    title: '',
+    startDate: '',
+    endDate: '',
+    description: '',
+    details: []
+  });
+  const [newMilestone, setNewMilestone] = useState({
+    dateTime: '',
+    title: '',
+    content: ''
+  });
+  const [activePhaseIndexForMilestone, setActivePhaseIndexForMilestone] = useState(-1);
+
+  // Files state
+  const [imageUploads, setImageUploads] = useState([]); // Array of { file, caption, isCover }
+  const [documentUploads, setDocumentUploads] = useState([]); // Array of File
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
-  // Handle timeline input
-  const handleAddTimeline = () => {
-    if (!newTimelineItem.dateTime || !newTimelineItem.description.trim()) {
-      setNotice('❌ Vui lòng nhập đầy đủ ngày giờ và nội dung timeline');
+  // Image Upload helpers
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    const newImages = files.map(file => ({
+      file,
+      caption: '',
+      isCover: imageUploads.length === 0 // Default first image as cover
+    }));
+    setImageUploads(prev => [...prev, ...newImages]);
+  };
+
+  const handleRemoveImage = (index) => {
+    setImageUploads(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleImageCaptionChange = (index, val) => {
+    setImageUploads(prev => prev.map((img, i) => i === index ? { ...img, caption: val } : img));
+  };
+
+  const handleImageCoverChange = (index, val) => {
+    setImageUploads(prev => prev.map((img, i) => i === index ? { ...img, isCover: val } : img));
+  };
+
+  // Document Upload helpers
+  const handleDocumentUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    setDocumentUploads(prev => [...prev, ...files]);
+  };
+
+  const handleRemoveDocument = (index) => {
+    setDocumentUploads(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 2-Level Timeline helpers
+  const handleAddPhase = () => {
+    if (!newPhase.title || !newPhase.startDate || !newPhase.endDate) {
+      setNotice('❌ Vui lòng điền tiêu đề, ngày bắt đầu và kết thúc của giai đoạn');
       return;
     }
-
-    // Validate timeline nằm trong khung giờ
-    if (!formData.startTime || !formData.endTime) {
-      setNotice('❌ Vui lòng nhập thời gian sự kiện trước');
-      return;
-    }
-
-    // So sánh ISO string trực tiếp (YYYY-MM-DDTHH:mm)
-    if (newTimelineItem.dateTime < formData.startTime || newTimelineItem.dateTime > formData.endTime) {
-      setNotice('❌ Timeline phải nằm trong khung giờ sự kiện (' + formData.startTime + ' đến ' + formData.endTime + ')');
-      return;
-    }
-
-    setTimelineItems(prev => {
-      const newList = [...prev, { ...newTimelineItem }];
-      newList.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
-      return newList;
+    setPhases(prev => [...prev, { ...newPhase }]);
+    setNewPhase({
+      title: '',
+      startDate: '',
+      endDate: '',
+      description: '',
+      details: []
     });
-    setNewTimelineItem({ dateTime: '', description: '' });
     setNotice('');
   };
 
-  // Remove timeline item
-  const handleRemoveTimeline = (index) => {
-    setTimelineItems(prev => prev.filter((_, i) => i !== index));
+  const handleRemovePhase = (index) => {
+    setPhases(prev => prev.filter((_, i) => i !== index));
+    if (activePhaseIndexForMilestone === index) {
+      setActivePhaseIndexForMilestone(-1);
+    }
   };
 
-  // Handle file upload
-  const handleFileUpload = (e) => {
-    const files = Array.from(e.target.files);
-    setImageFiles(prev => [...prev, ...files]);
-  };
-
-  // Remove uploaded file
-  const handleRemoveFile = (index) => {
-    setImageFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  // Submit form
-  const handleSubmitEvent = async () => {
-    // Validate required fields
-    if (!formData.title || !formData.location || !formData.startTime || !formData.endTime) {
-      setNotice('❌ Vui lòng điền đủ các trường bắt buộc: Tên sự kiện, Địa điểm, Thời gian');
+  const handleAddMilestone = (phaseIdx) => {
+    if (!newMilestone.title || !newMilestone.dateTime) {
+      setNotice('❌ Vui lòng nhập tiêu đề và thời điểm diễn ra của mốc chi tiết');
       return;
     }
 
-    // Validate startTime < endTime (so sánh ISO string)
-    if (formData.startTime >= formData.endTime) {
-      setNotice('❌ Giờ bắt đầu phải trước giờ kết thúc');
+    setPhases(prev => prev.map((phase, i) => {
+      if (i === phaseIdx) {
+        const newDetails = [...phase.details, { ...newMilestone }];
+        newDetails.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+        return { ...phase, details: newDetails };
+      }
+      return phase;
+    }));
+
+    setNewMilestone({
+      dateTime: '',
+      title: '',
+      content: ''
+    });
+    setNotice('');
+  };
+
+  const handleRemoveMilestone = (phaseIdx, milestoneIdx) => {
+    setPhases(prev => prev.map((phase, i) => {
+      if (i === phaseIdx) {
+        return {
+          ...phase,
+          details: phase.details.filter((_, j) => j !== milestoneIdx)
+        };
+      }
+      return phase;
+    }));
+  };
+
+  // Save draft locally
+  const handleSaveDraft = () => {
+    if (!formData.title || !formData.locationName) {
+      setNotice('❌ Tên sự kiện và địa điểm là bắt buộc để lưu nháp');
+      return;
+    }
+    localStorage.setItem(
+      'adminEventDraft',
+      JSON.stringify({
+        formData,
+        phases
+      })
+    );
+    setNotice('✓ Đã lưu nháp hồ sơ sự kiện của admin.');
+  };
+
+  // Submit to backend
+  const handleSubmitEvent = async () => {
+    if (!formData.title || !formData.locationName || !formData.plannedStartDate || !formData.plannedEndDate) {
+      setNotice('❌ Vui lòng nhập đủ: Tên sự kiện, Địa điểm, Ngày bắt đầu và Ngày kết thúc dự kiến');
+      return;
+    }
+
+    if (new Date(formData.plannedStartDate) >= new Date(formData.plannedEndDate)) {
+      setNotice('❌ Thời gian bắt đầu dự kiến phải trước thời gian kết thúc');
       return;
     }
 
     setLoading(true);
     try {
       const formDataToSend = new FormData();
-      formDataToSend.append('title', formData.title);
-      formDataToSend.append('description', formData.description);
-      formDataToSend.append('location', formData.location);
-      formDataToSend.append('startTime', formData.startTime);
-      formDataToSend.append('endTime', formData.endTime);
-      formDataToSend.append('maxParticipants', formData.maxParticipants ? parseInt(formData.maxParticipants) : null);
-      formDataToSend.append('category', formData.category);
-      formDataToSend.append('communityPoints', formData.communityPoints);
-      formDataToSend.append('timeline', JSON.stringify(timelineItems));
       
-      // Append image files
-      imageFiles.forEach((file) => {
-        formDataToSend.append('images', file);
+      // Append core fields
+      Object.keys(formData).forEach(key => {
+        formDataToSend.append(key, formData[key]);
+      });
+
+      // Append parsed timeline
+      formDataToSend.append('timeline', JSON.stringify(phases));
+
+      // Append image files and metadata
+      const imageCaptions = [];
+      const imageIsCovers = [];
+      imageUploads.forEach((img) => {
+        formDataToSend.append('images', img.file);
+        imageCaptions.push(img.caption || '');
+        imageIsCovers.push(img.isCover);
+      });
+      formDataToSend.append('imageCaptions', JSON.stringify(imageCaptions));
+      formDataToSend.append('imageIsCovers', JSON.stringify(imageIsCovers));
+
+      // Append document files
+      documentUploads.forEach(file => {
+        formDataToSend.append('documents', file);
       });
 
       const response = await fetch('/api/events', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        body: formDataToSend
+        body: formDataToSend,
       });
 
+      const data = await response.json();
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Lỗi tạo sự kiện');
+        throw new Error(data.message || 'Lỗi tạo sự kiện');
       }
 
-      const data = await response.json();
-      setNotice('✅ Tạo sự kiện thành công! ID: ' + data.event.id);
-      
-      // Reset form
+      setNotice(`✅ Tạo sự kiện thành công! ID: ${data.event.id}`);
+
+      // Clear Form
       setFormData({
         title: '',
         category: 'Kỹ năng',
+        minParticipants: '',
         maxParticipants: '',
-        startTime: '',
-        endTime: '',
-        location: '',
-        description: '',
-        communityPoints: 0
+        plannedStartDate: '',
+        plannedEndDate: '',
+        registrationDeadline: '',
+        locationName: '',
+        locationLat: '',
+        locationLng: '',
+        attendanceRadius: '',
+        description: ''
       });
-      setImageFiles([]);
-      setTimelineItems([]);
-    } catch (error) {
-      setNotice(`❌ Lỗi: ${error.message}`);
+      setPhases([]);
+      setImageUploads([]);
+      setDocumentUploads([]);
+    } catch (err) {
+      setNotice(`❌ Lỗi: ${err.message}`);
     } finally {
       setLoading(false);
     }
-  };
-
-  // Save draft
-  const handleSaveDraft = () => {
-    if (!formData.title || !formData.location || !formData.startTime || !formData.endTime) {
-      setNotice('❌ Vui lòng điền đủ các trường bắt buộc để lưu nháp');
-      return;
-    }
-
-    localStorage.setItem('eventDraft', JSON.stringify({
-      formData,
-      timelineItems
-    }));
-    setNotice('✓ Đã lưu nháp sự kiện');
   };
 
   return (
     <AdminLayout
       currentPath="/admin/events/create"
       title="Tạo sự kiện"
-      subtitle="Đoàn trường khởi tạo sự kiện mới, thiết lập thông tin, timeline và điều kiện tham gia theo đúng luồng UC004."
+      subtitle="Đoàn trường khởi tạo sự kiện chính thức, bỏ qua các bước duyệt trung gian."
     >
-      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <section className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        {/* Left column: Core details form */}
+        <section className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6 space-y-4">
           {notice && (
-            <div className={`mb-4 rounded-[24px] border px-4 py-3 text-sm font-semibold ${
-              notice.startsWith('✓') || notice.startsWith('✅')
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border-red-200 bg-red-50 text-red-700'
-            }`}>
+            <div
+              className={`rounded-[24px] border px-4 py-3 text-sm font-semibold ${
+                notice.startsWith('✓') || notice.startsWith('✅')
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-red-200 bg-red-50 text-red-700'
+              }`}
+            >
               {notice}
             </div>
           )}
 
-          <div className="grid gap-4">
+          <div>
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">Tên sự kiện *</span>
-              <input 
+              <input
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
-                className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" 
-                placeholder="Nhập tên sự kiện" 
-              />
-            </label>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Chủ đề</span>
-                <select 
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                  className="w-full rounded-2xl border border-[#dce8f5] bg-white px-4 py-3 outline-none focus:border-[#1f5dcc]"
-                >
-                  <option>Kỹ năng</option>
-                  <option>Tình nguyện</option>
-                  <option>Học thuật</option>
-                  <option>Cộng đồng</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Chỉ tiêu tham gia</span>
-                <input 
-                  type="number" 
-                  name="maxParticipants"
-                  value={formData.maxParticipants}
-                  onChange={handleInputChange}
-                  className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" 
-                  placeholder="Ví dụ: 200" 
-                />
-              </label>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Điểm cộng đồng (nếu có)</span>
-                <input 
-                  type="number" 
-                  name="communityPoints"
-                  value={formData.communityPoints}
-                  onChange={handleInputChange}
-                  className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" 
-                  placeholder="Ví dụ: 5" 
-                  min="0"
-                />
-              </label>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Thời gian bắt đầu *</span>
-                <CustomDateTimePicker 
-                  value={formData.startTime}
-                  onChange={(val) => setFormData(prev => ({ ...prev, startTime: val }))}
-                  min={new Date().toISOString()}
-                  placeholder="Chọn ngày giờ bắt đầu" 
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Thời gian kết thúc *</span>
-                <CustomDateTimePicker 
-                  value={formData.endTime}
-                  onChange={(val) => setFormData(prev => ({ ...prev, endTime: val }))}
-                  min={formData.startTime}
-                  disabled={!formData.startTime}
-                  placeholder="Chọn ngày giờ kết thúc" 
-                />
-                {!formData.startTime && (
-                  <p className="mt-1 text-xs text-slate-500">⚠️ Vui lòng chọn thời gian bắt đầu trước</p>
-                )}
-              </label>
-            </div>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Địa điểm *</span>
-              <input 
-                name="location"
-                value={formData.location}
-                onChange={handleInputChange}
-                className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" 
-                placeholder="Nhập địa điểm tổ chức" 
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Mô tả sự kiện</span>
-              <textarea 
-                rows="6" 
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                className="w-full rounded-[24px] border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" 
-                placeholder="Mô tả mục tiêu, nội dung và giá trị của sự kiện..." 
+                className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm"
+                placeholder="Nhập tên sự kiện"
               />
             </label>
           </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Thể loại</span>
+              <select
+                name="category"
+                value={formData.category}
+                onChange={handleInputChange}
+                className="w-full rounded-2xl border border-[#dce8f5] bg-white px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm"
+              >
+                <option>Kỹ năng</option>
+                <option>Tình nguyện</option>
+                <option>Học thuật</option>
+                <option>Cộng đồng</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">SL tối thiểu</span>
+              <input
+                type="number"
+                name="minParticipants"
+                value={formData.minParticipants}
+                onChange={handleInputChange}
+                className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm"
+                placeholder="Ví dụ: 20"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">SL tối đa</span>
+              <input
+                type="number"
+                name="maxParticipants"
+                value={formData.maxParticipants}
+                onChange={handleInputChange}
+                className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm"
+                placeholder="Ví dụ: 100"
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Bắt đầu dự kiến *</span>
+              <CustomDateTimePicker
+                value={formData.plannedStartDate}
+                onChange={(val) => setFormData(prev => ({ ...prev, plannedStartDate: val }))}
+                min={new Date().toISOString()}
+                placeholder="Ngày giờ bắt đầu"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Kết thúc dự kiến *</span>
+              <CustomDateTimePicker
+                value={formData.plannedEndDate}
+                onChange={(val) => setFormData(prev => ({ ...prev, plannedEndDate: val }))}
+                min={formData.plannedStartDate}
+                disabled={!formData.plannedStartDate}
+                placeholder="Ngày giờ kết thúc"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Hạn đăng ký</span>
+              <CustomDateTimePicker
+                value={formData.registrationDeadline}
+                onChange={(val) => setFormData(prev => ({ ...prev, registrationDeadline: val }))}
+                placeholder="Hạn sinh viên đăng ký"
+              />
+            </label>
+          </div>
+
+          <div className="border-t border-[#eaf2fb] pt-4 space-y-3">
+            <h4 className="text-sm font-bold text-[#132b57] flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-[#1747a6]" />
+              Địa điểm và Cấu hình điểm danh QR GPS
+            </h4>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-xs font-semibold text-slate-600">Tên địa điểm / Phòng tổ chức *</span>
+                <input
+                  name="locationName"
+                  value={formData.locationName}
+                  onChange={handleInputChange}
+                  className="w-full rounded-xl border border-[#dce8f5] px-3 py-2 outline-none focus:border-[#1f5dcc] text-sm"
+                  placeholder="Ví dụ: Hội trường A, Khu F - ĐH Bách Khoa"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-600">Vĩ độ (Latitude)</span>
+                <input
+                  type="number"
+                  step="any"
+                  name="locationLat"
+                  value={formData.locationLat}
+                  onChange={handleInputChange}
+                  className="w-full rounded-xl border border-[#dce8f5] px-3 py-2 outline-none focus:border-[#1f5dcc] text-sm font-mono"
+                  placeholder="Ví dụ: 16.074061"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-600">Kinh độ (Longitude)</span>
+                <input
+                  type="number"
+                  step="any"
+                  name="locationLng"
+                  value={formData.locationLng}
+                  onChange={handleInputChange}
+                  className="w-full rounded-xl border border-[#dce8f5] px-3 py-2 outline-none focus:border-[#1f5dcc] text-sm font-mono"
+                  placeholder="Ví dụ: 108.15072"
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-xs font-semibold text-slate-600">Bán kính điểm danh (mét)</span>
+                <input
+                  type="number"
+                  name="attendanceRadius"
+                  value={formData.attendanceRadius}
+                  onChange={handleInputChange}
+                  className="w-full rounded-xl border border-[#dce8f5] px-3 py-2 outline-none focus:border-[#1f5dcc] text-sm"
+                  placeholder="Ví dụ: 50 (bỏ trống nếu không check GPS)"
+                />
+              </label>
+            </div>
+          </div>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold text-slate-700">Mô tả sự kiện</span>
+            <textarea
+              rows="5"
+              name="description"
+              value={formData.description}
+              onChange={handleInputChange}
+              className="w-full rounded-[24px] border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm leading-relaxed"
+              placeholder="Mô tả mục tiêu, yêu cầu tham gia và giá trị mang lại..."
+            />
+          </label>
         </section>
 
+        {/* Right column: Media + Timeline Builder */}
         <section className="space-y-5">
-          <motion.div whileHover={{ y: -3 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5">
+          {/* Images & Documents Media Uploads */}
+          <motion.div whileHover={{ y: -2 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5 space-y-4">
             <div className="flex items-center gap-3">
               <div className="rounded-2xl bg-[#eef6ff] p-3 text-[#1747a6]">
                 <FileImage className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="text-xl font-black text-[#132b57]">Ảnh bìa và tài liệu</h3>
-                <p className="text-sm text-slate-500">Đính kèm poster, kế hoạch tổ chức và các tệp phục vụ duyệt sự kiện.</p>
+                <h3 className="text-lg font-black text-[#132b57]">Ảnh bìa & Tài liệu đính kèm</h3>
+                <p className="text-xs text-slate-500">Nhiều ảnh bìa (carousel) và các file kế hoạch PDF/Word.</p>
               </div>
             </div>
-            <label className="mt-4 inline-block cursor-pointer rounded-[24px] border border-dashed border-[#b9d1ee] bg-[#f8fbff] px-4 py-8 text-center text-sm text-slate-500 w-full">
-              <input type="file" multiple className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx" />
-              Kéo thả ảnh `.jpg`, `.png` hoặc tài liệu kế hoạch vào đây
-            </label>
-            {imageFiles.length > 0 && (
-              <div className="mt-4 space-y-3">
-                {imageFiles.map((file, idx) => {
-                  const isImage = file.type.startsWith('image/');
-                  const previewUrl = isImage ? URL.createObjectURL(file) : null;
-                  return (
-                    <div key={`${file.name}-${idx}`} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                      <div className="flex items-center gap-4 overflow-hidden">
-                        {isImage ? (
-                          <img src={previewUrl} alt="preview" className="h-16 w-16 rounded-lg object-cover" />
-                        ) : (
-                          <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
-                            <FileImage className="h-8 w-8" />
-                          </div>
-                        )}
-                        <div className="truncate">
-                          <p className="truncate text-sm font-semibold text-slate-700">{file.name}</p>
-                          <p className="text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                        </div>
-                      </div>
-                      <button type="button" onClick={() => handleRemoveFile(idx)} className="rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
-                        <X className="h-5 w-5" />
-                      </button>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="cursor-pointer rounded-xl border border-dashed border-[#b9d1ee] bg-[#f8fbff] p-4 text-center text-xs text-slate-600 hover:bg-[#edf4fc] transition-all flex flex-col items-center justify-center gap-1">
+                <input type="file" multiple className="hidden" onChange={handleImageUpload} accept="image/*" />
+                <FileImage className="h-5 w-5 text-[#1747a6]" />
+                Tải ảnh bìa
+              </label>
+              <label className="cursor-pointer rounded-xl border border-dashed border-[#b9d1ee] bg-[#f8fbff] p-4 text-center text-xs text-slate-600 hover:bg-[#edf4fc] transition-all flex flex-col items-center justify-center gap-1">
+                <input type="file" multiple className="hidden" onChange={handleDocumentUpload} accept=".pdf,.doc,.docx" />
+                <FileText className="h-5 w-5 text-[#1747a6]" />
+                Đính kèm tài liệu
+              </label>
+            </div>
+
+            {/* Render uploaded image previews & cover config */}
+            {imageUploads.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-600">Danh sách ảnh ({imageUploads.length})</p>
+                {imageUploads.map((item, idx) => (
+                  <div key={idx} className="flex gap-3 rounded-xl border p-2 bg-slate-50 relative">
+                    <img src={URL.createObjectURL(item.file)} className="h-16 w-16 rounded-lg object-cover bg-white" />
+                    <div className="flex-1 space-y-1">
+                      <input 
+                        type="text" 
+                        value={item.caption}
+                        onChange={(e) => handleImageCaptionChange(idx, e.target.value)}
+                        placeholder="Chú thích ảnh..."
+                        className="w-full text-xs rounded border px-2 py-0.5"
+                      />
+                      <label className="flex items-center gap-1 text-[10px] text-slate-600 cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={item.isCover} 
+                          onChange={(e) => handleImageCoverChange(idx, e.target.checked)}
+                          className="rounded"
+                        />
+                        Dùng làm ảnh bìa chính (carousel)
+                      </label>
                     </div>
-                  );
-                })}
+                    <button type="button" onClick={() => handleRemoveImage(idx)} className="absolute right-2 top-2 text-slate-400 hover:text-red-500">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Render uploaded document list */}
+            {documentUploads.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-600">Danh sách tài liệu ({documentUploads.length})</p>
+                {documentUploads.map((file, idx) => (
+                  <div key={idx} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-2 text-xs">
+                    <div className="flex items-center gap-2 truncate">
+                      <FileText className="h-4 w-4 text-[#1747a6] shrink-0" />
+                      <span className="truncate text-slate-700 font-medium">{file.name}</span>
+                    </div>
+                    <button type="button" onClick={() => handleRemoveDocument(idx)} className="text-slate-400 hover:text-red-500 ml-2">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </motion.div>
 
-          <motion.div whileHover={{ y: -3 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5">
+          {/* 2-Level Timeline Builder */}
+          <motion.div whileHover={{ y: -2 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5 space-y-4">
             <div className="flex items-center gap-3">
               <div className="rounded-2xl bg-[#eef6ff] p-3 text-[#1747a6]">
                 <CalendarRange className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="text-xl font-black text-[#132b57]">Timeline sự kiện</h3>
-                <p className="text-sm text-slate-500">Thêm các mốc quan trọng để hệ thống và người tham gia theo dõi.</p>
+                <h3 className="text-lg font-black text-[#132b57]">Timeline Giai đoạn & Mốc</h3>
+                <p className="text-xs text-slate-500">Xây dựng timeline 2 cấp: Giai đoạn lớn và các mốc chi tiết bên trong.</p>
               </div>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {timelineItems.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between rounded-2xl bg-[#f6faff] px-4 py-3 text-sm text-slate-600">
-                  <div>
-                    <strong>{new Date(item.dateTime).toLocaleString('vi-VN')}</strong>
-                    <p>{item.description}</p>
-                  </div>
-                  <button type="button" onClick={() => handleRemoveTimeline(idx)} className="text-red-500 hover:text-red-700">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
+            {/* Phases view */}
+            {phases.length > 0 && (
+              <div className="space-y-3 pt-2">
+                {phases.map((phase, phaseIdx) => (
+                  <div key={phaseIdx} className="rounded-2xl border border-[#eef5fc] bg-[#f8fbfd] p-3 text-xs space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="font-bold text-slate-700 text-sm">GD {phaseIdx + 1}: {phase.title}</span>
+                        <p className="text-[10px] text-slate-500">{new Date(phase.startDate).toLocaleDateString('vi-VN')} - {new Date(phase.endDate).toLocaleDateString('vi-VN')}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          type="button" 
+                          onClick={() => setActivePhaseIndexForMilestone(activePhaseIndexForMilestone === phaseIdx ? -1 : phaseIdx)}
+                          className="text-[#1747a6] font-semibold hover:underline"
+                        >
+                          {activePhaseIndexForMilestone === phaseIdx ? 'Đóng mốc' : '+ Thêm mốc'}
+                        </button>
+                        <button type="button" onClick={() => handleRemovePhase(phaseIdx)} className="text-red-500 hover:text-red-700">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    {phase.description && <p className="text-slate-600 bg-white p-2 rounded-lg border border-slate-100">{phase.description}</p>}
 
-            <div className="mt-4 space-y-3">
-              <label className="block relative z-40">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Ngày giờ Timeline *</span>
-                <CustomDateTimePicker 
-                  value={newTimelineItem.dateTime}
-                  onChange={(val) => setNewTimelineItem(prev => ({ ...prev, dateTime: val }))}
-                  min={formData.startTime}
-                  disabled={!formData.startTime || !formData.endTime}
-                  placeholder="Chọn mốc thời gian"
-                />
-                {(!formData.startTime || !formData.endTime) && (
-                  <p className="mt-1 text-xs text-slate-500">⚠️ Vui lòng chọn thời gian sự kiện trước</p>
-                )}
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Nội dung *</span>
+                    {/* Milestones listed inside phase */}
+                    {phase.details && phase.details.length > 0 && (
+                      <div className="bg-white border rounded-xl p-2 space-y-1.5 shadow-sm">
+                        {phase.details.map((mile, mileIdx) => (
+                          <div key={mileIdx} className="flex justify-between items-center bg-slate-50 p-1.5 rounded-lg">
+                            <div>
+                              <span className="font-bold text-slate-700">{mile.title}</span>
+                              <span className="text-[10px] text-slate-400 font-mono ml-2">({new Date(mile.dateTime).toLocaleString('vi-VN')})</span>
+                              {mile.content && <p className="text-slate-500 mt-0.5">{mile.content}</p>}
+                            </div>
+                            <button type="button" onClick={() => handleRemoveMilestone(phaseIdx, mileIdx)} className="text-slate-400 hover:text-red-500">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add Milestone Sub-form */}
+                    {activePhaseIndexForMilestone === phaseIdx && (
+                      <div className="border-t border-slate-100 pt-2 space-y-2 mt-2">
+                        <p className="font-bold text-[#132b57] text-[11px]">Thêm mốc chi tiết vào Giai đoạn:</p>
+                        <div className="grid gap-2">
+                          <input 
+                            type="datetime-local" 
+                            value={newMilestone.dateTime}
+                            onChange={(e) => setNewMilestone(prev => ({ ...prev, dateTime: e.target.value }))}
+                            className="rounded border p-1 w-full"
+                          />
+                          <input 
+                            type="text" 
+                            placeholder="Tiêu đề mốc (Khai mạc, bế mạc...)"
+                            value={newMilestone.title}
+                            onChange={(e) => setNewMilestone(prev => ({ ...prev, title: e.target.value }))}
+                            className="rounded border p-1 w-full"
+                          />
+                          <textarea 
+                            placeholder="Nội dung chi tiết..."
+                            value={newMilestone.content}
+                            onChange={(e) => setNewMilestone(prev => ({ ...prev, content: e.target.value }))}
+                            className="rounded border p-1 w-full"
+                            rows="2"
+                          />
+                          <button 
+                            type="button" 
+                            onClick={() => handleAddMilestone(phaseIdx)}
+                            className="bg-[#1747a6] text-white py-1 rounded font-bold hover:bg-[#215cd1]"
+                          >
+                            Xác nhận thêm mốc
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add Phase form */}
+            <div className="border-t border-slate-100 pt-3 space-y-3">
+              <p className="font-bold text-[#132b57] text-sm">Thêm Giai đoạn mới</p>
+              <div className="grid gap-2">
                 <input 
                   type="text" 
-                  value={newTimelineItem.description}
-                  onChange={(e) => setNewTimelineItem(prev => ({ ...prev, description: e.target.value }))}
-                  onKeyPress={(e) => e.key === 'Enter' && handleAddTimeline()}
-                  className="w-full rounded-2xl border border-[#dce8f5] px-3 py-2 text-sm outline-none focus:border-[#1f5dcc]"
-                  placeholder="Ví dụ: Phát biểu khai mạc"
+                  placeholder="Tiêu đề giai đoạn (Đăng ký, Gây quỹ, Tổ chức...)"
+                  value={newPhase.title}
+                  onChange={(e) => setNewPhase(prev => ({ ...prev, title: e.target.value }))}
+                  className="rounded-xl border p-2 text-xs w-full"
                 />
-              </label>
-              <button type="button" onClick={handleAddTimeline} className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-4 py-2 font-semibold text-[#1747a6] transition-all hover:bg-[#f3f8ff]">
-                <Plus className="h-5 w-5" />
-                Thêm Timeline
-              </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="text-[10px] text-slate-500">Bắt đầu giai đoạn</span>
+                    <input 
+                      type="date" 
+                      value={newPhase.startDate}
+                      onChange={(e) => setNewPhase(prev => ({ ...prev, startDate: e.target.value }))}
+                      className="rounded-xl border p-2 text-xs w-full"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] text-slate-500">Kết thúc giai đoạn</span>
+                    <input 
+                      type="date" 
+                      value={newPhase.endDate}
+                      onChange={(e) => setNewPhase(prev => ({ ...prev, endDate: e.target.value }))}
+                      className="rounded-xl border p-2 text-xs w-full"
+                    />
+                  </label>
+                </div>
+                <textarea 
+                  placeholder="Mô tả tổng quan giai đoạn..."
+                  value={newPhase.description}
+                  onChange={(e) => setNewPhase(prev => ({ ...prev, description: e.target.value }))}
+                  className="rounded-xl border p-2 text-xs w-full"
+                  rows="2"
+                />
+                <button 
+                  type="button" 
+                  onClick={handleAddPhase}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#dce8f5] bg-white py-2 font-semibold text-[#1747a6] text-xs transition-all hover:bg-[#f3f8ff]"
+                >
+                  <Plus className="h-4 w-4" />
+                  Xác nhận Giai đoạn
+                </button>
+              </div>
             </div>
           </motion.div>
 
-          <motion.div whileHover={{ y: -3 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5">
-            <h3 className="text-xl font-black text-[#132b57]">Thao tác</h3>
+          {/* Action buttons */}
+          <motion.div whileHover={{ y: -2 }} className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5">
+            <h3 className="text-sm font-bold text-[#132b57]">Lưu hoặc Gửi duyệt</h3>
             <div className="mt-4 flex flex-wrap gap-3">
-              <button 
-                onClick={handleSaveDraft} 
+              <button
+                type="button"
+                onClick={handleSaveDraft}
                 disabled={loading}
                 className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-slate-600 transition-all hover:bg-[#f3f8ff] disabled:opacity-50"
               >
                 <Save className="h-5 w-5 text-[#1747a6]" />
                 Lưu nháp
               </button>
-              <button 
-                onClick={handleSubmitEvent} 
+              <button
+                type="button"
+                onClick={handleSubmitEvent}
                 disabled={loading}
-                className="rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white transition-all hover:bg-[#205fd8] disabled:opacity-50"
+                className="rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white transition-all hover:bg-[#205fd8] disabled:opacity-50 flex-1 justify-center text-center shadow-lg shadow-indigo-100"
               >
-                {loading ? 'Đang gửi...' : 'Gửi duyệt sự kiện'}
+                {loading ? 'Đang gửi...' : 'Tạo sự kiện ngay'}
               </button>
             </div>
           </motion.div>

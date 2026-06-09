@@ -3,7 +3,7 @@ import axios from 'axios';
 import useSocket from '../../hooks/useSocket';
 import Badge from './Badge';
 
-const API_BASE = 'http://localhost:3000/api/notifications';
+const API_BASE = 'http://localhost:5000/api/notifications';
 
 export default function NotificationTab() {
   const [notifications, setNotifications] = useState([]);

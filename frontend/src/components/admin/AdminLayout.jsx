@@ -16,8 +16,6 @@ const navSections = [
     items: [
       { to: '/admin/events/create', label: 'Tạo sự kiện', icon: CalendarPlus2 },
       { to: '/admin/event-approvals', label: 'Duyệt sự kiện', icon: CheckCheck },
-      { to: '/admin/certificates', label: 'Duyệt chứng nhận', icon: Award },
-      { to: '/admin/registrations', label: 'Người đăng ký', icon: Users },
     ],
   },
   {
@@ -30,7 +28,6 @@ const navSections = [
   {
     title: 'Vận hành hệ thống',
     items: [
-      { to: '/admin/settings', label: 'Cấu hình hệ thống', icon: Settings2 },
       { to: '/admin/audit-logs', label: 'Nhật ký hoạt động', icon: FileClock },
     ],
   },
@@ -45,7 +42,7 @@ export default function AdminLayout({ title, subtitle, currentPath, children }) 
     // Clear localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    
+
     // Redirect to login
     navigate('/login');
   };
@@ -88,9 +85,8 @@ export default function AdminLayout({ title, subtitle, currentPath, children }) 
                     <Link
                       key={to}
                       to={to}
-                      className={`admin-sidebar-link flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all ${
-                        currentPath === to ? 'bg-white text-[#123d94] shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'
-                      }`}
+                      className={`admin-sidebar-link flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all ${currentPath === to ? 'bg-white text-[#123d94] shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'
+                        }`}
                     >
                       <Icon className="h-5 w-5 shrink-0" />
                       <span className="admin-sidebar-link-label">{label}</span>

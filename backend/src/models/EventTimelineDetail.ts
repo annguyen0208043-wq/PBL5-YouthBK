@@ -1,25 +1,34 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
+import EventTimeline from './EventTimeline';
 import Event from './Event';
 
-export class EventTimeline extends Model {
+export class EventTimelineDetail extends Model {
   declare id: number;
+  declare timelineId: number;
   declare eventId: number;
+  declare dateTime: Date;
   declare title: string;
-  declare startDate: Date;
-  declare endDate: Date;
-  declare description: string | null;
+  declare content: string | null;
   declare sortOrder: number;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
 
-EventTimeline.init(
+EventTimelineDetail.init(
   {
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true
+    },
+    timelineId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: EventTimeline,
+        key: 'id'
+      }
     },
     eventId: {
       type: DataTypes.INTEGER,
@@ -29,19 +38,15 @@ EventTimeline.init(
         key: 'id'
       }
     },
+    dateTime: {
+      type: DataTypes.DATE,
+      allowNull: false
+    },
     title: {
       type: DataTypes.STRING(255),
       allowNull: false
     },
-    startDate: {
-      type: DataTypes.DATE,
-      allowNull: false
-    },
-    endDate: {
-      type: DataTypes.DATE,
-      allowNull: false
-    },
-    description: {
+    content: {
       type: DataTypes.TEXT,
       allowNull: true
     },
@@ -53,14 +58,17 @@ EventTimeline.init(
   },
   {
     sequelize,
-    tableName: 'event_timelines',
+    tableName: 'event_timeline_details',
     timestamps: true,
     charset: 'utf8mb4',
     collate: 'utf8mb4_unicode_ci'
   }
 );
 
-EventTimeline.belongsTo(Event, { foreignKey: 'eventId' });
-Event.hasMany(EventTimeline, { as: 'timelines', foreignKey: 'eventId', onDelete: 'CASCADE' });
+EventTimelineDetail.belongsTo(EventTimeline, { foreignKey: 'timelineId' });
+EventTimelineDetail.belongsTo(Event, { foreignKey: 'eventId' });
 
-export default EventTimeline;
+EventTimeline.hasMany(EventTimelineDetail, { as: 'details', foreignKey: 'timelineId', onDelete: 'CASCADE' });
+Event.hasMany(EventTimelineDetail, { as: 'timelineDetails', foreignKey: 'eventId', onDelete: 'CASCADE' });
+
+export default EventTimelineDetail;

@@ -2,11 +2,13 @@ import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
 import User from './User';
 import Event from './Event';
+import EventRegistration from './EventRegistration';
 
 export class Certificate extends Model {
   declare id: number;
   declare userId: number;
-  declare eventId: number;
+  declare eventId: number | null;
+  declare registrationId: number | null;
   declare activityTitle: string;
   declare status: 'pending' | 'approved' | 'rejected';
   declare approvedBy: number | null;
@@ -15,7 +17,7 @@ export class Certificate extends Model {
   declare stampCode: string | null;
   declare note: string | null;
   declare certificateUrl: string | null;
-  declare earnedPoints: number;
+  declare isBulk: boolean;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -43,12 +45,21 @@ Certificate.init(
         key: 'id'
       }
     },
+    registrationId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: EventRegistration,
+        key: 'id'
+      }
+    },
     activityTitle: {
       type: DataTypes.STRING,
       allowNull: false
     },
     status: {
       type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+      allowNull: false,
       defaultValue: 'pending'
     },
     approvedBy: {
@@ -68,32 +79,36 @@ Certificate.init(
       allowNull: true
     },
     stampCode: {
-      type: DataTypes.STRING,
-      allowNull: true
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      unique: true
     },
     note: {
       type: DataTypes.TEXT,
       allowNull: true
     },
     certificateUrl: {
-      type: DataTypes.STRING,
+      type: DataTypes.STRING(500),
       allowNull: true
     },
-    earnedPoints: {
-      type: DataTypes.INTEGER,
-      defaultValue: 0
+    isBulk: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
     }
   },
   {
     sequelize,
     tableName: 'certificates',
     timestamps: true,
-    charset: 'utf8mb4'
+    charset: 'utf8mb4',
+    collate: 'utf8mb4_unicode_ci'
   }
 );
 
 Certificate.belongsTo(User, { as: 'student', foreignKey: 'userId' });
 Certificate.belongsTo(User, { as: 'approver', foreignKey: 'approvedBy' });
 Certificate.belongsTo(Event, { foreignKey: 'eventId' });
+Certificate.belongsTo(EventRegistration, { foreignKey: 'registrationId' });
 
 export default Certificate;

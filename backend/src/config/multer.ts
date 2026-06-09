@@ -65,4 +65,15 @@ export const uploadEventImages = multer({
   }
 });
 
+export const uploadEventFiles = multer({
+  storage: eventStorage,
+  fileFilter,
+  limits: {
+    fileSize: 15 * 1024 * 1024 // 15MB limit per file
+  }
+}).fields([
+  { name: 'images', maxCount: 10 },
+  { name: 'documents', maxCount: 5 }
+]);
+
 export default multer;

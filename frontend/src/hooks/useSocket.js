@@ -8,7 +8,7 @@ const useSocket = (onNewNotification, onNotificationRead) => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    const socket = io('http://localhost:3000', {
+    const socket = io('http://localhost:5000', {
       auth: { token },
       transports: ['websocket'],
     });
@@ -34,7 +34,7 @@ const useSocket = (onNewNotification, onNotificationRead) => {
     return () => {
       try {
         socket.disconnect();
-      } catch (e) {}
+      } catch (e) { }
     };
   }, [onNewNotification, onNotificationRead]);
 

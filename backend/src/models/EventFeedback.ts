@@ -8,7 +8,7 @@ export class EventFeedback extends Model {
   declare eventId: number;
   declare userId: number;
   declare rating: number;
-  declare content: string | null;
+  declare comment: string | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -44,7 +44,7 @@ EventFeedback.init(
         max: 5
       }
     },
-    content: {
+    comment: {
       type: DataTypes.TEXT,
       allowNull: true
     }
@@ -52,11 +52,13 @@ EventFeedback.init(
   {
     sequelize,
     tableName: 'event_feedbacks',
-    timestamps: true
+    timestamps: true,
+    charset: 'utf8mb4',
+    collate: 'utf8mb4_unicode_ci'
   }
 );
 
-Event.hasMany(EventFeedback, { foreignKey: 'eventId', as: 'feedbacks' });
+Event.hasMany(EventFeedback, { foreignKey: 'eventId', as: 'feedbacks', onDelete: 'CASCADE' });
 EventFeedback.belongsTo(Event, { foreignKey: 'eventId', as: 'event' });
 
 User.hasMany(EventFeedback, { foreignKey: 'userId', as: 'feedbacks' });
