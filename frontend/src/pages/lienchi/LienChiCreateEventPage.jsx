@@ -21,7 +21,8 @@ export default function LienChiCreateEventPage() {
     locationLat: '',
     locationLng: '',
     attendanceRadius: '',
-    description: ''
+    description: '',
+    leader: ''
   });
 
   // Timeline phases and milestones state (2-level hierarchy)
@@ -231,7 +232,8 @@ export default function LienChiCreateEventPage() {
         locationLat: '',
         locationLng: '',
         attendanceRadius: '',
-        description: ''
+        description: '',
+        leader: ''
       });
       setPhases([]);
       setImageUploads([]);
@@ -264,7 +266,7 @@ export default function LienChiCreateEventPage() {
             </div>
           )}
 
-          <div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">Tên sự kiện *</span>
               <input
@@ -273,6 +275,16 @@ export default function LienChiCreateEventPage() {
                 onChange={handleInputChange}
                 className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm"
                 placeholder="Nhập tên sự kiện"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Người chủ trì (Leader)</span>
+              <input
+                name="leader"
+                value={formData.leader}
+                onChange={handleInputChange}
+                className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm"
+                placeholder="Tên người chủ trì sự kiện"
               />
             </label>
           </div>

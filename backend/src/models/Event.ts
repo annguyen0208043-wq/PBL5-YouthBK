@@ -37,6 +37,8 @@ export class Event extends Model {
   declare qrCode: string | null;
   declare qrActive: boolean;
 
+  declare leader: string | null;
+
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -165,6 +167,10 @@ Event.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false
+    },
+    leader: {
+      type: DataTypes.STRING,
+      allowNull: true
     }
   },
   {

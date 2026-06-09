@@ -305,7 +305,7 @@ export default function AdminEventApprovalPage() {
                       <div>
                         <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Hồ sơ đề nghị duyệt</p>
                         <h2 className="mt-2 text-2xl font-black text-[#132b57] leading-snug">{selectedEvent.title}</h2>
-                        <p className="mt-2 text-xs text-slate-500 font-medium">Người tạo: {selectedEvent.creator?.name} ({selectedEvent.creator?.faculty || 'Khoa'})</p>
+                        <p className="mt-2 text-xs text-slate-500 font-medium">Người tạo: {selectedEvent.creator?.name} ({selectedEvent.creator?.faculty || 'Khoa'}){selectedEvent.leader && ` | Người chủ trì: ${selectedEvent.leader}`}</p>
                       </div>
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{selectedEvent.category}</span>
                     </div>

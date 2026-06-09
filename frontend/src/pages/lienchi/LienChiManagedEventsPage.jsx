@@ -341,7 +341,10 @@ export default function LienChiManagedEventsPage() {
                     <div>
                       <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Chi tiết quản lý sự kiện</p>
                       <h2 className="mt-2 text-2xl md:text-3xl font-black text-[#132b57]">{selectedEvent.title}</h2>
-                      <p className="mt-1 text-sm text-slate-500">Người tạo: {selectedEvent.creator?.name || 'N/A'}</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Người tạo: {selectedEvent.creator?.name || 'N/A'}
+                        {selectedEvent.leader && ` | Người chủ trì: ${selectedEvent.leader}`}
+                      </p>
                     </div>
                     <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold leading-none ${statusTone(selectedEvent.status)}`}>{translateStatus(selectedEvent.status)}</span>
                   </div>
