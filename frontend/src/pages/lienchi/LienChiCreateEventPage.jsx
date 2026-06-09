@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
 import CustomDateTimePicker from '../../components/common/CustomDateTimePicker';
-import InlineMapPicker from '../../components/common/InlineMapPicker';
+import MapPickerModal from '../../components/common/MapPickerModal';
 
 export default function LienChiCreateEventPage() {
   const [loading, setLoading] = useState(false);
@@ -687,8 +687,8 @@ export default function LienChiCreateEventPage() {
                   }`}
                 />
               </label>
-              <div className="grid grid-cols-2 gap-4 sm:col-span-2">
-                <label className="block">
+              <div className="sm:col-span-2 flex gap-3 items-end">
+                <label className="block flex-1">
                   <span className="mb-1 block text-xs font-semibold text-slate-600">Vĩ độ (Latitude) *</span>
                   <input
                     type="number"
@@ -696,11 +696,11 @@ export default function LienChiCreateEventPage() {
                     name="locationLat"
                     value={formData.locationLat}
                     readOnly
-                    placeholder="Chưa chọn"
+                    placeholder="Chọn từ bản đồ"
                     className="w-full rounded-xl border border-[#dce8f5] bg-slate-50 px-3 py-2 outline-none text-sm font-mono cursor-not-allowed"
                   />
                 </label>
-                <label className="block">
+                <label className="block flex-1">
                   <span className="mb-1 block text-xs font-semibold text-slate-600">Kinh độ (Longitude) *</span>
                   <input
                     type="number"
@@ -708,24 +708,18 @@ export default function LienChiCreateEventPage() {
                     name="locationLng"
                     value={formData.locationLng}
                     readOnly
-                    placeholder="Chưa chọn"
+                    placeholder="Chọn từ bản đồ"
                     className="w-full rounded-xl border border-[#dce8f5] bg-slate-50 px-3 py-2 outline-none text-sm font-mono cursor-not-allowed"
                   />
                 </label>
-              </div>
-              <div className="sm:col-span-2">
-                <span className="mb-1.5 block text-xs font-semibold text-slate-600 font-bold">Bản đồ chọn tọa độ (GPS):</span>
-                <InlineMapPicker
-                  lat={formData.locationLat}
-                  lng={formData.locationLng}
-                  onChange={(coords) => {
-                    setFormData(prev => ({
-                      ...prev,
-                      locationLat: coords.lat,
-                      locationLng: coords.lng
-                    }));
-                  }}
-                />
+                <button
+                  type="button"
+                  onClick={() => setShowMapPicker(true)}
+                  className="px-4 py-2 bg-[#1747a6] text-white text-xs font-bold rounded-xl hover:bg-[#205fd8] transition-all h-[38px] flex items-center gap-1.5 whitespace-nowrap animate-pulse hover:animate-none"
+                >
+                  <MapPin className="h-4 w-4" />
+                  Mở bản đồ
+                </button>
               </div>
               <label className="block sm:col-span-2">
                 <span className="mb-1 block text-xs font-semibold text-slate-600">Bán kính điểm danh (mét)</span>
@@ -1052,6 +1046,21 @@ export default function LienChiCreateEventPage() {
           </div>
         </div>
       )}
+      {/* Map Picker Modal */}
+      <MapPickerModal
+        show={showMapPicker}
+        onClose={() => setShowMapPicker(false)}
+        onConfirm={(coords) => {
+          setFormData(prev => ({
+            ...prev,
+            locationLat: coords.lat,
+            locationLng: coords.lng
+          }));
+          setShowMapPicker(false);
+        }}
+        initialLat={formData.locationLat}
+        initialLng={formData.locationLng}
+      />
     </LienChiLayout>
   );
 }
