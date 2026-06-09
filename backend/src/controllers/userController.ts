@@ -3,6 +3,9 @@ import User from '../models/User';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { hashPassword, convertRoleToEnglish, convertRoleToVietnamese } from '../utils/passwordHelper';
 import { Op } from 'sequelize';
+import { writeAuditLog, getClientIp } from '../utils/auditLogHelper';
+
+const DEFAULT_RESET_PASSWORD = process.env.DEFAULT_RESET_PASSWORD || '123456';
 
 export const getUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -80,6 +83,14 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
     const user = await User.create({ name: fullName, email, password: hashedPassword, role: englishRole, studentId: studentId || null, phone: phone || null, faculty: faculty || null, status, isActive: status === 'Hoạt động' });
     const createdUser = await User.findByPk(user.id, { attributes: { exclude: ['password'] } });
     const d = createdUser!.toJSON();
+    writeAuditLog({
+      userId: req.user!.id,
+      action: `Tạo tài khoản mới cho "${fullName}" (${email})`,
+      targetType: 'User',
+      targetId: user.id,
+      details: `Vai trò: ${role}`,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
     res.status(201).json({ message: 'Tạo tài khoản thành công', user: { ...d, fullName: d.name, role: convertRoleToVietnamese(d.role) } });
   } catch (error) {
     console.error('Create user error:', error);
@@ -117,6 +128,13 @@ export const changeUserRole = async (req: AuthRequest, res: Response): Promise<v
     if (!user) { res.status(404).json({ message: 'User not found' }); return; }
     const englishRole = convertRoleToEnglish(role);
     await user.update({ role: englishRole });
+    writeAuditLog({
+      userId: req.user!.id,
+      action: `Thay đổi vai trò của "${user.name}" thành "${role}"`,
+      targetType: 'User',
+      targetId: user.id,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
     res.json({ message: `Đã cập nhật vai trò thành "${role}"`, user: { id: user.id, role: convertRoleToVietnamese(englishRole) } });
   } catch (error) {
     console.error('Change role error:', error);
@@ -131,9 +149,41 @@ export const changeUserStatus = async (req: AuthRequest, res: Response): Promise
     const user = await User.findByPk(id);
     if (!user) { res.status(404).json({ message: 'User not found' }); return; }
     await user.update({ status, isActive: status === 'Hoạt động' });
+    writeAuditLog({
+      userId: req.user!.id,
+      action: `Cập nhật trạng thái tài khoản "${user.name}" thành "${status}"`,
+      targetType: 'User',
+      targetId: user.id,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
     res.json({ message: `Đã cập nhật trạng thái thành "${status}"`, user: { id: user.id, status: user.status } });
   } catch (error) {
     console.error('Change status error:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+};
+
+export const resetUserPassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const user = await User.findByPk(id);
+    if (!user) { res.status(404).json({ message: 'User not found' }); return; }
+
+    const hashedPassword = await hashPassword(DEFAULT_RESET_PASSWORD);
+    await user.update({ password: hashedPassword });
+    writeAuditLog({
+      userId: req.user!.id,
+      action: `Reset mật khẩu mặc định cho "${user.name}"`,
+      targetType: 'User',
+      targetId: user.id,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
+    res.json({
+      message: `Đã reset mật khẩu về mặc định: ${DEFAULT_RESET_PASSWORD}`,
+      defaultPassword: DEFAULT_RESET_PASSWORD
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
     res.status(500).json({ message: 'Lỗi server' });
   }
 };

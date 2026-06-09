@@ -611,8 +611,8 @@ export default function StudentEventsPage() {
             </div>
           </div>
 
-          <div className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
-            <div className="flex items-center gap-3">
+          <Link to="/sinhvien/profile" className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md hover:bg-white/15 transition-all block text-white no-underline w-full min-w-0">
+            <div className="flex items-center gap-3 w-full min-w-0">
               {user.avatarUrl ? (
                 <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-14 w-14 rounded-2xl border border-white/25 object-cover" />
               ) : (
@@ -625,7 +625,7 @@ export default function StudentEventsPage() {
                 <p className="profile-user-subtitle text-sm text-blue-100/85">MSSV: {user.studentId}</p>
               </div>
             </div>
-          </div>
+          </Link>
 
           <nav className="space-y-2">
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Sự kiện của tôi</div>
@@ -659,11 +659,12 @@ export default function StudentEventsPage() {
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Sự kiện dành cho sinh viên</h1>
                 <p className="mt-1 text-slate-500">Khám phá hoạt động nổi bật và đăng ký tham gia trực tiếp trên hệ thống.</p>
               </div>
-              <div
-                className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3"
+              <Link
+                to="/sinhvien/profile"
+                className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3 hover:bg-[#eef6ff] transition-all block text-slate-800 no-underline"
                 aria-label="Mở trang chỉnh sửa thông tin cá nhân"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 w-full min-w-0">
                   {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
                   ) : (
@@ -676,7 +677,7 @@ export default function StudentEventsPage() {
                     <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
                   </div>
                 </div>
-              </div>
+              </Link>
             </div>
           </div>
 
