@@ -265,9 +265,12 @@ export default function StudentEventsPage() {
         });
         if (response.ok) {
           const data = await response.json();
-          const approvedEvents = data.events.filter(e => e.status === 'approved' || e.status === 'ongoing');
+          const visibleStatuses = ['open_registration', 'ongoing', 'ended', 'completed'];
+          const approvedEvents = data.events
+            .filter(e => visibleStatuses.includes(e.status))
+            .sort((a, b) => new Date(b.createdAt || b.plannedStartDate || 0) - new Date(a.createdAt || a.plannedStartDate || 0));
           
-          const formattedEvents = approvedEvents.map(e => {
+          const formattedEvents = approvedEvents.map((e, index) => {
             const formatTime = (iso) => {
               if (!iso) return '';
               const d = new Date(iso);
@@ -278,7 +281,15 @@ export default function StudentEventsPage() {
               const YYYY = d.getFullYear();
               return `${hh}:${mm}, ${DD}/${MM}/${YYYY}`;
             };
-            const timeRange = `${formatTime(e.startTime || e.startDate)} - ${formatTime(e.endTime || e.endDate)}`;
+            const startSource = e.actualStartDate || e.plannedStartDate || e.startTime || e.startDate;
+            const endSource = e.actualEndDate || e.plannedEndDate || e.endTime || e.endDate;
+            const timeRange = `${formatTime(startSource)} - ${formatTime(endSource)}`;
+            const statusLabel = e.status === 'ongoing'
+              ? 'Sắp diễn ra'
+              : ['ended', 'completed'].includes(e.status)
+                ? 'Đã kết thúc'
+                : 'Đang mở đăng ký';
+            const slots = e.maxParticipants || e.maxSlots || e.capacity || 100;
 
             return {
               id: `db-${e.id}`,
@@ -287,15 +298,19 @@ export default function StudentEventsPage() {
               organizer: e.creator?.name || 'Liên chi Đoàn',
               category: e.category || 'Hoạt động',
               time: timeRange,
-              startAt: e.startTime ? new Date(e.startTime) : (e.startDate ? new Date(e.startDate) : null),
-              endAt: e.endTime ? new Date(e.endTime) : (e.endDate ? new Date(e.endDate) : null),
+              startAt: startSource ? new Date(startSource) : null,
+              endAt: endSource ? new Date(endSource) : null,
               qrActive: Boolean(e.qrActive),
-              location: e.location,
+              location: e.locationName || e.location,
               points: '+5 ĐRL',
-              slots: e.maxSlots || e.maxParticipants || e.capacity || 100,
+              slots,
               registered: e.currentSlots || 0,
+              remainingSlots: Math.max(slots - (e.currentSlots || 0), 0),
               enrolled: e.isRegistered || false,
-              status: e.status === 'ongoing' ? 'Sắp diễn ra' : 'Đang mở đăng ký',
+              status: statusLabel,
+              rawStatus: e.status,
+              createdAt: e.createdAt,
+              isNew: index < 2,
               description: e.description,
               tags: e.tags || ['Cập nhật mới'],
               accent: 'from-blue-500 to-indigo-500',
@@ -340,6 +355,17 @@ export default function StudentEventsPage() {
         return matchesSearch && matchesFilter;
       });
   }, [dbEvents, activeFilter, search, attendanceCheckins, attendanceWindowConfig]);
+
+  const eventStats = useMemo(() => {
+    const openEvents = dbEvents.filter((event) => event.rawStatus === 'open_registration');
+    return {
+      openCount: openEvents.length,
+      enrolledCount: dbEvents.filter((event) => event.enrolled).length,
+      remainingSlots: openEvents.reduce((total, event) => total + event.remainingSlots, 0),
+    };
+  }, [dbEvents]);
+
+  const featuredEvent = dbEvents[0] || null;
 
   const stopQrScanner = () => {
     if (qrLoopFrameRef.current) {
@@ -598,7 +624,7 @@ export default function StudentEventsPage() {
           </div>
 
           <nav className="space-y-2">
-            <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Sự kiện của tôi</div>
+            <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Tổng quan sự kiện</div>
             <Link to="/sinhvien/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Hồ sơ cá nhân
             </Link>
@@ -633,7 +659,7 @@ export default function StudentEventsPage() {
                 className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3"
                 aria-label="Mở trang chỉnh sửa thông tin cá nhân"
               >
-                <div className="flex items-center gap-3">
+                <div className="hidden">
                   {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
                   ) : (
@@ -665,8 +691,130 @@ export default function StudentEventsPage() {
               )}
             </AnimatePresence>
 
-            <div className="mb-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-              <motion.div whileHover={{ y: -3 }} className="rounded-[28px] border border-[#dce8f5] bg-white p-5 shadow-sm">
+            {featuredEvent && (
+              <motion.section
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 overflow-hidden rounded-[32px] border border-[#cfe0f3] bg-[#071833] shadow-[0_24px_60px_rgba(19,43,87,0.16)]"
+              >
+                <div className="grid min-h-[330px] lg:grid-cols-[minmax(0,1fr)_360px]">
+                  <div className="relative min-h-[320px]">
+                    {featuredEvent.imageUrl && (
+                      <img src={featuredEvent.imageUrl} alt={featuredEvent.title} className="absolute inset-0 h-full w-full object-cover" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#071833]/95 via-[#071833]/70 to-[#071833]/10" />
+                    <div className="relative z-10 flex h-full flex-col justify-end p-6 sm:p-8">
+                      <div className="mb-4 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-500 px-3 py-1 text-xs font-black text-white shadow-lg">
+                          <Sparkles className="h-3.5 w-3.5" />
+                          NEW
+                        </span>
+                        <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold text-white backdrop-blur">{featuredEvent.category}</span>
+                        <span className="rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-bold text-emerald-100 backdrop-blur">{featuredEvent.remainingSlots} chỗ còn lại</span>
+                      </div>
+                      <h2 className="max-w-3xl text-3xl font-black leading-tight text-white sm:text-4xl">{featuredEvent.title}</h2>
+                      <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-50/90">{featuredEvent.description}</p>
+                      <div className="mt-5 grid gap-3 text-sm font-semibold text-white/90 sm:grid-cols-2">
+                        <div className="flex items-center gap-2">
+                          <Clock3 className="h-4 w-4 text-sky-200" />
+                          <span>{featuredEvent.time}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-sky-200" />
+                          <span className="truncate">{featuredEvent.location}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col justify-between bg-white p-6">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#1f5dcc]">Sự kiện nổi bật</p>
+                      <div className="mt-5 grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl bg-blue-50 p-4">
+                          <p className="text-xs font-bold text-blue-600">Đã đăng ký</p>
+                          <p className="mt-1 text-2xl font-black text-[#132b57]">{featuredEvent.registered}</p>
+                        </div>
+                        <div className="rounded-2xl bg-emerald-50 p-4">
+                          <p className="text-xs font-bold text-emerald-700">Sức chứa</p>
+                          <p className="mt-1 text-2xl font-black text-[#132b57]">{featuredEvent.slots}</p>
+                        </div>
+                      </div>
+                      <div className="mt-5">
+                        <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-500">
+                          <span>Tỷ lệ lấp chỗ</span>
+                          <span>{Math.round((featuredEvent.registered / featuredEvent.slots) * 100)}%</span>
+                        </div>
+                        <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-[#1747a6] to-[#19c37d]"
+                            style={{ width: `${Math.min((featuredEvent.registered / featuredEvent.slots) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleRegistration(featuredEvent.id, featuredEvent.title, featuredEvent.enrolled, featuredEvent.realId)}
+                      className="mt-6 rounded-2xl bg-[#1747a6] px-5 py-4 text-sm font-black text-white shadow-[0_16px_34px_rgba(23,71,166,0.24)] transition hover:bg-[#205fd8]"
+                    >
+                      {featuredEvent.enrolled ? 'Hủy đăng ký sự kiện này' : 'Đăng ký sự kiện nổi bật'}
+                    </button>
+                  </div>
+                </div>
+              </motion.section>
+            )}
+
+            <div className="mb-6 rounded-[26px] border border-[#dce8f5] bg-white/95 px-4 py-4 shadow-sm">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
+                <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-[#dce8f5] bg-[#f8fbff] px-4 py-3 transition-all focus-within:border-[#1f5dcc] focus-within:shadow-[0_0_0_4px_rgba(31,93,204,0.08)]">
+                  <Search className="h-5 w-5 shrink-0 text-slate-400" />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+                    placeholder="Tìm sự kiện, đơn vị tổ chức hoặc chủ đề"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2 xl:flex-nowrap">
+                  {filters.map((filter) => (
+                    <motion.button
+                      key={filter}
+                      type="button"
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => setActiveFilter(filter)}
+                      className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                        activeFilter === filter
+                          ? 'bg-[#1747a6] text-white shadow-[0_10px_22px_rgba(23,71,166,0.18)]'
+                          : 'border border-[#dce8f5] bg-white text-slate-600 hover:border-[#9ec0f0] hover:bg-[#f8fbff]'
+                      }`}
+                    >
+                      {filter}
+                    </motion.button>
+                  ))}
+                </div>
+
+                <div className="grid min-w-[310px] grid-cols-3 overflow-hidden rounded-2xl border border-[#dce8f5] bg-[#f8fbff]">
+                  <div className="px-4 py-3">
+                    <p className="text-[11px] font-bold uppercase text-blue-600">Đang mở</p>
+                    <p className="text-xl font-black text-[#132b57]">{eventStats.openCount}</p>
+                  </div>
+                  <div className="border-x border-[#dce8f5] px-4 py-3">
+                    <p className="text-[11px] font-bold uppercase text-emerald-700">Đã đăng ký</p>
+                    <p className="text-xl font-black text-[#132b57]">{eventStats.enrolledCount}</p>
+                  </div>
+                  <div className="px-4 py-3">
+                    <p className="text-[11px] font-bold uppercase text-amber-700">Còn chỗ</p>
+                    <p className="text-xl font-black text-[#132b57]">{eventStats.remainingSlots}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden">
+              <motion.div whileHover={{ y: -2 }} className="min-w-0">
                 <div className="flex items-center gap-3 rounded-2xl border border-[#dce8f5] bg-[#f8fbff] px-4 py-3 transition-all focus-within:border-[#1f5dcc] focus-within:shadow-[0_0_0_4px_rgba(31,93,204,0.08)]">
                   <Search className="h-5 w-5 text-slate-400" />
                   <input
@@ -677,7 +825,7 @@ export default function StudentEventsPage() {
                   />
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-3">
+                <div className="mt-4 flex flex-wrap gap-2">
                   {filters.map((filter) => (
                     <motion.button
                       key={filter}
@@ -696,8 +844,8 @@ export default function StudentEventsPage() {
                 </div>
               </motion.div>
 
-              <motion.div whileHover={{ y: -3 }} className="relative overflow-hidden rounded-[28px] border border-[#dce8f5] bg-white p-5 shadow-sm">
-                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#1747a6] via-[#4ba3ff] to-[#19c37d]" />
+              <motion.div whileHover={{ y: -2 }} className="mt-4 border-t border-[#e8f0f8] pt-4">
+                <div className="hidden" />
                 <div className="flex items-center gap-3">
                   <motion.div
                     animate={{ rotate: [0, -8, 8, 0], scale: [1, 1.04, 1] }}
@@ -708,12 +856,26 @@ export default function StudentEventsPage() {
                   </motion.div>
                   <div>
                     <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Tình trạng hiện tại</p>
-                    <h2 className="mt-1 text-2xl font-black text-[#132b57]">{dbEvents.filter(e => e.enrolled).length} sự kiện đã đăng ký</h2>
+                    <h2 className="mt-1 text-2xl font-black text-[#132b57]">{eventStats.openCount} sự kiện đang mở</h2>
                   </div>
                 </div>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
+                <p className="hidden">
                   Theo dõi các sự kiện đang mở, các sự kiện đã đăng ký và thao tác điểm danh ngay trong danh sách bên dưới.
                 </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                    <p className="text-xs font-bold text-blue-600">Đang mở</p>
+                    <p className="mt-1 text-xl font-black text-[#132b57]">{eventStats.openCount}</p>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                    <p className="text-xs font-bold text-emerald-700">Đã đăng ký</p>
+                    <p className="mt-1 text-xl font-black text-[#132b57]">{eventStats.enrolledCount}</p>
+                  </div>
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+                    <p className="text-xs font-bold text-amber-700">Còn chỗ</p>
+                    <p className="mt-1 text-xl font-black text-[#132b57]">{eventStats.remainingSlots}</p>
+                  </div>
+                </div>
               </motion.div>
             </div>
 
@@ -731,15 +893,21 @@ export default function StudentEventsPage() {
                     key={event.id}
                     variants={itemVariants}
                     whileHover={{ y: -6 }}
-                    className="student-event-card relative overflow-hidden rounded-[28px] border border-[#dce8f5] bg-white p-5 shadow-sm"
+                    className="student-event-card relative flex h-full flex-col overflow-hidden rounded-[28px] border border-[#dce8f5] bg-white p-0 shadow-sm"
                   >
                     <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${event.accent}`} />
                     <div className="absolute -right-12 top-8 h-28 w-28 rounded-full bg-[#eff6ff] blur-2xl" />
 
-                    <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                      <div className="flex-1">
+                    <div className="grid flex-1 lg:grid-cols-[minmax(0,1fr)_300px]">
+                      <div className="flex flex-1 flex-col p-5">
                         <div className="flex flex-wrap items-center gap-3">
                           <EventStatus value={displayStatus} />
+                          {event.isNew && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-black text-rose-700">
+                              <Sparkles className="h-3.5 w-3.5" />
+                              NEW
+                            </span>
+                          )}
                           <span className="rounded-full bg-[#edf5ff] px-3 py-1 text-xs font-bold text-[#1f5dcc]">{event.points}</span>
                           {event.communityPoints > 0 && (
                             <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">+{event.communityPoints} Điểm cộng đồng</span>
@@ -748,13 +916,20 @@ export default function StudentEventsPage() {
                         </div>
 
                         {event.imageUrl && (
-                          <div className="mb-4 overflow-hidden rounded-2xl">
-                            <img src={event.imageUrl} alt={event.title} className="h-44 w-full object-cover" />
+                          <div className="relative mb-4 mt-4 overflow-hidden rounded-2xl border border-[#dce8f5] bg-slate-100">
+                            <img src={event.imageUrl} alt={event.title} className="h-44 w-full object-cover transition-transform duration-500 hover:scale-[1.03]" />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#071833]/80 to-transparent px-4 pb-4 pt-12">
+                              <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-white">
+                                {event.isNew && <span className="rounded-full bg-rose-500 px-2.5 py-1">NEW</span>}
+                                <span className="rounded-full bg-white/20 px-2.5 py-1 backdrop-blur">{event.category}</span>
+                                <span className="rounded-full bg-white/20 px-2.5 py-1 backdrop-blur">{event.remainingSlots} chỗ còn lại</span>
+                              </div>
+                            </div>
                           </div>
                         )}
                         <h2 className="mt-4 text-2xl font-black text-[#132b57]">{event.title}</h2>
                         <p className="mt-2 text-sm font-semibold text-[#1f5dcc]">{event.organizer}</p>
-                        <p className="mt-4 text-sm leading-6 text-slate-600">{event.description}</p>
+                        <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-600">{event.description}</p>
 
                         <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
                           <div className="flex items-center gap-2">
@@ -780,22 +955,33 @@ export default function StudentEventsPage() {
                         </div>
                       </div>
 
-                      <div className="relative w-full overflow-hidden rounded-[24px] bg-[#f4f8ff] p-4 xl:w-[260px]">
+                      <div className="relative w-full overflow-hidden border-t border-[#dce8f5] bg-[#f4f8ff] p-5 lg:border-l lg:border-t-0">
                         <div className={`absolute inset-x-6 top-0 h-20 rounded-b-[30px] bg-gradient-to-b ${event.accent} opacity-10 blur-2xl`} />
-                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Tình hình đăng ký</p>
-                        <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
-                          <span>{usedSlots} / {event.slots} sinh viên</span>
-                          <motion.span key={usedSlots} initial={{ scale: 0.85, opacity: 0.5 }} animate={{ scale: 1, opacity: 1 }} className="font-bold text-[#1747a6]">
-                            {Math.round(progress)}%
-                          </motion.span>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Tình hình đăng ký</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-600">{usedSlots} / {event.slots} sinh viên</p>
+                          </div>
+                          <div className="rounded-2xl bg-white px-4 py-2 text-right shadow-sm">
+                            <p className="text-xs font-bold text-slate-400">Còn lại</p>
+                            <p className="text-lg font-black text-[#1747a6]">{event.remainingSlots}</p>
+                          </div>
                         </div>
-                        <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${progress}%` }}
-                            transition={{ duration: 0.6, ease: 'easeOut' }}
-                            className={`h-3 rounded-full bg-gradient-to-r ${event.accent}`}
-                          />
+                        <div className="mt-4">
+                          <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-500">
+                            <span>Tiến độ lấp chỗ</span>
+                            <motion.span key={usedSlots} initial={{ scale: 0.85, opacity: 0.5 }} animate={{ scale: 1, opacity: 1 }} className="text-[#1747a6]">
+                              {Math.round(progress)}%
+                            </motion.span>
+                          </div>
+                          <div className="h-3 overflow-hidden rounded-full bg-white">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${progress}%` }}
+                              transition={{ duration: 0.6, ease: 'easeOut' }}
+                              className={`h-3 rounded-full bg-gradient-to-r ${event.accent}`}
+                            />
+                          </div>
                         </div>
 
                         <div className="mt-5 grid gap-2">

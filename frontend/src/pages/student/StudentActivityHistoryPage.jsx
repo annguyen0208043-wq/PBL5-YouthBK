@@ -214,7 +214,7 @@ export default function StudentActivityHistoryPage() {
 
           <nav className="space-y-2">
             <Link to="/sinhvien/event" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-              Sự kiện của tôi
+              Tổng quan sự kiện
             </Link>
             <Link to="/sinhvien/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Hồ sơ cá nhân

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#eefdf1"/>
+  <rect x="105" y="110" width="990" height="430" rx="36" fill="#ffffff"/>
+  <g fill="#19c37d">
+    <rect x="180" y="230" width="190" height="230" rx="28"/>
+    <rect x="505" y="230" width="190" height="230" rx="28"/>
+    <rect x="830" y="230" width="190" height="230" rx="28"/>
+  </g>
+  <g fill="#ffffff">
+    <path d="M275 285 l42 72 h-84z"/><circle cx="600" cy="335" r="48"/><rect x="900" y="290" width="50" height="95" rx="14"/>
+  </g>
+  <text x="90" y="595" font-family="Arial, sans-serif" font-size="54" font-weight="800" fill="#14532d">Phan loai rac tai nguon</text>
+  <text x="94" y="635" font-family="Arial, sans-serif" font-size="28" fill="#166534">Hoat dong xanh, thuc te va gan voi cong dong</text>
+</svg>

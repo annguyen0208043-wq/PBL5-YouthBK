@@ -75,10 +75,9 @@ const startServer = async () => {
       await sequelize.sync({ alter: true });
       console.log('Database models synchronized (alter)');
     } else {
-      await sequelize.sync({ alter: true }); // Automatically applying schema changes for development
+      await sequelize.sync();
       console.log('Database models synchronized');
     }
-    console.log('Database models synchronized');
 
     initCronJobs();
 
