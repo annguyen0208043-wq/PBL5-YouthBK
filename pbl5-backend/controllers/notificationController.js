@@ -116,6 +116,26 @@ const createNotification = async (req, res) => {
       ],
     });
 
+    // Emit realtime notification to each recipient via Socket.IO (if available)
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        users.forEach((u) => {
+          io.to(`user_${u.id}`).emit('new_notification', {
+            id: createdNotification.id,
+            title: createdNotification.title,
+            content: createdNotification.content,
+            targetType: createdNotification.targetType,
+            targetValue: createdNotification.targetValue,
+            createdAt: createdNotification.createdAt,
+          });
+        });
+      }
+    } catch (err) {
+      console.error('Emit notification error:', err.message);
+    }
+
     return res.status(201).json({
       message: 'Gửi thông báo thành công',
       notification: createdNotification,
@@ -145,6 +165,7 @@ const getMyNotifications = async (req, res) => {
       order: [[{ model: Notification, as: 'notification' }, 'createdAt', 'DESC']],
     });
 
+
     return res.status(200).json({
       notifications: notifications.map((item) => ({
         id: item.notification.id,
@@ -155,6 +176,7 @@ const getMyNotifications = async (req, res) => {
         createdAt: item.notification.createdAt,
         sender: item.notification.sender,
         readAt: item.readAt,
+        isRead: Boolean(item.readAt),
       })),
     });
   } catch (err) {
@@ -185,6 +207,16 @@ const markNotificationAsRead = async (req, res) => {
     return res.status(200).json({ message: 'Đã đánh dấu đã đọc', readAt: recipient.readAt });
   } catch (err) {
     console.error('markNotificationAsRead error:', err);
+    return res.status(500).json({ message: 'Lỗi server', error: err.message });
+  }
+};
+
+const getUnreadCount = async (req, res) => {
+  try {
+    const count = await NotificationRecipient.count({ where: { userId: req.user.id, readAt: null } });
+    return res.status(200).json({ unreadCount: count });
+  } catch (err) {
+    console.error('getUnreadCount error:', err);
     return res.status(500).json({ message: 'Lỗi server', error: err.message });
   }
 };
@@ -284,6 +316,7 @@ module.exports = {
   createNotification,
   getMyNotifications,
   markNotificationAsRead,
+  getUnreadCount,
   getFacultyTargets,
   searchRecipients,
   getSentNotifications,

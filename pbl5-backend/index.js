@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const http = require('http');
 require('dotenv').config();
 
 const { sequelize, testConnect } = require('./config/db');
@@ -9,6 +10,7 @@ const authRouter = require('./routes/auth');
 const eventRouter = require('./routes/event');
 const userRouter = require('./routes/user');
 const notificationRouter = require('./routes/notification');
+const { initSocket } = require('./socket');
 
 const app = express();
 app.use(cors());
@@ -31,7 +33,11 @@ const PORT = process.env.PORT || 3000;
 const startServer = async () => {
   await testConnect();
   await sequelize.sync();
-  app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+
+  const server = http.createServer(app);
+  const io = initSocket(server);
+
+  server.listen(PORT, () => console.log(`Server + Socket.IO running on http://localhost:${PORT}`));
 };
 
 startServer().catch((err) => {

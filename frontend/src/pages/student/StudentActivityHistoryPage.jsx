@@ -36,7 +36,7 @@ function certificateStatusTone(status) {
   return 'bg-amber-100 text-amber-700';
 }
 
-export default function StudentActivityHistoryPage() {
+export default function StudentActivityHistoryPage({ embedded = false } = {}) {
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
   const registeredEventIds = getRegisteredEventIds();
@@ -153,9 +153,9 @@ export default function StudentActivityHistoryPage() {
   };
 
   return (
-    <div className="profile-page p-4 sm:p-6">
+    <div className={embedded ? 'w-full' : 'profile-page p-4 sm:p-6'}>
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className="hidden w-[280px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
+        <aside className={embedded ? 'hidden' : 'hidden w-[280px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col'}>
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
