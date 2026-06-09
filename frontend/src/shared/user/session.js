@@ -17,6 +17,7 @@ function normalizeUser(rawUser) {
   }
 
   return {
+    id: rawUser.id || rawUser.userId || null,
     fullName: rawUser.fullName || rawUser.name || DEFAULT_USER.fullName,
     email: rawUser.email || DEFAULT_USER.email,
     studentId: rawUser.studentId || rawUser.studentCode || rawUser.username || DEFAULT_USER.studentId,

@@ -1104,9 +1104,12 @@ export const toggleEventQR = async (req: AuthRequest, res: Response): Promise<vo
       if (!event.qrCode) {
         event.qrCode = `BKYOUTH-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
       }
-      if (latitude !== undefined && longitude !== undefined) {
-        event.locationLat = latitude;
-        event.locationLng = longitude;
+      // Only set coordinates if they are not already set/pinned at creation/edit time
+      if (event.locationLat === null || event.locationLng === null) {
+        if (latitude !== undefined && longitude !== undefined) {
+          event.locationLat = latitude;
+          event.locationLng = longitude;
+        }
       }
     } else {
       event.qrActive = false;
@@ -1124,10 +1127,10 @@ export const toggleEventQR = async (req: AuthRequest, res: Response): Promise<vo
   }
 };
 
-export const checkInQR = async (req: AuthRequest, res: Response): Promise<void> => {
+export const checkInGPS = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { qrCode, latitude, longitude } = req.body;
+    const { latitude, longitude } = req.body;
     const userId = req.user?.id;
 
     if (!userId) {
@@ -1141,31 +1144,39 @@ export const checkInQR = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
+    if (event.status !== 'ongoing') {
+      res.status(400).json({ message: 'Sự kiện chưa bắt đầu hoặc đã kết thúc. Chỉ có thể điểm danh khi sự kiện đang diễn ra.' });
+      return;
+    }
+
     if (!event.qrActive) {
-      res.status(400).json({ message: 'Chức năng điểm danh QR hiện không bật' });
+      res.status(400).json({ message: 'Chức năng điểm danh hiện không bật' });
       return;
     }
 
-    if (event.qrCode !== qrCode) {
-      res.status(400).json({ message: 'Mã QR không khớp hoặc đã hết hiệu lực' });
+    // Check GPS radius (always mandatory)
+    if (!event.locationLat || !event.locationLng || !event.attendanceRadius) {
+      res.status(400).json({ message: 'Sự kiện chưa được cấu hình địa điểm định vị và bán kính điểm danh.' });
       return;
     }
 
-    // Check GPS radius if settings allow
-    if (event.locationLat && event.locationLng && event.attendanceRadius && latitude && longitude) {
-      const distKm = getDistanceFromLatLonInKm(
-        Number(event.locationLat),
-        Number(event.locationLng),
-        Number(latitude),
-        Number(longitude)
-      );
-      const distM = distKm * 1000;
-      if (distM > event.attendanceRadius) {
-        res.status(400).json({
-          message: `Vị trí điểm danh của bạn nằm ngoài bán kính cho phép (${Math.round(distM)}m, giới hạn ${event.attendanceRadius}m)`
-        });
-        return;
-      }
+    if (latitude === undefined || longitude === undefined || latitude === null || longitude === null) {
+      res.status(400).json({ message: 'Yêu cầu cấp quyền truy cập vị trí thiết bị để thực hiện điểm danh' });
+      return;
+    }
+
+    const distKm = getDistanceFromLatLonInKm(
+      Number(event.locationLat),
+      Number(event.locationLng),
+      Number(latitude),
+      Number(longitude)
+    );
+    const distM = distKm * 1000;
+    if (distM > event.attendanceRadius) {
+      res.status(400).json({
+        message: `Vị trí điểm danh của bạn nằm ngoài bán kính cho phép (${Math.round(distM)}m, giới hạn ${event.attendanceRadius}m)`
+      });
+      return;
     }
 
     const registration = await EventRegistration.findOne({
@@ -1184,13 +1195,13 @@ export const checkInQR = async (req: AuthRequest, res: Response): Promise<void> 
 
     registration.status = 'attended';
     registration.attendedAt = new Date();
-    if (latitude) registration.attendanceLat = latitude;
-    if (longitude) registration.attendanceLng = longitude;
+    registration.attendanceLat = latitude;
+    registration.attendanceLng = longitude;
     await registration.save();
 
-    res.json({ message: 'Điểm danh QR thành công!' });
+    res.json({ message: 'Điểm danh thành công!' });
   } catch (error) {
-    console.error('Check-in error:', error);
+    console.error('Check-in GPS error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
@@ -1260,6 +1271,85 @@ export const getEventFeedbacks = async (req: AuthRequest, res: Response): Promis
     res.json({ feedbacks });
   } catch (error) {
     console.error('Get feedbacks error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const scanStudentQR = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { studentQrCode } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const event = await Event.findByPk(id);
+    if (!event) {
+      res.status(404).json({ message: 'Sự kiện không tồn tại' });
+      return;
+    }
+
+    if (req.user?.role !== 'admin' && event.createdBy !== req.user?.id) {
+      res.status(403).json({ message: 'Không có quyền thực hiện hành động này' });
+      return;
+    }
+
+    if (event.status !== 'ongoing') {
+      res.status(400).json({ message: 'Sự kiện chưa bắt đầu hoặc đã kết thúc.' });
+      return;
+    }
+
+    if (!event.qrActive) {
+      res.status(400).json({ message: 'Phiên điểm danh hiện đang tắt.' });
+      return;
+    }
+
+    // Parse STUDENT-CHECKIN-${eventId}-${studentUserId}
+    const match = studentQrCode?.match(/^STUDENT-CHECKIN-(\d+)-(\d+)$/);
+    if (!match) {
+      res.status(400).json({ message: 'Mã QR sinh viên không đúng định dạng.' });
+      return;
+    }
+
+    const parsedEventId = parseInt(match[1], 10);
+    const studentUserId = parseInt(match[2], 10);
+
+    if (parsedEventId !== event.id) {
+      res.status(400).json({ message: 'Mã QR này thuộc về sự kiện khác.' });
+      return;
+    }
+
+    const registration = await EventRegistration.findOne({
+      where: { eventId: event.id, userId: studentUserId },
+      include: [{ model: User, attributes: ['id', 'name', 'studentId'] }]
+    });
+
+    if (!registration) {
+      res.status(400).json({ message: 'Sinh viên này chưa đăng ký tham gia sự kiện này.' });
+      return;
+    }
+
+    if (['attended', 'confirmed'].includes(registration.status)) {
+      const student = registration.getDataValue('User') as any;
+      res.status(400).json({ message: `Sinh viên ${student?.name || ''} (${student?.studentId || ''}) đã được điểm danh trước đó.` });
+      return;
+    }
+
+    registration.status = 'attended';
+    registration.attendedAt = new Date();
+    await registration.save();
+
+    const student = registration.getDataValue('User') as any;
+    res.json({
+      message: `Điểm danh thành công cho sinh viên ${student?.name || ''} (${student?.studentId || ''})!`,
+      studentName: student?.name || 'N/A',
+      studentId: student?.studentId || 'N/A'
+    });
+  } catch (error) {
+    console.error('Scan student QR error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
