@@ -357,6 +357,9 @@ export default function StudentEventsPage({ embedded = false } = {}) {
               startAt: startIso ? new Date(startIso) : null,
               endAt: endIso ? new Date(endIso) : null,
               location: e.locationName || e.location || 'Đang cập nhật',
+              locationLat: e.locationLat,
+              locationLng: e.locationLng,
+              attendanceRadius: e.attendanceRadius,
               points: `+${e.communityPoints || 0} ĐRL`,
               userRegistrationStatus: e.userRegistrationStatus,
               status: getStudentEventStatus(e.status),
@@ -367,7 +370,14 @@ export default function StudentEventsPage({ embedded = false } = {}) {
               audienceLabel: publicEvent ? 'Public - mọi khoa' : (e.creator?.faculty || 'Theo khoa'),
               isPublic: publicEvent,
               isNewestOpen: e.id === newestOpenId,
-              attendanceConfig: { gpsCenter: { lat: 16.074061, lng: 108.150720 }, allowedRadiusMeters: e.attendanceRadius || 100, qrValue: e.qrCode || `BKYOUTH-${e.id}` },
+              attendanceConfig: { 
+                gpsCenter: { 
+                  lat: parseFloat(e.locationLat) || 16.074061, 
+                  lng: parseFloat(e.locationLng) || 108.150720 
+                }, 
+                allowedRadiusMeters: e.attendanceRadius || 100, 
+                qrValue: e.qrCode || `BKYOUTH-${e.id}` 
+              },
               imageUrl: coverImage?.imageUrl || null,
               communityPoints: e.communityPoints || 0,
               createdAt: e.createdAt,

@@ -24,10 +24,6 @@ const navSections = [
       { to: '/lien-chi/registrations', label: 'Người đăng ký', icon: ClipboardList },
     ],
   },
-  {
-    title: 'Xử lý hồ sơ',
-    items: [{ to: '/lien-chi/evidences', label: 'Duyệt minh chứng', icon: BadgeCheck }],
-  },
 ];
 
 export default function LienChiLayout({ title, subtitle, currentPath, children }) {

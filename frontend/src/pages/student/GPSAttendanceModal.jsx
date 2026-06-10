@@ -73,23 +73,7 @@ export default function GPSAttendanceModal({ show, onClose, onConfirmCheckIn, ev
         attribution: '© OpenStreetMap contributors'
       }).addTo(map);
 
-      // Custom event center icon
-      const eventCenterIcon = L.divIcon({
-        className: 'relative flex items-center justify-center h-8 w-8',
-        html: `
-          <div class="flex items-center justify-center h-8 w-8 rounded-full bg-[#1747a6]/15 border-2 border-[#1747a6] shadow-sm">
-            <div class="h-3.5 w-3.5 rounded-full bg-[#1747a6]"></div>
-          </div>
-        `
-      });
-
-      // Add marker for event location
-      L.marker([eventLat, eventLng], { icon: eventCenterIcon })
-        .addTo(map)
-        .bindPopup(`<b>${event.title}</b><br/>Địa điểm: ${event.location || 'Đang cập nhật'}`)
-        .openPopup();
-
-      // Add attendance radius circle
+      // Add attendance radius circle (red)
       L.circle([eventLat, eventLng], {
         color: '#ef4444',
         fillColor: '#ef4444',
@@ -97,6 +81,29 @@ export default function GPSAttendanceModal({ show, onClose, onConfirmCheckIn, ev
         radius: radius,
         weight: 1.5
       }).addTo(map);
+
+      // Add outer center circle (blue, semi-transparent) representing the core pin area
+      // radius scales proportionally (e.g. 10% of total radius, minimum 12 meters)
+      const centerOuter = L.circle([eventLat, eventLng], {
+        color: '#1747a6',
+        fillColor: '#1747a6',
+        fillOpacity: 0.25,
+        radius: Math.max(12, radius * 0.1),
+        weight: 2
+      }).addTo(map);
+
+      // Add inner center circle (blue, solid) representing the exact coordinate pin
+      // radius scales proportionally (e.g. 3.5% of total radius, minimum 4 meters)
+      const centerInner = L.circle([eventLat, eventLng], {
+        color: '#1747a6',
+        fillColor: '#1747a6',
+        fillOpacity: 0.9,
+        radius: Math.max(4, radius * 0.035),
+        weight: 1
+      }).addTo(map);
+
+      // Bind popup to the center
+      centerOuter.bindPopup(`<b>${event.title}</b><br/>Địa điểm: ${event.location || 'Đang cập nhật'}`).openPopup();
 
       mapRef.current = map;
 

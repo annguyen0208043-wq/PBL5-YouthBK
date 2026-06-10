@@ -324,7 +324,13 @@ export default function LienChiRegistrationsPage() {
                         <td className="px-6 py-4 text-slate-600">{studentUser.faculty || '-'}</td>
                         <td className="px-6 py-4">
                           {reg.status === 'registered' && <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-600">Đã đăng ký</span>}
-                          {reg.status === 'attended' && <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-600">Đã điểm danh QR</span>}
+                          {reg.status === 'attended' && (
+                            reg.attendanceLat !== null && reg.attendanceLng !== null ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-bold text-purple-600">Đã điểm danh GPS</span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-600">Đã điểm danh QR</span>
+                            )
+                          )}
                           {reg.status === 'confirmed' && <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-600">Đã xác nhận thực tế</span>}
                           {reg.status === 'absent' && <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">Vắng mặt</span>}
                           {reg.status === 'cancelled' && <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">Đã hủy ĐK</span>}
@@ -332,11 +338,17 @@ export default function LienChiRegistrationsPage() {
                         <td className="px-6 py-4">
                           {reg.status === 'attended' || reg.status === 'confirmed' ? (
                             <div className="text-xs">
-                              <p className="font-semibold text-emerald-600">✓ Đã quét QR</p>
+                              {reg.attendanceLat !== null && reg.attendanceLng !== null ? (
+                                <p className="font-semibold text-emerald-600">✓ Đã xác thực GPS</p>
+                              ) : reg.attendedAt ? (
+                                <p className="font-semibold text-emerald-600">✓ Đã quét QR</p>
+                              ) : (
+                                <p className="font-semibold text-emerald-600">✓ Xác nhận trực tiếp</p>
+                              )}
                               {reg.attendedAt && <p className="text-[10px] text-slate-400">{new Date(reg.attendedAt).toLocaleTimeString('vi-VN')}</p>}
                             </div>
                           ) : (
-                            <span className="text-slate-400 text-xs">Chưa quét mã</span>
+                            <span className="text-slate-400 text-xs">Chưa điểm danh</span>
                           )}
                         </td>
                         <td className="px-6 py-4 text-right">
