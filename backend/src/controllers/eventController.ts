@@ -16,21 +16,25 @@ import { isBeforeStart, isRegistrationOpen, hasSlots, isOwner } from '../guards/
 import { writeAuditLog, getClientIp } from '../utils/auditLogHelper';
 import { addCommunityPointsForEvent } from '../utils/pointHelper';
 
-// Helper to calculate GPS distance
+// Helper to calculate GPS distance using the Haversine formula from the project report
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371; // Earth radius in km
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
+  const r = 6371; // Bán kính Trái Đất (km)
+  
+  // Chuyển đổi sang radian
+  const phi1 = lat1 * (Math.PI / 180); // Vĩ độ điểm ghim
+  const phi2 = lat2 * (Math.PI / 180); // Vĩ độ thiết bị
+  
+  const deltaPhi = (lat2 - lat1) * (Math.PI / 180); // Chênh lệch vĩ độ
+  const deltaLambda = (lon2 - lon1) * (Math.PI / 180); // Chênh lệch kinh độ
 
-function deg2rad(deg: number) {
-  return deg * (Math.PI / 180);
+  // Tính a = sin^2(deltaPhi/2) + cos(phi1)*cos(phi2)*sin^2(deltaLambda/2)
+  const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+            Math.cos(phi1) * Math.cos(phi2) *
+            Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+
+  // Áp dụng công thức Haversine với hàm arcsin: d = 2 * r * arcsin(sqrt(a))
+  const d = 2 * r * Math.asin(Math.sqrt(a));
+  return d;
 }
 
 function normalizeAudienceText(value?: string | null) {

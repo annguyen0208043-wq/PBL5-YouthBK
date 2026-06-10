@@ -9,6 +9,7 @@ import doanLogo from '../../assets/logo-doan.png';
 import { defaultRegisteredEventIds, STORAGE_ATTENDANCE_CHECKINS_KEY, STORAGE_ATTENDANCE_WINDOW_KEY, STORAGE_REGISTERED_EVENTS_KEY } from '../../shared/student/studentData';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
 import NotificationBell from './NotificationBell';
+import GPSAttendanceModal from './GPSAttendanceModal';
 
 const EARTH_RADIUS_METERS = 6371000;
 
@@ -243,6 +244,8 @@ export default function StudentEventsPage({ embedded = false } = {}) {
   const [eventsError, setEventsError] = useState('');
   const [isTogglingEventId, setIsTogglingEventId] = useState(null);
   const [selectedQRCheckInEvent, setSelectedQRCheckInEvent] = useState(null);
+  const [showGPSModal, setShowGPSModal] = useState(false);
+  const [selectedGPSCheckInEvent, setSelectedGPSCheckInEvent] = useState(null);
   const toastTimerRef = useRef(null);
   const qrVideoRef = useRef(null);
   const qrStreamRef = useRef(null);
@@ -429,61 +432,52 @@ export default function StudentEventsPage({ embedded = false } = {}) {
     setIsScanningQr(false);
   };
 
-  const handleGPSCheckIn = async (event) => {
-    if (!navigator.geolocation) {
-      setFeedback('Thiết bị không hỗ trợ định vị GPS.');
+  const handleStartGPSCheckIn = (event) => {
+    if (!event.locationLat || !event.locationLng) {
+      setFeedback('Sự kiện chưa được cấu hình tọa độ định vị GPS.');
       return;
     }
+    setSelectedGPSCheckInEvent(event);
+    setShowGPSModal(true);
+  };
+
+  const handleConfirmGPSCheckIn = async (coords) => {
+    if (!selectedGPSCheckInEvent) return;
 
     setIsCheckingGps(true);
-    setFeedback('Đang lấy vị trí GPS và tiến hành điểm danh...');
+    setFeedback('Đang xác thực tọa độ vị trí và tiến hành điểm danh...');
+    setShowGPSModal(false);
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const latitude = position.coords.latitude;
-          const longitude = position.coords.longitude;
-          const token = localStorage.getItem('token');
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/events/${selectedGPSCheckInEvent.realId}/attendance/gps`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          latitude: coords.lat,
+          longitude: coords.lng
+        })
+      });
 
-          const response = await fetch(`/api/events/${event.realId}/attendance/gps`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              latitude,
-              longitude
-            })
-          });
-
-          const data = await response.json();
-          if (!response.ok) {
-            setFeedback(data.message || 'Điểm danh thất bại');
-          } else {
-            setFeedback(`Điểm danh thành công: ${event.title}`);
-            setOpenedAttendanceEventId('');
-            if (fetchDbEventsRef.current) {
-              fetchDbEventsRef.current();
-            }
-          }
-        } catch (error) {
-          setFeedback('Lỗi kết nối máy chủ');
-        } finally {
-          setIsCheckingGps(false);
+      const data = await response.json();
+      if (!response.ok) {
+        setFeedback(data.message || 'Điểm danh thất bại');
+      } else {
+        setFeedback(`Điểm danh thành công: ${selectedGPSCheckInEvent.title}`);
+        setOpenedAttendanceEventId('');
+        if (fetchDbEventsRef.current) {
+          fetchDbEventsRef.current();
         }
-      },
-      (error) => {
-        console.error('GPS error:', error);
-        setFeedback('Không lấy được vị trí. Vui lòng bật GPS và cho phép trình duyệt truy cập vị trí thiết bị.');
-        setIsCheckingGps(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
       }
-    );
+    } catch (error) {
+      setFeedback('Lỗi kết nối máy chủ');
+    } finally {
+      setIsCheckingGps(false);
+      setSelectedGPSCheckInEvent(null);
+    }
   };
 
   const handleSubmitFeedback = async () => {
@@ -1033,19 +1027,15 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                               <div className="rounded-2xl border border-[#dce8f5] bg-white p-4 flex flex-col md:flex-row gap-6 items-center justify-between">
                                 <div className="flex-1">
                                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Cách 1: Điểm danh bằng vị trí GPS</p>
-                                  <p className="mt-2 text-sm text-slate-600">Hệ thống sẽ tự động lấy vị trí thực tế của thiết bị và so khớp với địa điểm tổ chức sự kiện.</p>
+                                  <p className="mt-2 text-sm text-slate-600">Hệ thống sẽ hiển thị bản đồ định vị thực tế của thiết bị so khớp với phạm vi của sự kiện.</p>
                                   <button
                                     type="button"
-                                    onClick={() => handleGPSCheckIn(event)}
+                                    onClick={() => handleStartGPSCheckIn(event)}
                                     disabled={isCheckingGps}
                                     className="mt-3 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition-all hover:bg-indigo-700 disabled:opacity-70 flex justify-center items-center gap-2"
                                   >
-                                    {isCheckingGps ? (
-                                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                                    ) : (
-                                      <Navigation className="h-4 w-4" />
-                                    )}
-                                    {isCheckingGps ? 'Đang xác thực vị trí...' : 'Xác nhận điểm danh GPS'}
+                                    <Navigation className="h-4 w-4" />
+                                    Mở bản đồ điểm danh GPS
                                   </button>
                                 </div>
                                 
@@ -1377,6 +1367,16 @@ export default function StudentEventsPage({ embedded = false } = {}) {
             </div>
           )}
         </AnimatePresence>
+
+        <GPSAttendanceModal
+          show={showGPSModal}
+          onClose={() => {
+            setShowGPSModal(false);
+            setSelectedGPSCheckInEvent(null);
+          }}
+          onConfirmCheckIn={handleConfirmGPSCheckIn}
+          event={selectedGPSCheckInEvent}
+        />
       </div>
     </div>
   );
