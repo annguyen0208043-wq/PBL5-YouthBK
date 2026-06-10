@@ -214,7 +214,7 @@ function canCancelRegistration(event) {
       return { allowed: false, reason: 'Hạn đăng ký đã hết' };
     }
   }
-  
+
   return { allowed: true, reason: '' };
 }
 
@@ -323,7 +323,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
           const approvedEvents = data.events
             .filter((event) => ['open_registration', 'ongoing', 'ended', 'completed'].includes(event.status))
             .filter((event) => isEventForStudentFaculty(event, studentFaculty));
-          
+
           const newestOpenId = approvedEvents
             .filter((event) => event.status === 'open_registration')
             .sort((a, b) => new Date(b.createdAt || b.updatedAt) - new Date(a.createdAt || a.updatedAt))[0]?.id;
@@ -363,7 +363,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
               locationLat: e.locationLat,
               locationLng: e.locationLng,
               attendanceRadius: e.attendanceRadius,
-              points: `+${e.communityPoints || 0} ĐRL`,
+              points: `+${e.communityPoints || 0} Điểm PVCĐ`,
               userRegistrationStatus: e.userRegistrationStatus,
               status: getStudentEventStatus(e.status),
               rawStatus: e.status,
@@ -373,13 +373,13 @@ export default function StudentEventsPage({ embedded = false } = {}) {
               audienceLabel: publicEvent ? 'Public - mọi khoa' : (e.creator?.faculty || 'Theo khoa'),
               isPublic: publicEvent,
               isNewestOpen: e.id === newestOpenId,
-              attendanceConfig: { 
-                gpsCenter: { 
-                  lat: parseFloat(e.locationLat) || 16.074061, 
-                  lng: parseFloat(e.locationLng) || 108.150720 
-                }, 
-                allowedRadiusMeters: e.attendanceRadius || 100, 
-                qrValue: e.qrCode || `BKYOUTH-${e.id}` 
+              attendanceConfig: {
+                gpsCenter: {
+                  lat: parseFloat(e.locationLat) || 16.074061,
+                  lng: parseFloat(e.locationLng) || 108.150720
+                },
+                allowedRadiusMeters: e.attendanceRadius || 100,
+                qrValue: e.qrCode || `BKYOUTH-${e.id}`
               },
               imageUrl: coverImage?.imageUrl || null,
               communityPoints: e.communityPoints || 0,
@@ -583,13 +583,13 @@ export default function StudentEventsPage({ embedded = false } = {}) {
         setIsTogglingEventId(null);
       } else {
         setFeedback(isEnrolled ? `Bạn đã hủy đăng ký: ${eventTitle}` : `Đăng ký thành công: ${eventTitle}`);
-        
+
         // Don't do optimistic update - only rely on refetch from backend
         // Re-fetch events to get updated slots and registration status
         if (fetchDbEventsRef.current) {
           await fetchDbEventsRef.current();
         }
-        
+
         // Clear toggle state after success
         setIsTogglingEventId(null);
       }
@@ -746,11 +746,10 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                       type="button"
                       whileTap={{ scale: 0.96 }}
                       onClick={() => setActiveFilter(filter)}
-                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                        normalizedActiveFilter === filter
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${normalizedActiveFilter === filter
                           ? 'bg-[#1747a6] text-white shadow-[0_10px_24px_rgba(23,71,166,0.24)]'
                           : 'border border-[#dce8f5] bg-white text-slate-600 hover:border-[#9ec0f0] hover:bg-[#f8fbff]'
-                      }`}
+                        }`}
                     >
                       {filter}
                     </motion.button>
@@ -885,7 +884,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                             const isRegistrationDeadlineExpired = event.registrationDeadline && new Date() >= event.registrationDeadline;
                             const cancelCheck = event.enrolled ? canCancelRegistration(event) : { allowed: true };
                             const cannotCancelReason = !cancelCheck.allowed ? cancelCheck.reason : null;
-                            
+
                             return (
                               <>
                                 <motion.button
@@ -901,31 +900,30 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                                   }}
                                   disabled={isTogglingEventId === event.realId || (!event.enrolled && event.registered >= event.slots) || (event.enrolled && cannotCancelReason)}
                                   title={cannotCancelReason ? `Không thể hủy: ${cannotCancelReason}` : ''}
-                                  className={`rounded-2xl px-4 py-3 font-bold text-white transition-all ${
-                                    event.enrolled
+                                  className={`rounded-2xl px-4 py-3 font-bold text-white transition-all ${event.enrolled
                                       ? (isTogglingEventId === event.realId || cannotCancelReason)
                                         ? 'bg-slate-400 cursor-not-allowed opacity-60'
                                         : 'bg-[#d24c4c] shadow-[0_12px_24px_rgba(210,76,76,0.24)] hover:bg-[#bf3b3b]'
                                       : (isTogglingEventId === event.realId || event.registered >= event.slots)
-                                      ? 'bg-slate-400 cursor-not-allowed opacity-60'
-                                      : isRegistrationDeadlineExpired
-                                      ? 'bg-slate-400 cursor-not-allowed opacity-60'
-                                      : 'bg-[#1747a6] shadow-[0_12px_24px_rgba(23,71,166,0.24)] hover:bg-[#205fd8]'
-                                  }`}
+                                        ? 'bg-slate-400 cursor-not-allowed opacity-60'
+                                        : isRegistrationDeadlineExpired
+                                          ? 'bg-slate-400 cursor-not-allowed opacity-60'
+                                          : 'bg-[#1747a6] shadow-[0_12px_24px_rgba(23,71,166,0.24)] hover:bg-[#205fd8]'
+                                    }`}
                                 >
                                   <span className="inline-flex items-center gap-2">
                                     {event.enrolled && <CheckCircle2 className="h-4 w-4" />}
                                     {isTogglingEventId === event.realId
                                       ? 'Đang xử lý...'
-                                      : event.enrolled 
-                                      ? cannotCancelReason 
-                                        ? `Không thể hủy (${cannotCancelReason})`
-                                        : 'Đã đăng ký (Nhấn để hủy)'
-                                      : event.registered >= event.slots
-                                      ? 'Đã đầy'
-                                      : isRegistrationDeadlineExpired
-                                      ? 'Hạn đăng ký hết'
-                                      : 'Đăng ký tham gia'
+                                      : event.enrolled
+                                        ? cannotCancelReason
+                                          ? `Không thể hủy (${cannotCancelReason})`
+                                          : 'Đã đăng ký (Nhấn để hủy)'
+                                        : event.registered >= event.slots
+                                          ? 'Đã đầy'
+                                          : isRegistrationDeadlineExpired
+                                            ? 'Hạn đăng ký hết'
+                                            : 'Đăng ký tham gia'
                                     }
                                   </span>
                                 </motion.button>
@@ -943,13 +941,12 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                             whileTap={{ scale: 0.98 }}
                             onClick={() => toggleAttendancePanel(event.id)}
                             disabled={!event.enrolled || isCheckedIn}
-                            className={`rounded-2xl border px-4 py-3 font-semibold transition-all ${
-                              isCheckedIn 
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 cursor-not-allowed opacity-90' 
+                            className={`rounded-2xl border px-4 py-3 font-semibold transition-all ${isCheckedIn
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 cursor-not-allowed opacity-90'
                                 : event.enrolled && event.attendanceGate.canCheckIn
                                   ? 'border-transparent bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 text-white shadow-[0_12px_24px_rgba(99,102,241,0.24)] hover:brightness-110'
                                   : 'border-[#dce8f5] bg-white text-slate-600 hover:bg-[#f7fbff] disabled:cursor-not-allowed disabled:opacity-70'
-                            }`}
+                              }`}
                           >
                             <span className="inline-flex items-center gap-2">
                               {isCheckedIn ? <CheckCircle2 className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
@@ -973,7 +970,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                               </span>
                             </motion.button>
                           )}
-                           {['completed', 'ended', 'Đã kết thúc'].includes(event.status) && isCheckedIn && (
+                          {['completed', 'ended', 'Đã kết thúc'].includes(event.status) && isCheckedIn && (
                             <motion.button
                               type="button"
                               whileHover={{ scale: event.hasSubmittedFeedback ? 1 : 1.01 }}
@@ -984,11 +981,10 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                                 setShowFeedbackModal(true);
                               }}
                               disabled={event.hasSubmittedFeedback}
-                              className={`rounded-2xl border px-4 py-3 font-semibold transition-all ${
-                                event.hasSubmittedFeedback
+                              className={`rounded-2xl border px-4 py-3 font-semibold transition-all ${event.hasSubmittedFeedback
                                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700 cursor-not-allowed opacity-90'
                                   : 'border-[#1747a6] bg-indigo-50 text-[#1747a6] hover:bg-[#e8f0fe]'
-                              }`}
+                                }`}
                             >
                               <span className="inline-flex items-center gap-2">
                                 {event.hasSubmittedFeedback ? (
@@ -1051,7 +1047,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                                     Mở bản đồ điểm danh GPS
                                   </button>
                                 </div>
-                                
+
                                 <div className="border-t border-[#dce8f5] md:border-t-0 md:border-l pl-0 md:pl-6 pt-4 md:pt-0 flex flex-col items-center shrink-0">
                                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400 mb-2 text-center">Cách 2: Quét mã QR cá nhân</p>
                                   <div className="bg-white p-2.5 rounded-2xl border border-indigo-100 shadow-sm">
@@ -1108,7 +1104,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                   <h3 className="text-xl font-black text-[#132b57]">Lưu ý khi tham gia hoạt động</h3>
                   <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                     <li>Đăng ký thành công không đồng nghĩa với hoàn thành hoạt động. Bạn vẫn cần điểm danh theo hướng dẫn.</li>
-                    <li>Nếu sự kiện yêu cầu minh chứng, hãy nộp đúng hạn để được cộng điểm rèn luyện.</li>
+                    <li>Nếu sự kiện yêu cầu minh chứng, hãy nộp đúng hạn để được cộng điểm phục vụ cộng đồng.</li>
                     <li>Các sự kiện đã gần diễn ra có thể bị khóa chức năng hủy đăng ký theo quy định của đơn vị tổ chức.</li>
                   </ul>
                 </div>
@@ -1122,31 +1118,31 @@ export default function StudentEventsPage({ embedded = false } = {}) {
         <AnimatePresence>
           {selectedQRCheckInEvent && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-              <motion.div 
+              <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
                 className="w-full max-w-md rounded-[32px] bg-white p-8 shadow-2xl relative text-center"
               >
-                <button 
-                  onClick={() => setSelectedQRCheckInEvent(null)} 
+                <button
+                  onClick={() => setSelectedQRCheckInEvent(null)}
                   className="absolute right-5 top-5 rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
                 >
                   <X className="h-5 w-5" />
                 </button>
-                
+
                 <div className="w-16 h-16 rounded-2xl bg-[#eef6ff] text-[#1747a6] flex items-center justify-center mx-auto mb-4">
                   <QrCode className="h-8 w-8" />
                 </div>
 
                 <h3 className="text-2xl font-black text-[#132b57] mb-1">Mã QR Điểm Danh</h3>
                 <p className="text-slate-500 text-sm mb-6">{selectedQRCheckInEvent.title}</p>
-                
+
                 <div className="bg-white p-4 rounded-3xl border border-indigo-100 shadow-md inline-block mb-6">
                   {typeof QRCode === 'function' || typeof QRCode === 'object' ? (
-                    React.createElement(QRCode.default || QRCode, { 
-                      value: `STUDENT-CHECKIN-${selectedQRCheckInEvent.realId}-${user.id}`, 
-                      size: 200 
+                    React.createElement(QRCode.default || QRCode, {
+                      value: `STUDENT-CHECKIN-${selectedQRCheckInEvent.realId}-${user.id}`,
+                      size: 200
                     })
                   ) : null}
                 </div>
@@ -1159,9 +1155,9 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                   </p>
                 </div>
 
-                <button 
+                <button
                   type="button"
-                  onClick={() => setSelectedQRCheckInEvent(null)} 
+                  onClick={() => setSelectedQRCheckInEvent(null)}
                   className="w-full rounded-2xl bg-[#1747a6] py-3.5 font-bold text-white hover:bg-[#205fd8] transition-colors shadow-lg shadow-indigo-100"
                 >
                   Đóng
@@ -1175,21 +1171,21 @@ export default function StudentEventsPage({ embedded = false } = {}) {
         <AnimatePresence>
           {showFeedbackModal && selectedEventForFeedback && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-              <motion.div 
+              <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
                 className="w-full max-w-lg rounded-[32px] bg-white p-8 shadow-2xl relative"
               >
-                <button 
-                  onClick={() => setShowFeedbackModal(false)} 
+                <button
+                  onClick={() => setShowFeedbackModal(false)}
                   className="absolute right-5 top-5 rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
                 >
                   <X className="h-5 w-5" />
                 </button>
                 <h3 className="text-2xl font-black text-[#132b57] mb-2">Đánh giá Sự kiện</h3>
                 <p className="text-slate-500 text-sm mb-6">Sự kiện: {selectedEventForFeedback.title}</p>
-                
+
                 <div className="flex flex-col gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">Đánh giá độ hài lòng:</label>
@@ -1235,16 +1231,16 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                   </div>
 
                   <div className="mt-4 flex gap-3">
-                    <button 
+                    <button
                       type="button"
-                      onClick={() => setShowFeedbackModal(false)} 
+                      onClick={() => setShowFeedbackModal(false)}
                       className="flex-1 rounded-2xl border border-slate-200 bg-white py-3 font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
                     >
                       Hủy bỏ
                     </button>
-                    <button 
+                    <button
                       type="button"
-                      onClick={handleSubmitFeedback} 
+                      onClick={handleSubmitFeedback}
                       className="flex-1 rounded-2xl bg-[#1747a6] py-3 font-bold text-white hover:bg-[#205fd8] transition-colors shadow-lg shadow-indigo-100"
                     >
                       Gửi đánh giá
@@ -1260,20 +1256,20 @@ export default function StudentEventsPage({ embedded = false } = {}) {
         <AnimatePresence>
           {showPublicReviewsModal && selectedEventForReviews && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-              <motion.div 
+              <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
                 className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-[32px] bg-white p-6 md:p-8 shadow-2xl relative scrollbar-hide"
                 onClick={(e) => e.stopPropagation()}
               >
-                <button 
-                  onClick={() => { setShowPublicReviewsModal(false); setSelectedEventForReviews(null); }} 
+                <button
+                  onClick={() => { setShowPublicReviewsModal(false); setSelectedEventForReviews(null); }}
                   className="absolute right-5 top-5 rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 transition-colors"
                 >
                   <X className="h-5 w-5" />
                 </button>
-                
+
                 <h3 className="text-2xl font-black text-[#132b57] mb-1">Đánh giá & Nhận xét</h3>
                 <p className="text-slate-500 text-sm mb-6">Sự kiện: {selectedEventForReviews.title}</p>
 
@@ -1283,7 +1279,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                   const breakdown = summary.ratingBreakdown || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
                   const total = summary.totalFeedbacks || 0;
                   const avg = summary.averageRating || 0;
-                  
+
                   return (
                     <div className="grid gap-6 md:grid-cols-[1fr_1.5fr] bg-[#f8fbff] rounded-3xl p-5 border border-[#e8effa] mb-6">
                       {/* Left: Avg Stars */}
@@ -1325,7 +1321,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
 
                 {/* Reviews List */}
                 <h4 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4">Ý kiến đóng góp ({publicFeedbacks.length})</h4>
-                
+
                 {loadingPublicFeedbacks ? (
                   <div className="flex flex-col items-center justify-center py-10">
                     <Loader className="h-6 w-6 animate-spin text-[#1747a6]" />
@@ -1352,7 +1348,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                             <p className="text-sm font-bold text-slate-800">{fb.user?.name || 'Người dùng ẩn danh'}</p>
                             <p className="text-[10px] text-slate-450 font-semibold">{new Date(fb.createdAt).toLocaleString('vi-VN')}</p>
                           </div>
-                          
+
                           <div className="ml-auto flex gap-0.5">
                             {[1, 2, 3, 4, 5].map(star => (
                               <span key={star} className={`text-base ${star <= fb.rating ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
@@ -1368,9 +1364,9 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                 )}
 
                 <div className="mt-6 border-t border-slate-100 pt-4">
-                  <button 
+                  <button
                     type="button"
-                    onClick={() => { setShowPublicReviewsModal(false); setSelectedEventForReviews(null); }} 
+                    onClick={() => { setShowPublicReviewsModal(false); setSelectedEventForReviews(null); }}
                     className="w-full rounded-2xl border border-slate-205 bg-[#1747a6] text-white py-3.5 font-bold hover:bg-[#205fd8] transition-colors shadow-lg shadow-indigo-100"
                   >
                     Đóng
