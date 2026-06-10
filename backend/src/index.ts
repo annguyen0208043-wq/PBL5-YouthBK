@@ -10,6 +10,7 @@ import eventRoutes from './routes/eventRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import chatRoutes from './routes/chatRoutes';
 import certificateRoutes from './routes/certificateRoutes';
+import uploadRoutes from './routes/uploadRoutes';
 import auditLogRoutes from './routes/auditLogRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import { registerChatSocket } from './sockets/chatSocket';
@@ -51,8 +52,8 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Static files - serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Phục vụ file tĩnh (đã loại bỏ phục vụ /uploads local)
+// Bạn có thể phục vụ thư mục public khác nếu cần ở đây
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -61,6 +62,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/certificates', certificateRoutes);
+app.use('/api/upload', uploadRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 

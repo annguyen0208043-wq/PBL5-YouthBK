@@ -162,3 +162,84 @@ export const getMyCertificates = async (req: AuthRequest, res: Response): Promis
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+export const issueDirectCertificate = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { userId, eventId, registrationId, activityTitle, certificateUrl } = req.body;
+    const adminId = req.user?.id;
+
+    if (!userId || !activityTitle) {
+      res.status(400).json({ message: 'Thiếu thông tin bắt buộc' });
+      return;
+    }
+
+    const admin = await User.findByPk(adminId, { attributes: ['id', 'name', 'role'] });
+
+    // Check if certificate already exists
+    const existing = await Certificate.findOne({
+      where: { userId, eventId }
+    });
+
+    if (existing && existing.status === 'approved') {
+      res.status(400).json({ message: 'Chứng nhận đã tồn tại và được duyệt' });
+      return;
+    }
+
+    // Determine stamp code
+    const roleStamp = admin?.role === 'admin' ? 'DOANTRUONG' : 'LIENCHI';
+    const stampCode = `BKYOUTH-${roleStamp}-APPROVED-${Date.now()}`;
+
+    // Calculate community points
+    let pointsToAdd = 0;
+    if (eventId) {
+      const { default: Event } = await import('../models/Event');
+      const event = await Event.findByPk(eventId);
+      if (event && (event as any).communityPoints) {
+        pointsToAdd = (event as any).communityPoints;
+      }
+    }
+
+    if (existing) {
+      await existing.update({
+        status: 'approved',
+        approvedBy: adminId,
+        approvedAt: new Date(),
+        approverName: admin?.name || 'Quản trị viên',
+        stampCode,
+        certificateUrl,
+        isBulk: true,
+        note: 'Chứng nhận điện tử được cấp phát tự động.'
+      });
+    } else {
+      await Certificate.create({
+        userId,
+        eventId: eventId || null,
+        registrationId: registrationId || null,
+        activityTitle,
+        status: 'approved',
+        approvedBy: adminId,
+        approvedAt: new Date(),
+        approverName: admin?.name || 'Quản trị viên',
+        stampCode,
+        certificateUrl,
+        isBulk: true,
+        note: 'Chứng nhận điện tử được cấp phát tự động.'
+      });
+    }
+
+    // Add points
+    if (pointsToAdd > 0) {
+      const student = await User.findByPk(userId);
+      if (student) {
+        await student.update({
+          communityPoints: (student.communityPoints || 0) + pointsToAdd
+        });
+      }
+    }
+
+    res.status(201).json({ message: 'Đã cấp chứng nhận thành công' });
+  } catch (error) {
+    console.error('Issue direct certificate error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};

@@ -6,6 +6,7 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import { getStoredUserProfile } from '../../shared/user/session';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { uploadFile } from '../../utils/upload';
 
 export default function LienChiRegistrationsPage() {
   const user = getStoredUserProfile();
@@ -24,6 +25,13 @@ export default function LienChiRegistrationsPage() {
 
   // States for student detail modal
   const [selectedStudent, setSelectedStudent] = useState(null);
+
+  const [isBulkIssuing, setIsBulkIssuing] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+  const [hasBulkIssued, setHasBulkIssued] = useState(false);
+
+  const currentEvent = events.find((e) => String(e.id) === String(selectedEventId));
+  const isEventEnded = currentEvent && ['ended', 'completed'].includes(currentEvent.status);
 
   useEffect(() => {
     fetchEvents();
@@ -77,12 +85,15 @@ export default function LienChiRegistrationsPage() {
       if (response.ok) {
         const data = await response.json();
         setRegistrations(data.registrations);
+        setHasBulkIssued(data.hasBulkIssued || false);
       } else {
         setRegistrations([]);
+        setHasBulkIssued(false);
       }
     } catch (err) {
       console.error(err);
       setRegistrations([]);
+      setHasBulkIssued(false);
     } finally {
       setIsLoading(false);
     }
@@ -235,6 +246,104 @@ export default function LienChiRegistrationsPage() {
     }
   };
 
+  const handleBulkIssueCertificates = async () => {
+    if (!currentEvent) return;
+    if (hasBulkIssued) {
+      alert('Sự kiện này đã được cấp chứng nhận hàng loạt.');
+      return;
+    }
+
+    const eligibleRegs = registrations.filter(r => ['attended', 'confirmed'].includes(r.status));
+    if (eligibleRegs.length === 0) {
+      alert('Không có sinh viên nào đủ điều kiện cấp chứng nhận.');
+      return;
+    }
+
+    if (!window.confirm(`Bạn sắp cấp chứng nhận hàng loạt cho ${eligibleRegs.length} sinh viên đủ điều kiện. Quá trình này sẽ mất một lúc để tạo và tải ảnh lên hệ thống. Tiếp tục?`)) return;
+
+    setIsBulkIssuing(true);
+    setBulkProgress({ current: 0, total: eligibleRegs.length });
+
+    let successCount = 0;
+    
+    // Create hidden div
+    const exportNode = document.createElement('div');
+    exportNode.style.position = 'fixed';
+    exportNode.style.left = '-99999px';
+    exportNode.style.top = '0';
+    exportNode.style.width = '1200px';
+    exportNode.style.height = '848px';
+    exportNode.style.background = '#f7faff';
+    exportNode.style.border = '6px solid #113b90';
+    exportNode.style.padding = '44px';
+    exportNode.style.fontFamily = '"Segoe UI", Arial, sans-serif';
+    exportNode.style.color = '#132b57';
+    document.body.appendChild(exportNode);
+
+    for (let i = 0; i < eligibleRegs.length; i++) {
+      const reg = eligibleRegs[i];
+      const studentUser = reg.User || {};
+
+      setBulkProgress({ current: i + 1, total: eligibleRegs.length });
+
+      exportNode.innerHTML = `
+        <div style="height:100%; border:2px solid #8cb4eb; position:relative; padding:36px 42px; box-sizing:border-box;">
+          <div style="text-align:center; letter-spacing:2px; font-size:14px; font-weight:700; color:#1f5dcc;">HỆ THỐNG BK-YOUTH</div>
+          <h1 style="margin:18px 0 8px; text-align:center; font-size:48px; color:#113b90; font-weight:900;">GIẤY CHỨNG NHẬN</h1>
+          <p style="margin:0; text-align:center; font-size:24px; color:#334155;">Xác nhận sinh viên đã hoàn thành hoạt động</p>
+          <h2 style="margin:26px 0 0; text-align:center; font-size:38px; color:#132b57; font-weight:900;">${currentEvent.title}</h2>
+          <div style="margin-top:42px; font-size:24px; line-height:1.7; color:#1e293b;">
+            <div><strong>Sinh viên:</strong> ${studentUser.fullName || ''}</div>
+            <div><strong>MSSV:</strong> ${studentUser.studentId || ''}</div>
+            <div><strong>Người duyệt:</strong> ${user.fullName || 'Quản trị viên'}</div>
+            <div><strong>Thời điểm duyệt:</strong> ${new Date().toLocaleString('vi-VN')}</div>
+            <div><strong>Phát hành:</strong> Điện tử</div>
+          </div>
+          <div style="position:absolute; right:62px; bottom:86px; width:180px; height:180px; border:4px solid #b12020; border-radius:50%; color:#b12020; display:flex; flex-direction:column; align-items:center; justify-content:center; transform:rotate(-12deg); font-weight:800;">
+            <div style="font-size:20px;">ĐÃ DUYỆT</div>
+            <div style="font-size:16px; margin-top:4px;">${user.role === 'admin' ? 'ĐOÀN TRƯỜNG' : 'LIÊN CHI ĐOÀN'}</div>
+            <div style="font-size:16px;">BK-YOUTH</div>
+          </div>
+        </div>
+      `;
+
+      try {
+        const canvas = await html2canvas(exportNode, { scale: 2, useCORS: true, backgroundColor: '#f7faff' });
+        
+        // Convert canvas to File
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        const file = new File([blob], `certificate-${studentUser.studentId}.png`, { type: 'image/png' });
+
+        // Upload to Cloudinary
+        const uploadResult = await uploadFile(file);
+        const certificateUrl = uploadResult.url;
+
+        // Send to backend
+        const token = localStorage.getItem('token') || '';
+        const res = await fetch('/api/certificates/issue-direct', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            userId: studentUser.id,
+            eventId: currentEvent.id,
+            registrationId: reg.id,
+            activityTitle: currentEvent.title,
+            certificateUrl
+          })
+        });
+
+        if (res.ok) successCount++;
+      } catch (err) {
+        console.error('Error generating/uploading for', studentUser.studentId, err);
+      }
+    }
+
+    document.body.removeChild(exportNode);
+    setIsBulkIssuing(false);
+    if (successCount > 0) setHasBulkIssued(true);
+    alert(`Cấp chứng nhận thành công ${successCount}/${eligibleRegs.length} sinh viên.`);
+  };
+
   const filteredRegistrations = registrations.filter((reg) => {
     if (!search) return true;
     const s = search.toLowerCase();
@@ -354,7 +463,7 @@ export default function LienChiRegistrationsPage() {
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-1.5">
                             {/* Confirmed Action */}
-                            {['registered', 'attended', 'absent'].includes(reg.status) && (
+                            {!isEventEnded && ['registered', 'attended', 'absent'].includes(reg.status) && (
                               <button
                                 onClick={() => handleUpdateStatus(reg.id, 'confirmed')}
                                 className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50"
@@ -365,18 +474,18 @@ export default function LienChiRegistrationsPage() {
                             )}
                             
                             {/* Certificate creation shortcut */}
-                            {reg.status === 'confirmed' && (
+                            {!isEventEnded && reg.status === 'confirmed' && (
                               <button
                                 onClick={() => handleIssueCertificate(reg)}
                                 className="rounded-lg p-2 text-[#1747a6] transition-colors hover:bg-blue-50"
-                                title="Xuất chứng nhận PDF"
+                                title="Xuất chứng nhận PDF thủ công"
                               >
                                 <Award className="h-5 w-5" />
                               </button>
                             )}
 
                             {/* Mark Attended (Manual QR bypass) */}
-                            {['registered', 'absent', 'cancelled'].includes(reg.status) && (
+                            {!isEventEnded && ['registered', 'absent', 'cancelled'].includes(reg.status) && (
                               <button
                                 onClick={() => handleUpdateStatus(reg.id, 'attended')}
                                 className="rounded-lg p-2 text-indigo-500 transition-colors hover:bg-indigo-50"
@@ -387,7 +496,7 @@ export default function LienChiRegistrationsPage() {
                             )}
 
                             {/* Mark Absent */}
-                            {['registered', 'attended', 'confirmed'].includes(reg.status) && (
+                            {!isEventEnded && ['registered', 'attended', 'confirmed'].includes(reg.status) && (
                               <button
                                 onClick={() => handleUpdateStatus(reg.id, 'absent')}
                                 className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
@@ -398,6 +507,7 @@ export default function LienChiRegistrationsPage() {
                             )}
 
                             {/* Delete Registration */}
+                            {!isEventEnded && (
                             <button
                               onClick={() => handleDeleteRegistration(reg.id)}
                               className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
@@ -405,6 +515,7 @@ export default function LienChiRegistrationsPage() {
                             >
                               <Trash2 className="h-5 w-5" />
                             </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -414,6 +525,26 @@ export default function LienChiRegistrationsPage() {
               </tbody>
             </table>
           </div>
+          {isEventEnded && (
+            <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-between">
+              <div>
+                <p className="font-bold text-[#132b57]">Sự kiện đã kết thúc</p>
+                <p className="text-sm text-slate-500">Bạn có thể cấp chứng nhận điện tử tự động cho toàn bộ sinh viên đã quét mã điểm danh.</p>
+              </div>
+              <button
+                onClick={handleBulkIssueCertificates}
+                disabled={isBulkIssuing || hasBulkIssued}
+                className={`flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold text-white shadow-lg transition-all ${
+                  hasBulkIssued 
+                    ? 'bg-slate-400 cursor-not-allowed shadow-none' 
+                    : 'bg-gradient-to-r from-[#1747a6] to-[#205fd8] shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 disabled:transform-none'
+                }`}
+              >
+                <Award className="h-5 w-5" />
+                {hasBulkIssued ? 'Đã cấp chứng nhận hàng loạt' : 'Cấp chứng nhận hàng loạt'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Khung chức năng */}
@@ -529,6 +660,37 @@ export default function LienChiRegistrationsPage() {
                   Đóng
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Issuing Modal */}
+      <AnimatePresence>
+        {isBulkIssuing && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md overflow-hidden rounded-[32px] bg-white shadow-2xl p-8 text-center"
+            >
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <Award className="h-10 w-10 animate-bounce" />
+              </div>
+              <h2 className="text-2xl font-black text-[#132b57] mb-2">Đang cấp chứng nhận</h2>
+              <p className="text-slate-500 mb-8">Vui lòng không đóng cửa sổ này. Quá trình tạo ảnh và tải lên máy chủ có thể mất vài phút.</p>
+              
+              <div className="relative h-4 w-full overflow-hidden rounded-full bg-slate-100">
+                <motion.div 
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-indigo-600"
+                  animate={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }}
+                />
+              </div>
+              <p className="mt-4 font-bold text-blue-600">
+                {bulkProgress.current} / {bulkProgress.total} sinh viên
+              </p>
             </motion.div>
           </div>
         )}

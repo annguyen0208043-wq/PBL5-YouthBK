@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
 import CustomDateTimePicker from '../../components/common/CustomDateTimePicker';
+import { uploadFile } from '../../utils/upload'; // Hàm upload mới
 import InlineMapPicker from '../../components/common/InlineMapPicker';
 
 export default function LienChiCreateEventPage() {
@@ -429,42 +430,58 @@ export default function LienChiCreateEventPage() {
     }
 
     setLoading(true);
+    setNotice('⏳ Đang upload file (nếu có), vui lòng đợi...');
     try {
-      const formDataToSend = new FormData();
+      // 1. Upload images sequentially
+      const uploadedImagesData = [];
+      for (let i = 0; i < imageUploads.length; i++) {
+        const img = imageUploads[i];
+        setNotice(`⏳ Đang upload ảnh ${i + 1}/${imageUploads.length}...`);
+        const result = await uploadFile(img.file);
+        uploadedImagesData.push({
+          url: result.url,
+          caption: img.caption || '',
+          isCover: img.isCover
+        });
+      }
+
+      // 2. Upload documents sequentially
+      const uploadedDocumentsData = [];
+      for (let i = 0; i < documentUploads.length; i++) {
+        const doc = documentUploads[i];
+        setNotice(`⏳ Đang upload tài liệu ${i + 1}/${documentUploads.length}...`);
+        const result = await uploadFile(doc);
+        uploadedDocumentsData.push({
+          url: result.url,
+          fileName: doc.name,
+          fileSize: doc.size,
+          fileType: doc.name.split('.').pop() || null
+        });
+      }
+
+      setNotice('⏳ Đang lưu dữ liệu sự kiện...');
+      setNotice('⏳ Đang lưu dữ liệu sự kiện...');
       
-      // Append core fields
-      Object.keys(formData).forEach(key => {
-        formDataToSend.append(key, formData[key]);
-      });
+      const payload = {
+        ...formData,
+        timeline: phases, // pass as object, backend handles JSON.parse or object
+        submit: 'true'
+      };
 
-      // Append parsed timeline
-      formDataToSend.append('timeline', JSON.stringify(phases));
-
-      // Append image files and metadata
-      const imageCaptions = [];
-      const imageIsCovers = [];
-      imageUploads.forEach((img, idx) => {
-        formDataToSend.append('images', img.file);
-        imageCaptions.push(img.caption || '');
-        imageIsCovers.push(img.isCover);
-      });
-      formDataToSend.append('imageCaptions', JSON.stringify(imageCaptions));
-      formDataToSend.append('imageIsCovers', JSON.stringify(imageIsCovers));
-
-      // Append document files
-      documentUploads.forEach(file => {
-        formDataToSend.append('documents', file);
-      });
-
-      // Set submit flag for immediate review request
-      formDataToSend.append('submit', 'true');
+      if (uploadedImagesData.length > 0) {
+        payload.uploadedImages = uploadedImagesData;
+      }
+      if (uploadedDocumentsData.length > 0) {
+        payload.uploadedDocuments = uploadedDocumentsData;
+      }
 
       const response = await fetch('/api/events', {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        body: formDataToSend,
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
