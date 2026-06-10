@@ -1,7 +1,8 @@
 import { Router, Response } from 'express';
 import {
   getUserProfile, updateUserProfile, getAllUsers, getUserById,
-  createUser, updateUser, changeUserRole, changeUserStatus, resetUserPassword
+  createUser, updateUser, changeUserRole, changeUserStatus, resetUserPassword,
+  getUserPointsHistory
 } from '../controllers/userController';
 import { authMiddleware, adminMiddleware, adminOrLienChiMiddleware, AuthRequest } from '../middlewares/authMiddleware';
 import { uploadAvatar } from '../config/multer';
@@ -13,6 +14,7 @@ const router = Router();
 // Profile (mọi user đã login)
 router.get('/profile', authMiddleware, getUserProfile);
 router.put('/profile', authMiddleware, updateUserProfile);
+router.get('/profile/points-history', authMiddleware, getUserPointsHistory);
 
 // Avatar upload
 router.post('/profile/avatar', authMiddleware, uploadAvatar.single('avatar'), async (req: AuthRequest, res: Response) => {

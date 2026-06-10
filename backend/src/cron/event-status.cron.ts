@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { Op } from 'sequelize';
 import Event from '../models/Event';
+import { addCommunityPointsForEvent } from '../utils/pointHelper';
 
 // Chạy cron job mỗi phút
 export const initCronJobs = () => {
@@ -96,15 +97,15 @@ export const initCronJobs = () => {
       });
 
       if (eventsToEnd.length > 0) {
-        await Promise.all(
-          eventsToEnd.map(event => {
-            const actualEnd = event.actualEndDate || now;
-            return event.update({
-              status: 'ended',
-              actualEndDate: event.actualEndDate ? event.actualEndDate : actualEnd
-            });
-          })
-        );
+        for (const event of eventsToEnd) {
+          const actualEnd = event.actualEndDate || now;
+          await event.update({
+            status: 'ended',
+            actualEndDate: event.actualEndDate ? event.actualEndDate : actualEnd
+          });
+          // Automatically credit community points
+          await addCommunityPointsForEvent(event.id);
+        }
         console.log(`[Cron] Marked ${eventsToEnd.length} events as ended`);
       }
 

@@ -54,9 +54,9 @@ router.post('/:id/attendance/gps', authMiddleware, checkInGPS);
 router.post('/:id/attendance/scan-student', authMiddleware, adminOrLienChiMiddleware, scanStudentQR);
 router.post('/:id/feedback', authMiddleware, submitEventFeedback);
 
-// Admin/LienChi quản lý QR & Feedback
+// Admin/LienChi quản lý QR
 router.put('/:id/qr/toggle', authMiddleware, adminOrLienChiMiddleware, toggleEventQR);
-router.get('/:id/feedbacks', authMiddleware, adminOrLienChiMiddleware, getEventFeedbacks);
+router.get('/:id/feedbacks', authMiddleware, getEventFeedbacks);
 
 // Admin: Duyệt / Từ chối / Yêu cầu chỉnh sửa
 router.put('/:id/approve', authMiddleware, adminMiddleware, approveEvent);

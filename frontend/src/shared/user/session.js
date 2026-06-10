@@ -64,7 +64,7 @@ export function isAdminRole(role) {
 
 export function isLienChiRole(role) {
   const normalizedRole = (role || '').trim().toLowerCase();
-  return ['lien chi doan', 'lien chi'].includes(normalizedRole);
+  return ['lien chi doan', 'lien chi', 'lienchi', 'liên chi đoàn', 'liên chi'].includes(normalizedRole);
 }
 
 export const defaultUserProfile = DEFAULT_USER;

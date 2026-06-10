@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import User from '../models/User';
+import Event from '../models/Event';
+import CommunityPointHistory from '../models/CommunityPointHistory';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { hashPassword, convertRoleToEnglish, convertRoleToVietnamese } from '../utils/passwordHelper';
 import { Op } from 'sequelize';
@@ -185,5 +187,22 @@ export const resetUserPassword = async (req: AuthRequest, res: Response): Promis
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ message: 'Lỗi server' });
+  }
+};
+
+export const getUserPointsHistory = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    const history = await CommunityPointHistory.findAll({
+      where: { userId },
+      include: [
+        { model: Event, as: 'event', attributes: ['id', 'title'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+    res.json({ history });
+  } catch (error) {
+    console.error('Get user points history error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };

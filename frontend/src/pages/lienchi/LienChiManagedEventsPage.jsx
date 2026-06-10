@@ -792,7 +792,7 @@ export default function LienChiManagedEventsPage() {
                         </button>
                         <button type="button" onClick={handleViewFeedbacks} className="inline-flex items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-3 font-semibold text-indigo-700 transition-all hover:bg-indigo-100">
                           <MessageSquare className="h-5 w-5" />
-                          Xem Đánh giá ({selectedEvent.feedbacks?.length || 0})
+                          Xem Đánh giá
                         </button>
                       </>
                     )}
@@ -939,12 +939,60 @@ export default function LienChiManagedEventsPage() {
       {/* Feedback Modal */}
       {showFeedbackModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl max-h-[80vh] overflow-y-auto rounded-[32px] bg-white p-8 shadow-2xl relative">
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-[32px] bg-white p-8 shadow-2xl relative scrollbar-hide">
             <button onClick={() => setShowFeedbackModal(false)} className="absolute right-5 top-5 rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
               <X className="h-5 w-5" />
             </button>
             <h3 className="text-2xl font-black text-[#132b57] mb-2">Đánh giá từ Sinh viên</h3>
             <p className="text-slate-500 text-sm mb-6">Sự kiện: {selectedEvent?.title}</p>
+
+            {/* Statistics Summary Section */}
+            {(() => {
+              const summary = selectedEvent?.feedbackSummary || { averageRating: 0, totalFeedbacks: 0, ratingBreakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
+              const breakdown = summary.ratingBreakdown || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+              const total = summary.totalFeedbacks || 0;
+              const avg = summary.averageRating || 0;
+              
+              return (
+                <div className="grid gap-6 md:grid-cols-[1fr_1.5fr] bg-[#f8fbff] rounded-3xl p-5 border border-[#e8effa] mb-6">
+                  {/* Left: Avg Stars */}
+                  <div className="flex flex-col items-center justify-center text-center border-b md:border-b-0 md:border-r border-slate-200/60 pb-5 md:pb-0 md:pr-5">
+                    <p className="text-5xl font-black text-[#132b57]">{avg}</p>
+                    <div className="flex gap-1 my-2">
+                      {[1, 2, 3, 4, 5].map(star => {
+                        const isHalf = avg > star - 1 && avg < star;
+                        const isFull = avg >= star;
+                        return (
+                          <span key={star} className={`text-2xl ${isFull ? 'text-amber-400' : isHalf ? 'text-amber-300' : 'text-slate-200'}`}>
+                            ★
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">{total} đánh giá</p>
+                  </div>
+
+                  {/* Right: Stars Breakdown Progress Bars */}
+                  <div className="flex flex-col justify-center space-y-2">
+                    {[5, 4, 3, 2, 1].map(stars => {
+                      const count = breakdown[stars] || 0;
+                      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                      return (
+                        <div key={stars} className="flex items-center gap-3 text-xs text-slate-600">
+                          <span className="w-10 text-right font-bold">{stars} sao</span>
+                          <div className="flex-1 h-3 rounded-full bg-white border border-slate-100 overflow-hidden">
+                            <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }}></div>
+                          </div>
+                          <span className="w-12 text-slate-400 font-semibold">{count} ({pct}%)</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            <h4 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4">Ý kiến đóng góp ({feedbacks.length})</h4>
 
             <div className="space-y-4">
               {feedbacks.length === 0 ? (
@@ -954,15 +1002,15 @@ export default function LienChiManagedEventsPage() {
                 </div>
               ) : (
                 feedbacks.map(fb => (
-                  <div key={fb.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50">
-                    <div className="flex items-center gap-3 mb-3">
+                  <div key={fb.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 flex flex-col gap-2">
+                    <div className="flex items-center gap-3">
                       {fb.user?.avatar ? (
                         <img src={fb.user.avatar} className="w-10 h-10 rounded-full object-cover" />
                       ) : (
                         <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center">{fb.user?.name?.charAt(0) || 'U'}</div>
                       )}
                       <div>
-                        <p className="font-semibold text-slate-800">{fb.user?.name}</p>
+                        <p className="font-semibold text-slate-800">{fb.user?.name || 'Người dùng ẩn danh'}</p>
                         <p className="text-xs text-slate-500">{new Date(fb.createdAt).toLocaleString('vi-VN')}</p>
                       </div>
                       <div className="ml-auto flex gap-1">
@@ -971,8 +1019,7 @@ export default function LienChiManagedEventsPage() {
                         ))}
                       </div>
                     </div>
-                    {/* Changed fb.content to fb.comment */}
-                    <p className="text-slate-600 bg-white p-3 rounded-xl border border-slate-100">{fb.comment || 'Không có bình luận.'}</p>
+                    <p className="text-slate-600 bg-white p-3 rounded-xl border border-slate-100 text-sm leading-relaxed">{fb.comment || 'Không có bình luận.'}</p>
                   </div>
                 ))
               )}

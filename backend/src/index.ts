@@ -35,6 +35,7 @@ import './models/ChatInvitation';
 import './models/Message';
 import './models/AuditLog';
 import './models/EventFeedback';
+import './models/CommunityPointHistory';
 
 dotenv.config();
 
@@ -90,10 +91,9 @@ const startServer = async () => {
       await sequelize.sync({ alter: true });
       console.log('Database models synchronized (alter)');
     } else {
-      await sequelize.sync({ alter: true }); // Automatically applying schema changes for development
+      await sequelize.sync(); // Bypasses the Sequelize alter:true bug in MySQL
       console.log('Database models synchronized');
     }
-    console.log('Database models synchronized');
 
     initCronJobs();
 
