@@ -1,15 +1,20 @@
-import React from 'react';
-import { BadgeCheck, CalendarPlus2, ClipboardList, FilePenLine, LayoutDashboard, LogOut } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+import { BadgeCheck, BellRing, CalendarPlus2, ClipboardList, FilePenLine, LayoutDashboard, LogOut } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
+import useSocket from '../../hooks/useSocket';
 
 const navSections = [
   {
     title: 'Điều hành',
-    items: [{ to: '/lien-chi', label: 'Tổng quan', icon: LayoutDashboard }],
+    items: [
+      { to: '/lien-chi', label: 'Tổng quan', icon: LayoutDashboard },
+      { to: '/lien-chi/notifications', label: 'Thông báo', icon: BellRing }
+    ],
   },
   {
     title: 'Quản lý sự kiện',
@@ -29,6 +34,32 @@ export default function LienChiLayout({ title, subtitle, currentPath, children }
   const navigate = useNavigate();
   const user = getStoredUserProfile();
   const userInitials = getUserInitials(user.fullName);
+
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const resp = await axios.get('/api/notifications/unread-count', { headers: { Authorization: `Bearer ${token}` } });
+      setUnreadCount(resp.data.unreadCount || 0);
+    } catch (err) {
+      console.error('fetchUnreadCount error:', err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchUnreadCount();
+  }, [fetchUnreadCount]);
+
+  const handleNewNotification = useCallback(() => {
+    setUnreadCount((c) => c + 1);
+  }, []);
+
+  const handleNotificationRead = useCallback(() => {
+    setUnreadCount((c) => Math.max(0, c - 1));
+  }, []);
+
+  useSocket(handleNewNotification, handleNotificationRead);
 
   const handleLogout = () => {
     // Clear localStorage
@@ -77,12 +108,18 @@ export default function LienChiLayout({ title, subtitle, currentPath, children }
                     <Link
                       key={to}
                       to={to}
-                      className={`admin-sidebar-link flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all ${
+                      className={`admin-sidebar-link relative flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all ${
                         currentPath === to ? 'bg-white text-[#123d94] shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'
                       }`}
                     >
                       <Icon className="h-5 w-5 shrink-0" />
                       <span className="admin-sidebar-link-label">{label}</span>
+                      
+                      {to === '/lien-chi/notifications' && unreadCount > 0 && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-black text-white shadow-sm ring-2 ring-red-500/30">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </div>
+                      )}
                     </Link>
                   ))}
                 </div>

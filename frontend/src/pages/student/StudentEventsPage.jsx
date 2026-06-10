@@ -8,6 +8,7 @@ import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
 import { defaultRegisteredEventIds, STORAGE_ATTENDANCE_CHECKINS_KEY, STORAGE_ATTENDANCE_WINDOW_KEY, STORAGE_REGISTERED_EVENTS_KEY } from '../../shared/student/studentData';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
+import NotificationBell from './NotificationBell';
 
 const EARTH_RADIUS_METERS = 6371000;
 
@@ -136,7 +137,46 @@ function parseEventTimeRange(timeLabel) {
 }
 
 function buildAttendanceGate(event, attendanceWindowConfig) {
+<<<<<<< HEAD
   if (event.rawStatus !== 'ongoing') {
+=======
+  if (event.qrActive) {
+    return {
+      canCheckIn: true,
+      message: 'Mã QR điểm danh đang mở, bạn có thể điểm danh ngay!',
+    };
+  }
+
+  const now = new Date();
+
+  let isEventInProgress = false;
+  if (event.startAt && event.endAt) {
+    isEventInProgress = now >= event.startAt && now <= event.endAt;
+  } else if (event.time) {
+    const eventRange = parseEventTimeRange(event.time);
+    isEventInProgress = eventRange ? now >= eventRange.startAt && now <= eventRange.endAt : false;
+  }
+
+  const isAdminWindowEnabled = Boolean(attendanceWindowConfig?.enabled);
+  const adminStartAt = attendanceWindowConfig?.startAt ? new Date(attendanceWindowConfig.startAt) : null;
+  const adminEndAt = attendanceWindowConfig?.endAt ? new Date(attendanceWindowConfig.endAt) : null;
+  const hasValidAdminRange =
+    adminStartAt instanceof Date &&
+    adminEndAt instanceof Date &&
+    !Number.isNaN(adminStartAt.getTime()) &&
+    !Number.isNaN(adminEndAt.getTime()) &&
+    adminStartAt < adminEndAt;
+  const isAdminWindowActive = isAdminWindowEnabled && hasValidAdminRange && now >= adminStartAt && now <= adminEndAt;
+
+  if (isEventInProgress || isAdminWindowActive) {
+    return {
+      canCheckIn: true,
+      message: isEventInProgress ? 'Sự kiện đang diễn ra: có thể điểm danh.' : 'Admin đang mở cửa sổ điểm danh.',
+    };
+  }
+
+  if (isAdminWindowEnabled && !hasValidAdminRange) {
+>>>>>>> origin/Ngoc2
     return {
       canCheckIn: false,
       message: 'Sự kiện chưa diễn ra hoặc đã kết thúc. Chỉ có thể điểm danh khi sự kiện đang diễn ra.',
@@ -156,6 +196,7 @@ function buildAttendanceGate(event, attendanceWindowConfig) {
   };
 }
 
+<<<<<<< HEAD
 function isMobileDevice() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 }
@@ -214,6 +255,9 @@ function canCancelRegistration(event) {
 }
 
 export default function StudentEventsPage() {
+=======
+export default function StudentEventsPage({ embedded = false } = {}) {
+>>>>>>> origin/Ngoc2
   const navigate = useNavigate();
   const location = useLocation();
   const mainRef = useRef(null);
@@ -247,7 +291,7 @@ export default function StudentEventsPage() {
     // Clear localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    
+
     // Redirect to login
     navigate('/login');
   };
@@ -308,6 +352,7 @@ export default function StudentEventsPage() {
         }
 
         if (response.ok) {
+<<<<<<< HEAD
           const approvedEvents = data.events
             .filter((event) => ['open_registration', 'ongoing', 'ended', 'completed'].includes(event.status))
             .filter((event) => isEventForStudentFaculty(event, studentFaculty));
@@ -315,6 +360,10 @@ export default function StudentEventsPage() {
           const newestOpenId = approvedEvents
             .filter((event) => event.status === 'open_registration')
             .sort((a, b) => new Date(b.createdAt || b.updatedAt) - new Date(a.createdAt || a.updatedAt))[0]?.id;
+=======
+          const data = await response.json();
+          const approvedEvents = data.events.filter(e => e.status === 'approved' || e.status === 'ongoing');
+>>>>>>> origin/Ngoc2
 
           const formattedEvents = approvedEvents.map(e => {
             const formatTime = (iso) => {
@@ -378,6 +427,7 @@ export default function StudentEventsPage() {
               registrationDeadlineStr: e.registrationDeadline ? formatDateTime(e.registrationDeadline) : null,
             };
           });
+<<<<<<< HEAD
           
           setDbEvents(formattedEvents.sort((a, b) => {
             if (a.isNewestOpen !== b.isNewestOpen) return a.isNewestOpen ? -1 : 1;
@@ -385,6 +435,10 @@ export default function StudentEventsPage() {
             if (a.rawStatus !== 'open_registration' && b.rawStatus === 'open_registration') return 1;
             return new Date(b.createdAt || b.startAt || 0) - new Date(a.createdAt || a.startAt || 0);
           }));
+=======
+
+          setDbEvents(formattedEvents);
+>>>>>>> origin/Ngoc2
         }
       } catch (err) {
         setEventsError(err.message || 'Không thể tải danh sách sự kiện');
@@ -542,7 +596,7 @@ export default function StudentEventsPage() {
       setIsTogglingEventId(realId);
 
       const endpoint = isEnrolled ? `/api/events/${realId}/cancel-registration` : `/api/events/${realId}/register`;
-      
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -572,7 +626,7 @@ export default function StudentEventsPage() {
       setFeedback('Lỗi kết nối máy chủ');
       setIsTogglingEventId(null);
     }
-    
+
     if (toastTimerRef.current) {
       window.clearTimeout(toastTimerRef.current);
     }
@@ -599,9 +653,9 @@ export default function StudentEventsPage() {
   };
 
   return (
-    <div className="profile-page p-4 sm:p-6">
+    <div className={embedded ? 'w-full' : 'profile-page p-4 sm:p-6'}>
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className="app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
+        <aside className={embedded ? 'hidden' : 'app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col'}>
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
@@ -638,6 +692,9 @@ export default function StudentEventsPage() {
             <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Lịch sử hoạt động
             </Link>
+            <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Thông báo
+            </Link>
           </nav>
 
           <div className="mt-auto pt-6">
@@ -659,25 +716,28 @@ export default function StudentEventsPage() {
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Sự kiện dành cho sinh viên</h1>
                 <p className="mt-1 text-slate-500">Khám phá hoạt động nổi bật và đăng ký tham gia trực tiếp trên hệ thống.</p>
               </div>
-              <Link
-                to="/sinhvien/profile"
-                className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3 hover:bg-[#eef6ff] transition-all block text-slate-800 no-underline"
-                aria-label="Mở trang chỉnh sửa thông tin cá nhân"
-              >
-                <div className="flex items-center gap-3 w-full min-w-0">
-                  {user.avatarUrl ? (
-                    <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
-                  ) : (
-                    <div className="profile-user-avatar flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#1747a6,#4ba3ff)] text-sm font-black text-white">
-                      {userInitials}
+              <div className="flex items-center gap-3">
+                <NotificationBell />
+                <Link
+                  to="/sinhvien/profile"
+                  className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3 hover:bg-[#eef6ff] transition-all block text-slate-800 no-underline"
+                  aria-label="Mở trang chỉnh sửa thông tin cá nhân"
+                >
+                  <div className="flex items-center gap-3 w-full min-w-0">
+                    {user.avatarUrl ? (
+                      <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
+                    ) : (
+                      <div className="profile-user-avatar flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#1747a6,#4ba3ff)] text-sm font-black text-white">
+                        {userInitials}
+                      </div>
+                    )}
+                    <div className="profile-user-meta">
+                      <p className="profile-user-name font-bold text-[#132b57]">{user.fullName}</p>
+                      <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
                     </div>
-                  )}
-                  <div className="profile-user-meta">
-                    <p className="profile-user-name font-bold text-[#132b57]">{user.fullName}</p>
-                    <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
                   </div>
-                </div>
-              </Link>
+                </Link>
+              </div>
             </div>
           </div>
 
@@ -934,7 +994,6 @@ export default function StudentEventsPage() {
                               </span>
                             </motion.button>
                           )}
-                          
                           {['completed', 'ended', 'Đã kết thúc'].includes(event.status) && isCheckedIn && (
                             <motion.button
                               type="button"

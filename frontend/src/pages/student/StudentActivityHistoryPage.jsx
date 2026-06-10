@@ -10,6 +10,7 @@ import doanLogo from '../../assets/logo-doan.png';
 import { activityHistory, defaultRegisteredEventIds, STORAGE_REGISTERED_EVENTS_KEY, studentEvents } from '../../shared/student/studentData';
 import { getCertificateRequests, upsertCertificateRequest } from '../../shared/student/certificateStore';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
+import NotificationBell from './NotificationBell';
 
 function getRegisteredEventIds() {
   if (typeof window === 'undefined') {
@@ -36,7 +37,7 @@ function certificateStatusTone(status) {
   return 'bg-amber-100 text-amber-700';
 }
 
-export default function StudentActivityHistoryPage() {
+export default function StudentActivityHistoryPage({ embedded = false } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const mainRef = useRef(null);
@@ -184,9 +185,9 @@ export default function StudentActivityHistoryPage() {
   };
 
   return (
-    <div className="profile-page p-4 sm:p-6">
+    <div className={embedded ? 'w-full' : 'profile-page p-4 sm:p-6'}>
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className="app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
+        <aside className={embedded ? 'hidden' : 'app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col'}>
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
@@ -223,6 +224,9 @@ export default function StudentActivityHistoryPage() {
               Chat sinh viên
             </Link>
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Lịch sử hoạt động</div>
+            <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Thông báo
+            </Link>
           </nav>
 
           <div className="mt-auto pt-6">
@@ -244,7 +248,9 @@ export default function StudentActivityHistoryPage() {
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Lịch sử hoạt động của tôi</h1>
                 <p className="mt-1 text-slate-500">Theo dõi các hoạt động đã tham gia và những sự kiện bạn đang chờ diễn ra.</p>
               </div>
-              <div
+              <div className="flex items-center gap-3">
+                <NotificationBell />
+                <div
                 className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3"
                 aria-label="Mở trang chỉnh sửa thông tin cá nhân"
               >
@@ -261,6 +267,7 @@ export default function StudentActivityHistoryPage() {
                     <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
                   </div>
                 </div>
+              </div>
               </div>
             </div>
           </div>

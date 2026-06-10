@@ -941,7 +941,7 @@ export const getEventRegistrations = async (req: AuthRequest, res: Response): Pr
       where: { eventId: id },
       include: [{
         model: User,
-        attributes: ['id', 'name', 'fullName', 'studentId', 'department', 'faculty', 'email', 'phone', 'communityPoints']
+        attributes: ['id', 'name', 'fullName', 'studentId', 'department', 'faculty', 'email', 'phone']
       }],
       order: [['createdAt', 'DESC']]
     });

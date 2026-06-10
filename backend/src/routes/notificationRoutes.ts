@@ -1,20 +1,21 @@
 import { Router } from 'express';
 import {
-  getNotifications, markAsRead, getSentNotifications,
+  getNotifications, markAsRead, getSentNotifications, getUnreadCount,
   getFaculties, searchRecipients, sendNotification
 } from '../controllers/notificationController';
-import { authMiddleware, adminMiddleware } from '../middlewares/authMiddleware';
+import { authMiddleware, adminMiddleware, adminOrLienChiMiddleware } from '../middlewares/authMiddleware';
 
 const router = Router();
 
 // User: Thông báo cá nhân
 router.get('/', authMiddleware, getNotifications);
+router.get('/unread-count', authMiddleware, getUnreadCount);
 router.put('/:id/read', authMiddleware, markAsRead);
 
-// Admin: Quản lý thông báo
-router.get('/sent', authMiddleware, adminMiddleware, getSentNotifications);
-router.get('/faculties', authMiddleware, adminMiddleware, getFaculties);
-router.get('/recipients/search', authMiddleware, adminMiddleware, searchRecipients);
-router.post('/', authMiddleware, adminMiddleware, sendNotification);
+// Admin / LienChi: Quản lý thông báo
+router.get('/sent', authMiddleware, adminOrLienChiMiddleware, getSentNotifications);
+router.get('/faculties', authMiddleware, adminOrLienChiMiddleware, getFaculties);
+router.get('/recipients/search', authMiddleware, adminOrLienChiMiddleware, searchRecipients);
+router.post('/', authMiddleware, adminOrLienChiMiddleware, sendNotification);
 
 export default router;

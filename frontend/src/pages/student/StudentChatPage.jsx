@@ -34,6 +34,7 @@ import {
 } from '../../shared/student/chatApi';
 import { connectSocket, disconnectSocket, getSocket } from '../../shared/student/socket';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
+import NotificationBell from './NotificationBell';
 
 function Avatar({ name = 'SV', src, size = 'h-11 w-11', rounded = 'rounded-2xl' }) {
   return src ? (
@@ -288,7 +289,7 @@ export default function StudentChatPage() {
     try {
       const socket = getSocket();
       if (socket && socket.connected) socket.emit('conversation:join', { conversationId });
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const data = await fetchMessages(conversationId);
@@ -313,7 +314,7 @@ export default function StudentChatPage() {
     }
   };
 
-  
+
 
   const startDirectChat = async () => {
     if (!directIdentifier.trim()) return;
@@ -401,7 +402,7 @@ export default function StudentChatPage() {
     setDraftsByConversation((cur) => {
       const copy = { ...cur };
       delete copy[activeConversationId];
-      try { localStorage.setItem('chat:drafts', JSON.stringify(copy)); } catch {};
+      try { localStorage.setItem('chat:drafts', JSON.stringify(copy)); } catch { };
       return copy;
     });
 
@@ -545,7 +546,7 @@ export default function StudentChatPage() {
     // persist draft per conversation
     setDraftsByConversation((current) => {
       const copy = { ...current, [activeConversationId]: value };
-      try { localStorage.setItem('chat:drafts', JSON.stringify(copy)); } catch {};
+      try { localStorage.setItem('chat:drafts', JSON.stringify(copy)); } catch { };
       return copy;
     });
     if (!activeConversationId) return;
@@ -557,7 +558,7 @@ export default function StudentChatPage() {
     try {
       const raw = localStorage.getItem('chat:drafts');
       if (raw) setDraftsByConversation(JSON.parse(raw) || {});
-    } catch {}
+    } catch { }
   }, []);
 
   // when switching conversation, restore draft for it
@@ -597,6 +598,7 @@ export default function StudentChatPage() {
             <Link to="/sinhvien/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">Hồ sơ cá nhân</Link>
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Chat sinh viên</div>
             <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">Lịch sử hoạt động</Link>
+            <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">Thông báo</Link>
           </nav>
 
           <button onClick={handleLogout} className="app-logout-button mt-auto flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all">
@@ -613,7 +615,7 @@ export default function StudentChatPage() {
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Chat sinh viên</h1>
                 <p className="mt-1 text-slate-500">Tin nhắn cá nhân, nhóm học tập và lời mời tham gia nhóm.</p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button onClick={() => setMode('chat')} className={`rounded-2xl px-4 py-3 text-sm font-bold ${mode === 'chat' ? 'bg-[#1747a6] text-white' : 'border border-[#dce8f5] bg-white text-[#132b57]'}`}>Chat</button>
                 <button onClick={() => setMode('new')} className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold ${mode === 'new' ? 'bg-[#1747a6] text-white' : 'border border-[#dce8f5] bg-white text-[#132b57]'}`}>
                   <Plus className="h-4 w-4" /> Tạo mới
@@ -621,6 +623,7 @@ export default function StudentChatPage() {
                 <button onClick={() => setMode('invites')} className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold ${mode === 'invites' ? 'bg-[#1747a6] text-white' : 'border border-[#dce8f5] bg-white text-[#132b57]'}`}>
                   <MailPlus className="h-4 w-4" /> Lời mời {invitations.length > 0 ? `(${invitations.length})` : ''}
                 </button>
+                <NotificationBell />
               </div>
             </div>
           </div>
@@ -827,22 +830,22 @@ export default function StudentChatPage() {
                                   ))}
                                 </div>
                               )}
-                                <p className={`mt-2 text-xs ${isMine ? 'text-blue-100/80' : 'text-slate-400'}`}>{formatTime(message.createdAt)}</p>
-                                <div className="mt-1 flex items-center gap-2">
-                                  {message.status === 'pending' && <span className="text-xs text-slate-400">Đang gửi…</span>}
-                                  {message.status === 'failed' && (
-                                    <button onClick={() => retryMessage(message)} className="text-xs text-red-500">Gửi lại</button>
-                                  )}
-                                  {viewers.length > 0 && (
-                                    <div title={viewersTitle} className="text-xs text-slate-400">
-                                      {isMine ? (
-                                        <span>Đã xem bởi {viewersInline.join(', ')}{viewers.length > 3 ? '…' : ''}</span>
-                                      ) : (
-                                        <span>Đã xem: {viewersInline.join(', ')}{viewers.length > 3 ? '…' : ''}</span>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
+                              <p className={`mt-2 text-xs ${isMine ? 'text-blue-100/80' : 'text-slate-400'}`}>{formatTime(message.createdAt)}</p>
+                              <div className="mt-1 flex items-center gap-2">
+                                {message.status === 'pending' && <span className="text-xs text-slate-400">Đang gửi…</span>}
+                                {message.status === 'failed' && (
+                                  <button onClick={() => retryMessage(message)} className="text-xs text-red-500">Gửi lại</button>
+                                )}
+                                {viewers.length > 0 && (
+                                  <div title={viewersTitle} className="text-xs text-slate-400">
+                                    {isMine ? (
+                                      <span>Đã xem bởi {viewersInline.join(', ')}{viewers.length > 3 ? '…' : ''}</span>
+                                    ) : (
+                                      <span>Đã xem: {viewersInline.join(', ')}{viewers.length > 3 ? '…' : ''}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>

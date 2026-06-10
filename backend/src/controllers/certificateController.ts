@@ -8,7 +8,7 @@ export const getCertificateRequests = async (req: AuthRequest, res: Response) =>
   try {
     const certificates = await Certificate.findAll({
       include: [
-        { model: User, as: 'student', attributes: ['id', 'name', 'email', 'studentId'] },
+        { model: User, as: 'student', attributes: ['id', 'name', 'email', 'studentId', 'communityPoints'] },
         { model: User, as: 'approver', attributes: ['id', 'name', 'email'] },
         { model: require('../models/Event').default, attributes: ['id', 'title'] }
       ],
@@ -49,7 +49,7 @@ export const approveCertificate = async (req: AuthRequest, res: Response): Promi
     }
 
     const admin = await User.findByPk(adminId, { attributes: ['id', 'name'] });
-    
+
     // Process community points
     let pointsToAdd = 0;
     if (certificate.eventId) {
