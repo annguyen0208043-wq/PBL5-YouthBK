@@ -137,46 +137,7 @@ function parseEventTimeRange(timeLabel) {
 }
 
 function buildAttendanceGate(event, attendanceWindowConfig) {
-<<<<<<< HEAD
   if (event.rawStatus !== 'ongoing') {
-=======
-  if (event.qrActive) {
-    return {
-      canCheckIn: true,
-      message: 'Mã QR điểm danh đang mở, bạn có thể điểm danh ngay!',
-    };
-  }
-
-  const now = new Date();
-
-  let isEventInProgress = false;
-  if (event.startAt && event.endAt) {
-    isEventInProgress = now >= event.startAt && now <= event.endAt;
-  } else if (event.time) {
-    const eventRange = parseEventTimeRange(event.time);
-    isEventInProgress = eventRange ? now >= eventRange.startAt && now <= eventRange.endAt : false;
-  }
-
-  const isAdminWindowEnabled = Boolean(attendanceWindowConfig?.enabled);
-  const adminStartAt = attendanceWindowConfig?.startAt ? new Date(attendanceWindowConfig.startAt) : null;
-  const adminEndAt = attendanceWindowConfig?.endAt ? new Date(attendanceWindowConfig.endAt) : null;
-  const hasValidAdminRange =
-    adminStartAt instanceof Date &&
-    adminEndAt instanceof Date &&
-    !Number.isNaN(adminStartAt.getTime()) &&
-    !Number.isNaN(adminEndAt.getTime()) &&
-    adminStartAt < adminEndAt;
-  const isAdminWindowActive = isAdminWindowEnabled && hasValidAdminRange && now >= adminStartAt && now <= adminEndAt;
-
-  if (isEventInProgress || isAdminWindowActive) {
-    return {
-      canCheckIn: true,
-      message: isEventInProgress ? 'Sự kiện đang diễn ra: có thể điểm danh.' : 'Admin đang mở cửa sổ điểm danh.',
-    };
-  }
-
-  if (isAdminWindowEnabled && !hasValidAdminRange) {
->>>>>>> origin/Ngoc2
     return {
       canCheckIn: false,
       message: 'Sự kiện chưa diễn ra hoặc đã kết thúc. Chỉ có thể điểm danh khi sự kiện đang diễn ra.',
@@ -196,7 +157,6 @@ function buildAttendanceGate(event, attendanceWindowConfig) {
   };
 }
 
-<<<<<<< HEAD
 function isMobileDevice() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 }
@@ -254,10 +214,7 @@ function canCancelRegistration(event) {
   return { allowed: true, reason: '' };
 }
 
-export default function StudentEventsPage() {
-=======
 export default function StudentEventsPage({ embedded = false } = {}) {
->>>>>>> origin/Ngoc2
   const navigate = useNavigate();
   const location = useLocation();
   const mainRef = useRef(null);
@@ -352,7 +309,6 @@ export default function StudentEventsPage({ embedded = false } = {}) {
         }
 
         if (response.ok) {
-<<<<<<< HEAD
           const approvedEvents = data.events
             .filter((event) => ['open_registration', 'ongoing', 'ended', 'completed'].includes(event.status))
             .filter((event) => isEventForStudentFaculty(event, studentFaculty));
@@ -360,10 +316,6 @@ export default function StudentEventsPage({ embedded = false } = {}) {
           const newestOpenId = approvedEvents
             .filter((event) => event.status === 'open_registration')
             .sort((a, b) => new Date(b.createdAt || b.updatedAt) - new Date(a.createdAt || a.updatedAt))[0]?.id;
-=======
-          const data = await response.json();
-          const approvedEvents = data.events.filter(e => e.status === 'approved' || e.status === 'ongoing');
->>>>>>> origin/Ngoc2
 
           const formattedEvents = approvedEvents.map(e => {
             const formatTime = (iso) => {
@@ -427,18 +379,12 @@ export default function StudentEventsPage({ embedded = false } = {}) {
               registrationDeadlineStr: e.registrationDeadline ? formatDateTime(e.registrationDeadline) : null,
             };
           });
-<<<<<<< HEAD
-          
           setDbEvents(formattedEvents.sort((a, b) => {
             if (a.isNewestOpen !== b.isNewestOpen) return a.isNewestOpen ? -1 : 1;
             if (a.rawStatus === 'open_registration' && b.rawStatus !== 'open_registration') return -1;
             if (a.rawStatus !== 'open_registration' && b.rawStatus === 'open_registration') return 1;
             return new Date(b.createdAt || b.startAt || 0) - new Date(a.createdAt || a.startAt || 0);
           }));
-=======
-
-          setDbEvents(formattedEvents);
->>>>>>> origin/Ngoc2
         }
       } catch (err) {
         setEventsError(err.message || 'Không thể tải danh sách sự kiện');
