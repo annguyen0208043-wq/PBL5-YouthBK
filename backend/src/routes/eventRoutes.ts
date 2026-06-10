@@ -23,7 +23,6 @@ import {
   getEventFeedbacks
 } from '../controllers/eventController';
 import { authMiddleware, adminMiddleware, adminOrLienChiMiddleware } from '../middlewares/authMiddleware';
-import { uploadEventFiles } from '../config/multer';
 
 const router = Router();
 
@@ -39,8 +38,8 @@ router.get('/pending', authMiddleware, adminMiddleware, getPendingEvents);
 router.get('/:id', authMiddleware, getEventById);
 
 // LienChi / Admin Create & Update
-router.post('/', authMiddleware, adminOrLienChiMiddleware, uploadEventFiles, createEvent);
-router.put('/:id', authMiddleware, adminOrLienChiMiddleware, uploadEventFiles, updateEvent);
+router.post('/', authMiddleware, adminOrLienChiMiddleware, createEvent);
+router.put('/:id', authMiddleware, adminOrLienChiMiddleware, updateEvent);
 router.post('/:id/submit', authMiddleware, adminOrLienChiMiddleware, submitEvent);
 router.delete('/:id', authMiddleware, adminOrLienChiMiddleware, deleteEvent);
 
