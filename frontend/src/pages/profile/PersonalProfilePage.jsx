@@ -102,13 +102,17 @@ function ProfileLayout({ children, title, subtitle, user }) {
             <Link to="/sinhvien/event" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Sự kiện của tôi
             </Link>
-            <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Hồ sơ cá nhân</div>
             <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Chat sinh viên
             </Link>
             <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Lịch sử hoạt động
             </Link>
+            {['monitor', 'ban cán sự', 'ban can su'].includes(user.role?.toLowerCase()) && (
+              <Link to="/sinhvien/class-points" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+                Theo dõi điểm lớp
+              </Link>
+            )}
             <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Thông báo
             </Link>
@@ -168,6 +172,7 @@ export default function PersonalProfilePage() {
     department: ''
   });
 
+  const isStudentOrMonitor = ['student', 'monitor'].includes(user.role?.toLowerCase());
   const userInitials = getUserInitials(user.fullName);
 
   useEffect(() => {
@@ -583,6 +588,11 @@ export default function PersonalProfilePage() {
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Cập nhật thông tin</p>
                   <h3 className="mt-1 text-2xl font-black text-[#132b57]">Chỉnh sửa hồ sơ</h3>
                   <p className="mt-2 text-sm text-slate-500">Các thay đổi sẽ được cập nhật trực tiếp trên toàn hệ thống.</p>
+                  {isStudentOrMonitor && (
+                    <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-700 leading-5">
+                      ℹ️ Bạn đang sử dụng tài khoản Sinh viên/Ban cán sự. Bạn chỉ được phép chỉnh sửa số điện thoại và ảnh đại diện. Các thông tin học thuật (Họ tên, Khoa, Lớp) do Quản trị viên quản lý trực tiếp.
+                    </p>
+                  )}
                 </div>
 
                 <form onSubmit={handleSaveProfile} className="mt-6 space-y-4">
@@ -597,7 +607,12 @@ export default function PersonalProfilePage() {
                           name="fullName"
                           value={editFormData.fullName}
                           onChange={handleInputChange}
-                          className="w-full rounded-2xl border border-[#dce8f5] pl-11 pr-4 py-3 outline-none focus:border-[#1f5dcc] focus:ring-4 focus:ring-[#1f5dcc]/5 transition-all text-slate-800"
+                          disabled={isStudentOrMonitor}
+                          className={`w-full rounded-2xl border border-[#dce8f5] pl-11 pr-4 py-3 outline-none transition-all text-slate-800 ${
+                            isStudentOrMonitor
+                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-150'
+                              : 'focus:border-[#1f5dcc] focus:ring-4 focus:ring-[#1f5dcc]/5'
+                          }`}
                           placeholder="Nhập họ và tên"
                           required
                         />
@@ -632,7 +647,12 @@ export default function PersonalProfilePage() {
                           name="faculty"
                           value={editFormData.faculty}
                           onChange={handleInputChange}
-                          className="w-full rounded-2xl border border-[#dce8f5] pl-11 pr-4 py-3 outline-none focus:border-[#1f5dcc] focus:ring-4 focus:ring-[#1f5dcc]/5 transition-all text-slate-800"
+                          disabled={isStudentOrMonitor}
+                          className={`w-full rounded-2xl border border-[#dce8f5] pl-11 pr-4 py-3 outline-none transition-all text-slate-800 ${
+                            isStudentOrMonitor
+                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-150'
+                              : 'focus:border-[#1f5dcc] focus:ring-4 focus:ring-[#1f5dcc]/5'
+                          }`}
                           placeholder="Nhập khoa hoặc phòng ban lớn"
                         />
                       </div>
@@ -648,7 +668,12 @@ export default function PersonalProfilePage() {
                           name="department"
                           value={editFormData.department}
                           onChange={handleInputChange}
-                          className="w-full rounded-2xl border border-[#dce8f5] pl-11 pr-4 py-3 outline-none focus:border-[#1f5dcc] focus:ring-4 focus:ring-[#1f5dcc]/5 transition-all text-slate-800"
+                          disabled={isStudentOrMonitor}
+                          className={`w-full rounded-2xl border border-[#dce8f5] pl-11 pr-4 py-3 outline-none transition-all text-slate-800 ${
+                            isStudentOrMonitor
+                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-150'
+                              : 'focus:border-[#1f5dcc] focus:ring-4 focus:ring-[#1f5dcc]/5'
+                          }`}
                           placeholder="Nhập lớp học hoặc phòng ban chi tiết"
                         />
                       </div>

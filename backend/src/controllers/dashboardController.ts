@@ -17,7 +17,7 @@ export const getLienChiDashboard = async (req: AuthRequest, res: Response): Prom
     const lienchiId = user.id;
 
     // 1. KPI Stats
-    const totalStudents = await User.count({ where: { role: 'student', faculty } });
+    const totalStudents = await User.count({ where: { role: { [Op.in]: ['student', 'monitor'] }, faculty } });
     
     // Total events created by this Lien Chi
     const totalEvents = await Event.count({ where: { createdBy: lienchiId } });

@@ -74,7 +74,7 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
       where.status = status;
     } else {
       // Exclude draft from public/students list if requested by student
-      if (req.user?.role === 'student') {
+      if (req.user?.role === 'student' || req.user?.role === 'monitor') {
         where.status = { [Op.ne]: 'draft' };
       }
     }
@@ -1027,9 +1027,9 @@ export const registerForEvent = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    if (req.user?.role === 'student' && !(await canStudentAccessEvent(event, userId))) {
+    if ((req.user?.role === 'student' || req.user?.role === 'monitor') && !(await canStudentAccessEvent(event, userId))) {
       await transaction.rollback();
-      res.status(403).json({ message: 'Sá»± kiá»‡n nÃ y chá»‰ dÃ nh cho sinh viÃªn thuá»™c khoa phÃ¹ há»£p' });
+      res.status(403).json({ message: 'Sự kiện này chỉ dành cho sinh viên thuộc khoa phù hợp' });
       return;
     }
 

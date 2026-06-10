@@ -7,7 +7,7 @@ export class User extends Model {
   declare fullName: string;
   declare email: string;
   declare password: string;
-  declare role: 'admin' | 'lienchi' | 'student';
+  declare role: 'admin' | 'lienchi' | 'student' | 'monitor';
   declare phone: string | null;
   declare avatar: string | null;
   declare studentId: string | null;
@@ -50,7 +50,7 @@ User.init(
       allowNull: false
     },
     role: {
-      type: DataTypes.ENUM('admin', 'lienchi', 'student'),
+      type: DataTypes.ENUM('admin', 'lienchi', 'student', 'monitor'),
       defaultValue: 'student',
       allowNull: false
     },

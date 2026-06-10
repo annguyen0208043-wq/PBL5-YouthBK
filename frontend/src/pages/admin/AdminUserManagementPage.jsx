@@ -8,7 +8,7 @@ function statusTone(status) {
   return status === 'Hoạt động' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700';
 }
 
-const ROLE_OPTIONS = ['Sinh viên', 'Liên chi Đoàn'];
+const ROLE_OPTIONS = ['Sinh viên', 'Ban cán sự', 'Liên chi Đoàn'];
 const FACULTY_OPTIONS = ['CNTT', 'Cơ khí', 'Điện', 'Xây dựng', 'Kinh tế', 'Khác'];
 const CUSTOM_FACULTY_VALUE = '__custom_faculty__';
 
@@ -23,6 +23,7 @@ function normalizeRole(role = '') {
   if (normalized === 'admin' || normalized.includes('doan truong')) return 'admin';
   if (normalized === 'lienchi' || normalized.includes('lien chi')) return 'lienchi';
   if (normalized === 'student' || normalized.includes('sinh vien')) return 'student';
+  if (normalized === 'monitor' || normalized.includes('ban can su')) return 'monitor';
   return normalized;
 }
 
@@ -50,6 +51,7 @@ export default function AdminUserManagementPage() {
     email: '',
     phone: '',
     faculty: '',
+    department: '',
     role: 'Sinh viên',
     password: ''
   });
@@ -59,11 +61,12 @@ export default function AdminUserManagementPage() {
     email: '',
     phone: '',
     faculty: '',
+    department: '',
     role: 'Sinh viên'
   });
   const [editCustomFaculty, setEditCustomFaculty] = useState('');
 
-  const roles = ['Tất cả', 'Sinh viên', 'Liên chi Đoàn'];
+  const roles = ['Tất cả', 'Sinh viên', 'Ban cán sự', 'Liên chi Đoàn'];
 
   // Fetch users on component mount
   useEffect(() => {
@@ -312,6 +315,7 @@ export default function AdminUserManagementPage() {
           email: formData.email,
           phone: formData.phone || null,
           faculty: formData.faculty === CUSTOM_FACULTY_VALUE ? (customFaculty.trim() || null) : (formData.faculty || null),
+          department: formData.department || null,
           role: formData.role,
           password: formData.password,
           status: 'Hoạt động'
@@ -334,6 +338,7 @@ export default function AdminUserManagementPage() {
         email: '',
         phone: '',
         faculty: '',
+        department: '',
         role: 'Sinh viên',
         password: ''
       });
@@ -359,6 +364,7 @@ export default function AdminUserManagementPage() {
         email: selected.email,
         phone: selected.phone || '',
         faculty: selectedFaculty ? (isPresetFaculty ? selectedFaculty : CUSTOM_FACULTY_VALUE) : '',
+        department: selected.department || '',
         role: selected.role
       });
       setEditCustomFaculty(selectedFaculty && !isPresetFaculty ? selectedFaculty : '');
@@ -388,6 +394,7 @@ export default function AdminUserManagementPage() {
           email: editFormData.email,
           phone: editFormData.phone || null,
           faculty: editFormData.faculty === CUSTOM_FACULTY_VALUE ? (editCustomFaculty.trim() || null) : (editFormData.faculty || null),
+          department: editFormData.department || null,
           role: editFormData.role
         })
       });
@@ -531,7 +538,10 @@ export default function AdminUserManagementPage() {
                   >
                     <div>
                       <p className="font-bold text-[#132b57]">{user.fullName}</p>
-                      <p className="mt-1 text-sm text-slate-500">MSSV/Mã: {user.studentId || 'N/A'}</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        MSSV/Mã: {user.studentId || 'N/A'}
+                        {user.department && ` | Lớp: ${user.department}`}
+                      </p>
                     </div>
                     <p className="text-sm text-slate-600">{user.email}</p>
                     <div>
@@ -772,6 +782,17 @@ export default function AdminUserManagementPage() {
                   </label>
 
                   <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">Lớp (Mã lớp)</span>
+                    <input
+                      name="department"
+                      value={formData.department}
+                      onChange={handleCreateFormChange}
+                      className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
+                      placeholder="Nhập mã lớp (Ví dụ: 23T_Nhat1)"
+                    />
+                  </label>
+
+                  <label className="block">
                     <span className="mb-2 block text-sm font-semibold text-slate-700">Khoa / Phòng ban</span>
                     <select
                       name="faculty"
@@ -896,6 +917,17 @@ export default function AdminUserManagementPage() {
                       onChange={handleEditFormChange}
                       className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
                       placeholder="Nhập số điện thoại"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">Lớp (Mã lớp)</span>
+                    <input
+                      name="department"
+                      value={editFormData.department}
+                      onChange={handleEditFormChange}
+                      className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
+                      placeholder="Nhập mã lớp (Ví dụ: 23T_Nhat1)"
                     />
                   </label>
 

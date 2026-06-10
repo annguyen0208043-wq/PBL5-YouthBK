@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import {
   getUserProfile, updateUserProfile, getAllUsers, getUserById,
   createUser, updateUser, changeUserRole, changeUserStatus, resetUserPassword,
-  getUserPointsHistory
+  getUserPointsHistory, getClassStudentsPoints, getStudentPointsHistory
 } from '../controllers/userController';
 import { authMiddleware, adminMiddleware, adminOrLienChiMiddleware, AuthRequest } from '../middlewares/authMiddleware';
 import { uploadAvatar } from '../config/multer';
@@ -54,6 +54,8 @@ router.post('/profile/avatar', authMiddleware, uploadAvatar.single('avatar'), as
 router.get('/', authMiddleware, adminOrLienChiMiddleware, getAllUsers);
 router.post('/', authMiddleware, adminMiddleware, createUser);
 router.put('/:id/reset-password', authMiddleware, adminMiddleware, resetUserPassword);
+router.get('/class-points', authMiddleware, getClassStudentsPoints);
+router.get('/class-points/:id/history', authMiddleware, getStudentPointsHistory);
 router.get('/:id', authMiddleware, getUserById);
 router.put('/:id', authMiddleware, adminMiddleware, updateUser);
 router.put('/:id/role', authMiddleware, adminMiddleware, changeUserRole);

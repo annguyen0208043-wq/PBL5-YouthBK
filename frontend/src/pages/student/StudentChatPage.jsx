@@ -53,6 +53,7 @@ function normalizeUser(user) {
     email: user?.email || '',
     studentId: user?.studentId || '',
     avatar: user?.avatar || user?.avatarUrl || '',
+    role: user?.role || '',
   };
 }
 
@@ -595,9 +596,13 @@ export default function StudentChatPage() {
 
           <nav className="space-y-2">
             <Link to="/sinhvien/event" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">Sự kiện của tôi</Link>
-            <Link to="/sinhvien/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">Hồ sơ cá nhân</Link>
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Chat sinh viên</div>
             <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">Lịch sử hoạt động</Link>
+            {['monitor', 'ban cán sự', 'ban can su'].includes(currentUser.role?.toLowerCase()) && (
+              <Link to="/sinhvien/class-points" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+                Theo dõi điểm lớp
+              </Link>
+            )}
             <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">Thông báo</Link>
           </nav>
 

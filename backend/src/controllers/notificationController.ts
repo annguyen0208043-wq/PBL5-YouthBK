@@ -123,7 +123,7 @@ export const searchRecipients = async (req: AuthRequest, res: Response) => {
     if (req.user?.role === 'lienchi') {
       const currentUser = await User.findByPk(req.user.id);
       if (currentUser && currentUser.faculty) {
-        whereClause.role = 'student';
+        whereClause.role = { [Op.in]: ['student', 'monitor'] };
         whereClause.faculty = currentUser.faculty;
       }
     }
@@ -161,13 +161,13 @@ export const sendNotification = async (req: AuthRequest, res: Response): Promise
     let recipientIds: number[] = [];
 
     if (targetType === 'all_students') {
-      const students = await User.findAll({ where: { role: 'student', isActive: true }, attributes: ['id'] });
+      const students = await User.findAll({ where: { role: { [Op.in]: ['student', 'monitor'] }, isActive: true }, attributes: ['id'] });
       recipientIds = students.map(s => s.id);
     } else if (targetType === 'lienchi_faculty' && faculty) {
       const users = await User.findAll({ where: { role: 'lienchi', faculty, isActive: true }, attributes: ['id'] });
       recipientIds = users.map(u => u.id);
     } else if (targetType === 'faculty_students' && faculty) {
-      const users = await User.findAll({ where: { role: 'student', faculty, isActive: true }, attributes: ['id'] });
+      const users = await User.findAll({ where: { role: { [Op.in]: ['student', 'monitor'] }, faculty, isActive: true }, attributes: ['id'] });
       recipientIds = users.map(u => u.id);
     } else if (targetType === 'faculty' && faculty) {
       // Keep for backward compatibility if any old client still sends this
