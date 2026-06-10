@@ -31,7 +31,8 @@ export default function AdminCreateEventPage() {
     locationLng: '',
     attendanceRadius: '',
     description: '',
-    leaderId: ''
+    leaderId: '',
+    communityPoints: ''
   });
 
   const [users, setUsers] = useState([]);
@@ -480,7 +481,8 @@ export default function AdminCreateEventPage() {
         locationLng: '',
         attendanceRadius: '',
         description: '',
-        leaderId: ''
+        leaderId: '',
+        communityPoints: ''
       });
       setLeaderSearch('');
       setLeaderNameDisplay('');
@@ -567,7 +569,7 @@ export default function AdminCreateEventPage() {
             </label>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">Thể loại</span>
               <select
@@ -619,6 +621,17 @@ export default function AdminCreateEventPage() {
                   <span>⚠</span> {errors.maxParticipantsMsg}
                 </p>
               )}
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Điểm cộng đồng</span>
+              <input
+                type="number"
+                name="communityPoints"
+                value={formData.communityPoints}
+                onChange={handleInputChange}
+                className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm"
+                placeholder="Ví dụ: 5"
+              />
             </label>
           </div>
 

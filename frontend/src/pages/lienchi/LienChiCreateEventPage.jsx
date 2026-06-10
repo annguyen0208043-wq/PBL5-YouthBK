@@ -31,7 +31,8 @@ export default function LienChiCreateEventPage() {
     locationLng: '',
     attendanceRadius: '',
     description: '',
-    leaderId: ''
+    leaderId: '',
+    communityPoints: ''
   });
 
   const [users, setUsers] = useState([]);
@@ -487,7 +488,8 @@ export default function LienChiCreateEventPage() {
         locationLng: '',
         attendanceRadius: '',
         description: '',
-        leaderId: ''
+        leaderId: '',
+        communityPoints: ''
       });
       setLeaderSearch('');
       setLeaderNameDisplay('');
@@ -574,7 +576,7 @@ export default function LienChiCreateEventPage() {
             </label>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">Thể loại</span>
               <select
@@ -611,6 +613,17 @@ export default function LienChiCreateEventPage() {
                 className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
                   errors.maxParticipants ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
                 }`}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Điểm cộng đồng</span>
+              <input
+                type="number"
+                name="communityPoints"
+                value={formData.communityPoints}
+                onChange={handleInputChange}
+                className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm"
+                placeholder="Ví dụ: 5"
               />
             </label>
           </div>

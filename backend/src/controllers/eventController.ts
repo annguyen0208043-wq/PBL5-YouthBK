@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { Op } from 'sequelize';
+import sequelize from '../config/database';
 import crypto from 'crypto';
 import Event from '../models/Event';
 import EventRegistration from '../models/EventRegistration';
@@ -13,6 +14,7 @@ import EventFeedback from '../models/EventFeedback';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { isBeforeStart, isRegistrationOpen, hasSlots, isOwner } from '../guards/event.guards';
 import { writeAuditLog, getClientIp } from '../utils/auditLogHelper';
+import { addCommunityPointsForEvent } from '../utils/pointHelper';
 
 // Helper to calculate GPS distance
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -83,7 +85,7 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
         ...(req.user ? [{
           model: EventRegistration,
           as: 'registrations',
-          where: { 
+          where: {
             userId: req.user.id,
             status: { [Op.in]: ['registered', 'attended', 'confirmed', 'pending'] }
           },
@@ -92,6 +94,33 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
       ],
       order: [['createdAt', 'DESC']]
     });
+
+    // Fetch aggregate feedback stats for all fetched events in one go
+    const feedbackCounts = await EventFeedback.findAll({
+      attributes: [
+        'eventId',
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+        [sequelize.fn('AVG', sequelize.col('rating')), 'average']
+      ],
+      group: ['eventId'],
+      raw: true
+    }) as unknown as { eventId: number; count: string; average: string }[];
+
+    const feedbackMap = new Map<number, { count: number; average: number }>();
+    feedbackCounts.forEach(item => {
+      feedbackMap.set(Number(item.eventId), {
+        count: parseInt(item.count || '0'),
+        average: parseFloat(parseFloat(item.average || '0').toFixed(2))
+      });
+    });
+
+    // Fetch feedbacks left by the current logged-in user
+    const userFeedbacks = req.user ? await EventFeedback.findAll({
+      where: { userId: req.user.id },
+      attributes: ['eventId'],
+      raw: true
+    }) : [];
+    const userFeedbackSet = new Set(userFeedbacks.map(f => f.eventId));
 
     const formattedEvents = events.map(e => {
       const data = e.toJSON() as any;
@@ -103,6 +132,15 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
         data.isRegistered = false;
         data.userRegistrationStatus = null;
       }
+
+      const stats = feedbackMap.get(e.id) || { count: 0, average: 0 };
+      data.feedbackSummary = {
+        averageRating: stats.average,
+        totalFeedbacks: stats.count
+      };
+
+      data.hasSubmittedFeedback = req.user ? userFeedbackSet.has(e.id) : false;
+
       return data;
     });
 
@@ -122,8 +160,8 @@ export const getEventById = async (req: AuthRequest, res: Response): Promise<voi
       include: [
         { model: User, as: 'creator', attributes: ['id', 'name', 'email', 'faculty'] },
         { model: User, as: 'leader', attributes: ['id', 'name', 'email', 'role', 'faculty'] },
-        { 
-          model: EventTimeline, 
+        {
+          model: EventTimeline,
           as: 'timelines',
           include: [{ model: EventTimelineDetail, as: 'details' }]
         },
@@ -137,7 +175,7 @@ export const getEventById = async (req: AuthRequest, res: Response): Promise<voi
         ...(req.user ? [{
           model: EventRegistration,
           as: 'registrations',
-          where: { 
+          where: {
             userId: req.user.id,
             status: { [Op.in]: ['registered', 'attended', 'confirmed', 'pending'] }
           },
@@ -165,6 +203,48 @@ export const getEventById = async (req: AuthRequest, res: Response): Promise<voi
       data.userRegistrationStatus = null;
     }
 
+    // Fetch feedback statistics for this single event
+    const feedbackStats = await EventFeedback.findAll({
+      where: { eventId: id },
+      attributes: [
+        'rating',
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+      ],
+      group: ['rating'],
+      raw: true
+    }) as unknown as { rating: number; count: number }[];
+
+    let totalFeedbacks = 0;
+    let sumRating = 0;
+    const ratingBreakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+    feedbackStats.forEach((stat: any) => {
+      const rating = parseInt(stat.rating);
+      const count = parseInt(stat.count);
+      if (rating >= 1 && rating <= 5) {
+        ratingBreakdown[rating as 1 | 2 | 3 | 4 | 5] = count;
+        totalFeedbacks += count;
+        sumRating += rating * count;
+      }
+    });
+
+    const averageRating = totalFeedbacks > 0 ? parseFloat((sumRating / totalFeedbacks).toFixed(2)) : 0;
+
+    data.feedbackSummary = {
+      averageRating,
+      totalFeedbacks,
+      ratingBreakdown
+    };
+
+    let hasSubmittedFeedback = false;
+    if (req.user) {
+      const fb = await EventFeedback.findOne({
+        where: { eventId: id, userId: req.user.id }
+      });
+      hasSubmittedFeedback = !!fb;
+    }
+    data.hasSubmittedFeedback = hasSubmittedFeedback;
+
     res.json({ event: data });
   } catch (error) {
     console.error('Get event by id error:', error);
@@ -191,9 +271,10 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       maxParticipants,
       timeline,
       submit,
-      leaderId
+      leaderId,
+      communityPoints
     } = req.body;
-    
+
     const userId = req.user?.id!;
     const role = req.user?.role!;
 
@@ -229,7 +310,8 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       status,
       createdBy: userId,
       createdByRole: role === 'admin' ? 'admin' : 'lienchi',
-      leaderId: leaderId ? parseInt(leaderId, 10) : null
+      leaderId: leaderId ? parseInt(leaderId, 10) : null,
+      communityPoints: communityPoints ? parseInt(communityPoints, 10) : 0
     }, { transaction });
 
     // Handle Timeline (phases and details)
@@ -266,7 +348,7 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
 
     // Handle uploaded files
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
-    
+
     // Save cover and other images
     if (files && files.images) {
       const captions = req.body.imageCaptions ? (typeof req.body.imageCaptions === 'string' ? JSON.parse(req.body.imageCaptions) : req.body.imageCaptions) : [];
@@ -375,9 +457,11 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       maxParticipants,
       timeline,
       submit,
-      leaderId
+      leaderId,
+      communityPoints
     } = req.body;
 
+    const oldStatus = event.status;
     let updatedStatus = event.status;
     if (role !== 'admin' && (submit === 'true' || submit === true)) {
       updatedStatus = 'pending';
@@ -399,7 +483,8 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       minParticipants: minParticipants !== undefined ? (minParticipants ? parseInt(minParticipants, 10) : null) : event.minParticipants,
       maxParticipants: maxParticipants !== undefined ? (maxParticipants ? parseInt(maxParticipants, 10) : null) : event.maxParticipants,
       status: updatedStatus,
-      leaderId: leaderId !== undefined ? (leaderId ? parseInt(leaderId, 10) : null) : event.leaderId
+      leaderId: leaderId !== undefined ? (leaderId ? parseInt(leaderId, 10) : null) : event.leaderId,
+      communityPoints: communityPoints !== undefined ? (communityPoints ? parseInt(communityPoints, 10) : 0) : event.communityPoints
     }, { transaction });
 
     // Handle Timeline updates (delete and recreate)
@@ -439,7 +524,7 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
 
     // Handle uploaded files
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
-    
+
     // Manage image uploads: optionally replace or append images.
     // Here we will keep old files, unless user explicitly sends replacement.
     // If new images are sent: append them. Or if 'replaceImages' flag is true, delete old.
@@ -447,7 +532,7 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       if (req.body.replaceImages === 'true' || req.body.replaceImages === true) {
         await EventImage.destroy({ where: { eventId: id }, transaction });
       }
-      
+
       const captions = req.body.imageCaptions ? (typeof req.body.imageCaptions === 'string' ? JSON.parse(req.body.imageCaptions) : req.body.imageCaptions) : [];
       const covers = req.body.imageIsCovers ? (typeof req.body.imageIsCovers === 'string' ? JSON.parse(req.body.imageIsCovers) : req.body.imageIsCovers) : [];
 
@@ -483,6 +568,11 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
 
     await transaction.commit();
 
+    const currentStatus = event.status;
+    if (['ended', 'completed'].includes(currentStatus)) {
+      await addCommunityPointsForEvent(event.id);
+    }
+
     const fullEvent = await Event.findByPk(id, {
       include: [
         { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
@@ -510,7 +600,7 @@ export const submitEvent = async (req: AuthRequest, res: Response): Promise<void
       res.status(403).json({ message: 'Không có quyền thao tác' });
       return;
     }
-    
+
     if (!['draft', 'revision_required'].includes(event.status)) {
       res.status(400).json({ message: 'Trạng thái sự kiện không hợp lệ để gửi duyệt' });
       return;
@@ -571,7 +661,7 @@ export const approveEvent = async (req: AuthRequest, res: Response): Promise<voi
   try {
     const { id } = req.params;
     const { actualStartDate, actualEndDate, note } = req.body;
-    
+
     const event = await Event.findByPk(id, { transaction });
     if (!event) {
       await transaction.rollback();
@@ -625,7 +715,7 @@ export const rejectEvent = async (req: AuthRequest, res: Response): Promise<void
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    
+
     const event = await Event.findByPk(id, { transaction });
     if (!event) {
       await transaction.rollback();
@@ -681,7 +771,7 @@ export const requestEventRevision = async (req: AuthRequest, res: Response): Pro
       res.status(400).json({ message: 'Lời nhắn và Hạn chỉnh sửa là bắt buộc' });
       return;
     }
-    
+
     const event = await Event.findByPk(id, { transaction });
     if (!event) {
       await transaction.rollback();
@@ -926,7 +1016,7 @@ export const getEventRegistrations = async (req: AuthRequest, res: Response): Pr
   try {
     const { id } = req.params;
     const event = await Event.findByPk(id);
-    
+
     if (!event) {
       res.status(404).json({ message: 'Event not found' });
       return;
@@ -1085,6 +1175,10 @@ export const updateRegistrationStatus = async (req: AuthRequest, res: Response):
     await registration.save({ transaction });
     await transaction.commit();
 
+    if (lockEvent && ['ended', 'completed'].includes(lockEvent.status) && ['attended', 'confirmed'].includes(status)) {
+      await addCommunityPointsForEvent(lockEvent.id);
+    }
+
     res.json({ message: 'Cập nhật trạng thái sinh viên thành công', registration });
   } catch (error) {
     await transaction.rollback();
@@ -1114,7 +1208,7 @@ export const deleteRegistration = async (req: AuthRequest, res: Response): Promi
 
     const lockEvent = await Event.findByPk(event.id, { transaction, lock: transaction.LOCK.UPDATE });
     const isValid = ['registered', 'attended', 'confirmed'].includes(registration.status);
-    
+
     if (isValid && lockEvent!.currentSlots > 0) {
       lockEvent!.currentSlots -= 1;
       await lockEvent!.save({ transaction });
@@ -1122,7 +1216,7 @@ export const deleteRegistration = async (req: AuthRequest, res: Response): Promi
 
     await registration.destroy({ transaction });
     await transaction.commit();
-    
+
     res.json({ message: 'Xóa sinh viên khỏi danh sách thành công' });
   } catch (error) {
     await transaction.rollback();
@@ -1258,8 +1352,19 @@ export const checkInGPS = async (req: AuthRequest, res: Response): Promise<void>
 export const submitEventFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { rating, comment } = req.body;
+    const { rating, comment, isAnonymous } = req.body;
     const userId = req.user?.id!;
+
+    const event = await Event.findByPk(id);
+    if (!event) {
+      res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+      return;
+    }
+
+    if (!['ended', 'completed'].includes(event.status)) {
+      res.status(400).json({ message: 'Sự kiện chưa kết thúc. Chỉ có thể đánh giá sau khi sự kiện đã kết thúc.' });
+      return;
+    }
 
     const registration = await EventRegistration.findOne({
       where: {
@@ -1287,7 +1392,8 @@ export const submitEventFeedback = async (req: AuthRequest, res: Response): Prom
       eventId: Number(id),
       userId,
       rating,
-      comment
+      comment,
+      isAnonymous: !!isAnonymous
     });
 
     res.status(201).json({ message: 'Gửi đánh giá thành công. Cảm ơn bạn!', feedback });
@@ -1306,18 +1412,28 @@ export const getEventFeedbacks = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    if (req.user?.role !== 'admin' && event.createdBy !== req.user?.id) {
-      res.status(403).json({ message: 'Không có quyền xem các đánh giá của sự kiện này' });
-      return;
-    }
-
     const feedbacks = await EventFeedback.findAll({
       where: { eventId: id },
       include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email', 'avatar'] }],
       order: [['createdAt', 'DESC']]
     });
 
-    res.json({ feedbacks });
+    // ẩn danh
+    const formattedFeedbacks = feedbacks.map((fb: any) => {
+      const data = fb.toJSON();
+      if (data.isAnonymous) {
+        data.userId = null;
+        data.user = {
+          id: null,
+          name: 'Người dùng ẩn danh',
+          avatar: null,
+          email: null
+        };
+      }
+      return data;
+    });
+
+    res.json({ feedbacks: formattedFeedbacks });
   } catch (error) {
     console.error('Get feedbacks error:', error);
     res.status(500).json({ message: 'Internal server error' });

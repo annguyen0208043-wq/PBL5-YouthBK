@@ -9,6 +9,7 @@ export class EventFeedback extends Model {
   declare userId: number;
   declare rating: number;
   declare comment: string | null;
+  declare isAnonymous: boolean;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -47,6 +48,11 @@ EventFeedback.init(
     comment: {
       type: DataTypes.TEXT,
       allowNull: true
+    },
+    isAnonymous: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
     }
   },
   {

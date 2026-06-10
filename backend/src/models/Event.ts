@@ -38,6 +38,7 @@ export class Event extends Model {
   declare qrActive: boolean;
 
   declare leaderId: number | null;
+  declare communityPoints: number;
 
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -175,6 +176,11 @@ Event.init(
         model: User,
         key: 'id'
       }
+    },
+    communityPoints: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
     }
   },
   {

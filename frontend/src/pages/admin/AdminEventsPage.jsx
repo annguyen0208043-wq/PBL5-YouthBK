@@ -475,7 +475,7 @@ export default function AdminEventsPage() {
                         </button>
                         <button type="button" onClick={handleViewFeedbacks} className="inline-flex items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-3 font-semibold text-indigo-700 transition-all hover:bg-indigo-100 shadow-sm">
                           <MessageSquare className="h-5 w-5" />
-                          Xem Đánh giá ({selectedEvent.feedbacks?.length || 0})
+                          Xem Đánh giá
                         </button>
                       </>
                     )}

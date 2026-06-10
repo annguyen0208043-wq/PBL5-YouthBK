@@ -264,6 +264,7 @@ CREATE TABLE `events` (
   `qrCode`                VARCHAR(255)          COMMENT 'Mã QR dùng để điểm danh',
   `qrActive`              TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1 = Bật quét QR điểm danh, 0 = Tắt',
   `leaderId`              INT                   COMMENT 'ID người chủ trì sự kiện (FK -> users.id)',
+  `communityPoints`       INT          NOT NULL DEFAULT 0 COMMENT 'Điểm phục vụ cộng đồng tích lũy của sự kiện',
 
   `createdAt`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -446,13 +447,14 @@ CREATE TABLE `certificates` (
 -- 17. BẢNG event_feedbacks (Đánh giá sự kiện)
 -- ============================================================
 CREATE TABLE `event_feedbacks` (
-  `id`        INT      NOT NULL AUTO_INCREMENT,
-  `eventId`   INT      NOT NULL,
-  `userId`    INT      NOT NULL COMMENT 'Sinh viên đánh giá',
-  `rating`    INT      NOT NULL COMMENT 'Điểm đánh giá (1-5 sao)',
-  `comment`   TEXT              COMMENT 'Nhận xét chi tiết',
-  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `id`          INT          NOT NULL AUTO_INCREMENT,
+  `eventId`     INT          NOT NULL,
+  `userId`      INT          NOT NULL COMMENT 'Sinh viên đánh giá',
+  `rating`      INT          NOT NULL COMMENT 'Điểm đánh giá (1-5 sao)',
+  `comment`     TEXT                  COMMENT 'Nhận xét chi tiết',
+  `isAnonymous` TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1 = Ẩn danh, 0 = Công khai',
+  `createdAt`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_feedback` (`eventId`, `userId`),
@@ -460,4 +462,23 @@ CREATE TABLE `event_feedbacks` (
   CONSTRAINT `fk_feedback_event` FOREIGN KEY (`eventId`) REFERENCES `events` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_feedback_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON UPDATE CASCADE,
   CONSTRAINT `chk_rating` CHECK (`rating` >= 1 AND `rating` <= 5)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 18. BẢNG community_point_histories (Lịch sử điểm cộng đồng)
+-- ============================================================
+CREATE TABLE `community_point_histories` (
+  `id`          INT          NOT NULL AUTO_INCREMENT,
+  `userId`      INT          NOT NULL COMMENT 'Sinh viên được cộng/trừ điểm',
+  `eventId`     INT                   COMMENT 'Sự kiện liên quan (nếu có)',
+  `points`      INT          NOT NULL COMMENT 'Số điểm cộng/trừ',
+  `reason`      VARCHAR(255) NOT NULL COMMENT 'Lý do cộng/trừ điểm',
+  `createdAt`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  KEY `idx_pt_history_user` (`userId`),
+  CONSTRAINT `fk_pt_history_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_pt_history_event` FOREIGN KEY (`eventId`) REFERENCES `events` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

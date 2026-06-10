@@ -82,6 +82,11 @@ User.init(
     isActive: {
       type: DataTypes.BOOLEAN,
       defaultValue: true
+    },
+    communityPoints: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0
     }
   },
   {
