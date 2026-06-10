@@ -38,8 +38,8 @@ export default function StudentNotificationPage() {
             </div>
           </div>
 
-          <div className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
-            <div className="flex items-center gap-3">
+          <Link to="/sinhvien/profile" className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md hover:bg-white/15 transition-all block text-white no-underline w-full min-w-0">
+            <div className="flex items-center gap-3 w-full min-w-0">
               {user.avatarUrl ? (
                 <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-14 w-14 rounded-2xl border border-white/25 object-cover" />
               ) : (
@@ -52,14 +52,11 @@ export default function StudentNotificationPage() {
                 <p className="profile-user-subtitle text-sm text-blue-100/85">MSSV: {user.studentId}</p>
               </div>
             </div>
-          </div>
+          </Link>
 
           <nav className="space-y-2">
             <Link to="/sinhvien/event" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Sự kiện của tôi
-            </Link>
-            <Link to="/sinhvien/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-              Hồ sơ cá nhân
             </Link>
             <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Chat sinh viên
@@ -67,6 +64,11 @@ export default function StudentNotificationPage() {
             <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Lịch sử hoạt động
             </Link>
+            {['monitor', 'ban cán sự', 'ban can su'].includes(user.role?.toLowerCase()) && (
+              <Link to="/sinhvien/class-points" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+                Theo dõi điểm lớp
+              </Link>
+            )}
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Thông báo</div>
           </nav>
 

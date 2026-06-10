@@ -12,6 +12,7 @@ export const comparePassword = async (password: string, hash: string): Promise<b
 export const convertRoleToVietnamese = (role: string): string => {
   const roleMap: { [key: string]: string } = {
     'student': 'Sinh viên',
+    'monitor': 'Ban cán sự',
     'lienchi': 'Liên chi đoàn',
     'admin': 'Đoàn trường'
   };
@@ -21,6 +22,8 @@ export const convertRoleToVietnamese = (role: string): string => {
 export const convertRoleToEnglish = (role: string): string => {
   const roleMap: { [key: string]: string } = {
     'sinh viên': 'student',
+    'ban cán sự': 'monitor',
+    'ban can su': 'monitor',
     'liên chi đoàn': 'lienchi',
     'đoàn trường': 'admin',
     'lien chi doan': 'lienchi',

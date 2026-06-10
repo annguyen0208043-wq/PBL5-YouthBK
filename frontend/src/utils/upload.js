@@ -33,7 +33,7 @@ export const uploadFile = async (file, token = null) => {
     }
 
     // Đổi URL endpoint sao cho phù hợp với cấu hình (vd: axiosInstance.post('/upload', ...))
-    const response = await axios.post('http://localhost:5000/api/upload', formData, {
+    const response = await axios.post('/api/upload', formData, {
       headers,
     });
 

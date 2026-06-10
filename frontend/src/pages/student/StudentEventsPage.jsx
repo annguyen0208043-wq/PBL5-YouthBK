@@ -651,15 +651,17 @@ export default function StudentEventsPage({ embedded = false } = {}) {
 
           <nav className="space-y-2">
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Sự kiện của tôi</div>
-            <Link to="/sinhvien/profile" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-              Hồ sơ cá nhân
-            </Link>
             <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Chat sinh viên
             </Link>
             <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Lịch sử hoạt động
             </Link>
+            {['monitor', 'ban cán sự', 'ban can su'].includes(user.role?.toLowerCase()) && (
+              <Link to="/sinhvien/class-points" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+                Theo dõi điểm lớp
+              </Link>
+            )}
             <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Thông báo
             </Link>

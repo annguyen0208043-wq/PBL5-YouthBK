@@ -24,6 +24,7 @@ import StudentChatPage from '../pages/student/StudentChatPage';
 import StudentEventsPage from '../pages/student/StudentEventsPage';
 import StudentNotificationPage from '../pages/student/StudentNotificationPage';
 import PersonalProfilePage from '../pages/profile/PersonalProfilePage';
+import StudentClassPointsPage from '../pages/student/StudentClassPointsPage';
 
 export default function App() {
   return (
@@ -62,6 +63,7 @@ export default function App() {
       <Route path="/sinhvien/history" element={<StudentActivityHistoryPage />} />
       <Route path="/sinhvien/notifications" element={<StudentNotificationPage />} />
       <Route path="/sinhvien/profile" element={<PersonalProfilePage />} />
+      <Route path="/sinhvien/class-points" element={<StudentClassPointsPage />} />
     </Routes>
   );
 }
