@@ -10,6 +10,7 @@ import EventDocument from '../models/EventDocument';
 import EventApproval from '../models/EventApproval';
 import User from '../models/User';
 import EventFeedback from '../models/EventFeedback';
+import Certificate from '../models/Certificate';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { isBeforeStart, isRegistrationOpen, hasSlots, isOwner } from '../guards/event.guards';
 import { writeAuditLog, getClientIp } from '../utils/auditLogHelper';
@@ -946,7 +947,14 @@ export const getEventRegistrations = async (req: AuthRequest, res: Response): Pr
       order: [['createdAt', 'DESC']]
     });
 
-    res.json({ registrations });
+    const bulkCertCount = await Certificate.count({
+      where: {
+        eventId: id,
+        isBulk: true
+      }
+    });
+
+    res.json({ registrations, hasBulkIssued: bulkCertCount > 0 });
   } catch (error) {
     console.error('Get registrations error:', error);
     res.status(500).json({ message: 'Internal server error' });
