@@ -636,8 +636,8 @@ export default function StudentEventsPage({ embedded = false } = {}) {
             </div>
           </div>
 
-          <Link to="/sinhvien/profile" className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md hover:bg-white/15 transition-all block text-white no-underline w-full min-w-0">
-            <div className="flex items-center gap-3 w-full min-w-0">
+          <div className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
+            <div className="flex items-center gap-3">
               {user.avatarUrl ? (
                 <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-14 w-14 rounded-2xl border border-white/25 object-cover" />
               ) : (
@@ -650,7 +650,7 @@ export default function StudentEventsPage({ embedded = false } = {}) {
                 <p className="profile-user-subtitle text-sm text-blue-100/85">MSSV: {user.studentId}</p>
               </div>
             </div>
-          </Link>
+          </div>
 
           <nav className="space-y-2">
             <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Sự kiện của tôi</div>

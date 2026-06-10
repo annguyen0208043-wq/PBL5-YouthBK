@@ -1,14 +1,14 @@
 import multer from 'multer';
-import path from 'path';
 import fs from 'fs';
-
-const avatarDir = path.join(__dirname, '../../uploads/avatars');
-if (!fs.existsSync(avatarDir)) {
-  fs.mkdirSync(avatarDir, { recursive: true });
-}
+import path from 'path';
 
 // Sử dụng memory storage thay vì disk storage
 const storage = multer.memoryStorage();
+const avatarDir = path.join(__dirname, '../../uploads/avatars');
+
+if (!fs.existsSync(avatarDir)) {
+  fs.mkdirSync(avatarDir, { recursive: true });
+}
 
 const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowedTypes = [

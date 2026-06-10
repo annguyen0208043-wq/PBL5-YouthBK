@@ -48,7 +48,6 @@ export default function App() {
       
       {/* Lien Chi Routes */}
       <Route path="/lien-chi" element={<LienChiDashboardPage />} />
-      <Route path="/lien-chi/profile" element={<PersonalProfilePage />} />
       <Route path="/lien-chi/events/create" element={<LienChiCreateEventPage />} />
       <Route path="/lien-chi/events/manage" element={<LienChiManagedEventsPage />} />
       <Route path="/lien-chi/events/manage/edit/:id" element={<LienChiEditEventPage />} />
