@@ -294,6 +294,26 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
+    // Validate plannedStartDate: phải sau hiện tại ít nhất 48h
+    const startDt = new Date(plannedStartDate);
+    const minStartDt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    if (startDt < minStartDt) {
+      await transaction.rollback();
+      res.status(400).json({ message: 'Thời gian bắt đầu sự kiện phải sau thời điểm hiện tại ít nhất 48 giờ' });
+      return;
+    }
+
+    // Validate registrationDeadline: phải trước plannedStartDate tối thiểu 24h
+    if (registrationDeadline) {
+      const regDt = new Date(registrationDeadline);
+      const minGapMs = 24 * 60 * 60 * 1000; // 24 giờ
+      if (regDt.getTime() > startDt.getTime() - minGapMs) {
+        await transaction.rollback();
+        res.status(400).json({ message: 'Hạn đăng ký phải trước thời gian bắt đầu sự kiện tối thiểu 24 giờ' });
+        return;
+      }
+    }
+
     // Determine initial status
     let status: any = 'draft';
     if (role === 'admin') {
@@ -494,6 +514,29 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       updatedStatus = 'pending';
     } else if (role === 'admin') {
       updatedStatus = 'open_registration';
+    }
+
+    // Validate plannedStartDate: phải sau hiện tại ít nhất 48h (nếu đổi ngày bắt đầu)
+    if (plannedStartDate) {
+      const newStartDt = new Date(plannedStartDate);
+      const minStartDt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      if (newStartDt < minStartDt) {
+        await transaction.rollback();
+        res.status(400).json({ message: 'Thời gian bắt đầu sự kiện phải sau thời điểm hiện tại ít nhất 48 giờ' });
+        return;
+      }
+    }
+
+    // Validate registrationDeadline: phải trước plannedStartDate tối thiểu 24h
+    if (registrationDeadline) {
+      const regDt = new Date(registrationDeadline);
+      const effectiveStart = new Date(plannedStartDate || event.plannedStartDate);
+      const minGapMs = 24 * 60 * 60 * 1000;
+      if (regDt.getTime() > effectiveStart.getTime() - minGapMs) {
+        await transaction.rollback();
+        res.status(400).json({ message: 'Hạn đăng ký phải trước thời gian bắt đầu sự kiện tối thiểu 24 giờ' });
+        return;
+      }
     }
 
     await event.update({
@@ -860,6 +903,53 @@ export const requestEventRevision = async (req: AuthRequest, res: Response): Pro
     await transaction.rollback();
     console.error('Revision request error:', error);
     res.status(500).json({ message: 'Internal error' });
+  }
+};
+
+// 3b. END EVENT EARLY (LIEN CHI / ADMIN)
+export const endEvent = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const event = await Event.findByPk(id);
+
+    if (!event) {
+      res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+      return;
+    }
+
+    const role = req.user?.role!;
+    const userId = req.user?.id!;
+
+    if (role !== 'admin' && !isOwner(event, userId)) {
+      res.status(403).json({ message: 'Không có quyền kết thúc sự kiện này' });
+      return;
+    }
+
+    if (event.status !== 'ongoing') {
+      res.status(400).json({ message: 'Chỉ có thể kết thúc sự kiện đang diễn ra' });
+      return;
+    }
+
+    const now = new Date();
+    await event.update({
+      status: 'ended',
+      actualEndDate: now
+    });
+
+    // Ghi nhật ký
+    writeAuditLog({
+      userId,
+      action: `Kết thúc sự kiện \"${event.title}\"`,
+      targetType: 'Event',
+      targetId: event.id,
+      details: `Thời gian kết thúc thực tế: ${now.toLocaleString('vi-VN')}`,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
+
+    res.json({ message: 'Sự kiện đã được kết thúc thành công', event, actualEndDate: now });
+  } catch (error) {
+    console.error('End event error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 

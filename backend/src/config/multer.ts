@@ -1,4 +1,11 @@
 import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+const avatarDir = path.join(__dirname, '../../uploads/avatars');
+if (!fs.existsSync(avatarDir)) {
+  fs.mkdirSync(avatarDir, { recursive: true });
+}
 
 // Sử dụng memory storage thay vì disk storage
 const storage = multer.memoryStorage();
