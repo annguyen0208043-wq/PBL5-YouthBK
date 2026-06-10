@@ -82,50 +82,46 @@ function ProfileLayout({ children, title, subtitle, user }) {
             </div>
           </div>
 
-          <div className="mb-6">
-            <UserIdentity user={user} subtitle={user.studentId || 'Sinh viên'} />
-          </div>
-
-          <div className="mb-6 rounded-3xl bg-white/10 p-4 backdrop-blur-md">
-            <p className="text-xs uppercase tracking-[0.28em] text-blue-100">Vai trò hiện tại</p>
-            <p className="mt-2 text-xl font-bold">{user.role || 'Sinh viên'}</p>
-            <p className="mt-2 text-sm text-blue-50/85">Quản lý thông tin cá nhân, cập nhật hồ sơ và theo dõi trạng thái tài khoản.</p>
-          </div>
-
-          <div className="mt-auto rounded-3xl border border-white/10 bg-white/10 p-4">
-            <p className="text-sm font-semibold">Tiện ích tài khoản</p>
-            <ul className="mt-3 space-y-2 text-sm text-blue-50/90 mb-6">
-              <li>Xem thông tin cá nhân</li>
-              <li>Cập nhật hồ sơ</li>
-              <li>Đăng ký tham gia sự kiện</li>
-              <li>Theo dõi lịch sử hoạt động</li>
-            </ul>
-
-            <nav className="space-y-2">
-              <Link to="/sinhvien/event" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-                Sự kiện của tôi
-              </Link>
-              <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Hồ sơ cá nhân</div>
-              <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-                Chat sinh viên
-              </Link>
-              <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-                Lịch sử hoạt động
-              </Link>
-              <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-                Thông báo
-              </Link>
-            </nav>
-
-            <div className="mt-6">
-              <button
-                onClick={handleLogout}
-                className="app-logout-button flex w-full items-center gap-3 rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10"
-              >
-                <LogOut className="h-5 w-5 shrink-0" />
-                <span>Đăng xuất</span>
-              </button>
+          <Link to="/sinhvien/profile" className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md hover:bg-white/15 transition-all block text-white no-underline w-full min-w-0">
+            <div className="flex items-center gap-3 w-full min-w-0">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-14 w-14 rounded-2xl border border-white/25 object-cover" />
+              ) : (
+                <div className="profile-user-avatar flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 text-lg font-black text-white">
+                  {userInitials}
+                </div>
+              )}
+              <div className="profile-user-meta">
+                <p className="profile-user-name text-base font-bold text-white">{user.fullName}</p>
+                <p className="profile-user-subtitle text-sm text-blue-100/85">MSSV: {user.studentId || 'N/A'}</p>
+              </div>
             </div>
+          </Link>
+
+          <nav className="space-y-2">
+            <Link to="/sinhvien/event" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Sự kiện của tôi
+            </Link>
+            <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Hồ sơ cá nhân</div>
+            <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Chat sinh viên
+            </Link>
+            <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Lịch sử hoạt động
+            </Link>
+            <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Thông báo
+            </Link>
+          </nav>
+
+          <div className="mt-auto pt-6">
+            <button
+              onClick={handleLogout}
+              className="app-logout-button flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-semibold text-white transition-all hover:bg-white/10"
+            >
+              <LogOut className="h-5 w-5 shrink-0" />
+              <span>Đăng xuất</span>
+            </button>
           </div>
         </aside>
 

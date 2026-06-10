@@ -202,6 +202,9 @@ function isEventForStudentFaculty(event, studentFaculty) {
 }
 
 function canCancelRegistration(event) {
+  if (['ongoing', 'completed', 'ended'].includes(event.rawStatus)) {
+    return { allowed: false, reason: 'Sự kiện đã diễn ra' };
+  }
   // Check if registration deadline has passed
   if (event.registrationDeadline) {
     const now = new Date();

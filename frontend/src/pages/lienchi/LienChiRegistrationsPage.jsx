@@ -32,6 +32,11 @@ export default function LienChiRegistrationsPage() {
 
   const currentEvent = events.find((e) => String(e.id) === String(selectedEventId));
   const isEventEnded = currentEvent && ['ended', 'completed'].includes(currentEvent.status);
+  const isRegistrationExpired = currentEvent && currentEvent.registrationDeadline && new Date() > new Date(currentEvent.registrationDeadline);
+  const isListLocked = isEventEnded || isRegistrationExpired;
+  
+  const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
 
   useEffect(() => {
     fetchEvents();
@@ -249,18 +254,23 @@ export default function LienChiRegistrationsPage() {
   const handleBulkIssueCertificates = async () => {
     if (!currentEvent) return;
     if (hasBulkIssued) {
-      alert('Sự kiện này đã được cấp chứng nhận hàng loạt.');
+      setBulkResult({ type: 'info', message: 'Sự kiện này đã được cấp chứng nhận hàng loạt.' });
       return;
     }
 
     const eligibleRegs = registrations.filter(r => ['attended', 'confirmed'].includes(r.status));
     if (eligibleRegs.length === 0) {
-      alert('Không có sinh viên nào đủ điều kiện cấp chứng nhận.');
+      setBulkResult({ type: 'error', message: 'Không có sinh viên nào đủ điều kiện cấp chứng nhận.' });
       return;
     }
 
-    if (!window.confirm(`Bạn sắp cấp chứng nhận hàng loạt cho ${eligibleRegs.length} sinh viên đủ điều kiện. Quá trình này sẽ mất một lúc để tạo và tải ảnh lên hệ thống. Tiếp tục?`)) return;
+    setShowBulkConfirmModal(true);
+  };
 
+  const confirmBulkIssueCertificates = async () => {
+    setShowBulkConfirmModal(false);
+    const eligibleRegs = registrations.filter(r => ['attended', 'confirmed'].includes(r.status));
+    
     setIsBulkIssuing(true);
     setBulkProgress({ current: 0, total: eligibleRegs.length });
 
@@ -341,7 +351,7 @@ export default function LienChiRegistrationsPage() {
     document.body.removeChild(exportNode);
     setIsBulkIssuing(false);
     if (successCount > 0) setHasBulkIssued(true);
-    alert(`Cấp chứng nhận thành công ${successCount}/${eligibleRegs.length} sinh viên.`);
+    setBulkResult({ type: 'success', message: `Cấp chứng nhận thành công ${successCount}/${eligibleRegs.length} sinh viên.` });
   };
 
   const filteredRegistrations = registrations.filter((reg) => {
@@ -451,7 +461,7 @@ export default function LienChiRegistrationsPage() {
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-1.5">
                             {/* Confirmed Action */}
-                            {!isEventEnded && ['registered', 'attended', 'absent'].includes(reg.status) && (
+                            {!isListLocked && ['registered', 'attended', 'absent'].includes(reg.status) && (
                               <button
                                 onClick={() => handleUpdateStatus(reg.id, 'confirmed')}
                                 className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50"
@@ -462,7 +472,7 @@ export default function LienChiRegistrationsPage() {
                             )}
                             
                             {/* Certificate creation shortcut */}
-                            {!isEventEnded && reg.status === 'confirmed' && (
+                            {!isListLocked && reg.status === 'confirmed' && (
                               <button
                                 onClick={() => handleIssueCertificate(reg)}
                                 className="rounded-lg p-2 text-[#1747a6] transition-colors hover:bg-blue-50"
@@ -473,7 +483,7 @@ export default function LienChiRegistrationsPage() {
                             )}
 
                             {/* Mark Attended (Manual QR bypass) */}
-                            {!isEventEnded && ['registered', 'absent', 'cancelled'].includes(reg.status) && (
+                            {!isListLocked && ['registered', 'absent', 'cancelled'].includes(reg.status) && (
                               <button
                                 onClick={() => handleUpdateStatus(reg.id, 'attended')}
                                 className="rounded-lg p-2 text-indigo-500 transition-colors hover:bg-indigo-50"
@@ -484,7 +494,7 @@ export default function LienChiRegistrationsPage() {
                             )}
 
                             {/* Mark Absent */}
-                            {!isEventEnded && ['registered', 'attended', 'confirmed'].includes(reg.status) && (
+                            {!isListLocked && ['registered', 'attended', 'confirmed'].includes(reg.status) && (
                               <button
                                 onClick={() => handleUpdateStatus(reg.id, 'absent')}
                                 className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
@@ -495,14 +505,14 @@ export default function LienChiRegistrationsPage() {
                             )}
 
                             {/* Delete Registration */}
-                            {!isEventEnded && (
-                            <button
-                              onClick={() => handleDeleteRegistration(reg.id)}
-                              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                              title="Xóa khỏi danh sách"
-                            >
-                              <Trash2 className="h-5 w-5" />
-                            </button>
+                            {!isListLocked && (
+                              <button
+                                onClick={() => handleDeleteRegistration(reg.id)}
+                                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                title="Xóa khỏi danh sách"
+                              >
+                                <Trash2 className="h-5 w-5" />
+                              </button>
                             )}
                           </div>
                         </td>
@@ -520,7 +530,7 @@ export default function LienChiRegistrationsPage() {
                 <p className="text-sm text-slate-500">Bạn có thể cấp chứng nhận điện tử tự động cho toàn bộ sinh viên đã quét mã điểm danh.</p>
               </div>
               <button
-                onClick={handleBulkIssueCertificates}
+                onClick={() => setShowBulkConfirmModal(true)}
                 disabled={isBulkIssuing || hasBulkIssued}
                 className={`flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold text-white shadow-lg transition-all ${
                   hasBulkIssued 
@@ -543,22 +553,27 @@ export default function LienChiRegistrationsPage() {
               <div className="rounded-xl bg-[#eef6ff] p-3 text-[#1747a6]">
                 <UserPlus className="h-6 w-6" />
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-[#132b57]">Bổ sung sinh viên thủ công</h3>
-                <p className="text-sm text-slate-500">Thêm sinh viên trực tiếp vào danh sách bằng MSSV.</p>
+              <div className="flex-1">
+                <label className="mb-2 block text-sm font-bold text-slate-700">Thêm người tham gia thủ công</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Nhập MSSV cần thêm..."
+                    value={newStudentId}
+                    onChange={(e) => setNewStudentId(e.target.value)}
+                    disabled={isListLocked}
+                    className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-4 pr-12 outline-none transition-all focus:border-[#1747a6] focus:ring-4 focus:ring-[#1747a6]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <UserPlus className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                </div>
               </div>
             </div>
-            <form onSubmit={handleAddStudent} className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Mã Số Sinh Viên (MSSV)</label>
-                <input
-                  type="text"
-                  placeholder="Nhập MSSV (vd: 102230046)"
-                  value={newStudentId}
-                  onChange={(e) => setNewStudentId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition-all focus:border-[#1747a6] focus:ring-4 focus:ring-[#1747a6]/10"
-                />
+
+            {isListLocked && (
+              <div className="mt-3 text-sm font-semibold text-rose-500">
+                Sự kiện đã hết hạn đăng ký hoặc đã kết thúc. Không thể chỉnh sửa danh sách.
               </div>
+            )}
               
               <AnimatePresence>
                 {addFeedback.message && (
@@ -580,12 +595,12 @@ export default function LienChiRegistrationsPage() {
 
               <button
                 type="submit"
-                disabled={!selectedEventId}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1747a6] px-4 py-3 font-bold text-white transition-all hover:bg-[#205fd8] active:scale-[0.98] disabled:opacity-50"
+                disabled={isListLocked || !selectedEventId}
+                className="flex items-center justify-center gap-2 rounded-xl bg-[#1747a6] px-6 py-3 font-bold text-white transition-all hover:bg-[#205fd8] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:transform-none"
               >
-                Thêm sinh viên vào sự kiện
+                <Save className="h-5 w-5" />
+                Thêm sinh viên
               </button>
-            </form>
           </div>
         </div>
       </div>
@@ -679,6 +694,82 @@ export default function LienChiRegistrationsPage() {
               <p className="mt-4 font-bold text-blue-600">
                 {bulkProgress.current} / {bulkProgress.total} sinh viên
               </p>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Confirm Modal */}
+      <AnimatePresence>
+        {showBulkConfirmModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              onClick={() => setShowBulkConfirmModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md overflow-hidden rounded-[24px] bg-white shadow-2xl p-6"
+            >
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 mb-4">
+                <Award className="h-8 w-8 text-[#1747a6]" />
+              </div>
+              <h3 className="text-center text-xl font-bold text-[#132b57] mb-2">Xác nhận cấp chứng nhận</h3>
+              <p className="text-center text-slate-500 mb-6">
+                Bạn sắp cấp chứng nhận hàng loạt cho <strong className="text-[#1747a6]">{registrations.filter(r => ['attended', 'confirmed'].includes(r.status)).length}</strong> sinh viên đủ điều kiện. Quá trình này sẽ diễn ra trên hệ thống và có thể mất vài phút.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowBulkConfirmModal(false)}
+                  className="flex-1 rounded-xl bg-slate-100 py-3 font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  onClick={confirmBulkIssueCertificates}
+                  className="flex-1 rounded-xl bg-[#1747a6] py-3 font-bold text-white shadow-lg shadow-blue-500/30 hover:bg-[#205fd8] transition-all"
+                >
+                  Bắt đầu cấp
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Result Modal */}
+      <AnimatePresence>
+        {bulkResult && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              onClick={() => setBulkResult(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md overflow-hidden rounded-[24px] bg-white shadow-2xl p-6"
+            >
+              <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full mb-4 ${bulkResult.type === 'success' ? 'bg-emerald-50' : bulkResult.type === 'error' ? 'bg-red-50' : 'bg-blue-50'}`}>
+                {bulkResult.type === 'success' ? <CheckCircle2 className="h-8 w-8 text-emerald-500" /> : bulkResult.type === 'error' ? <XCircle className="h-8 w-8 text-red-500" /> : <AlertCircle className="h-8 w-8 text-blue-500" />}
+              </div>
+              <h3 className="text-center text-xl font-bold text-[#132b57] mb-2">Thông báo</h3>
+              <p className="text-center text-slate-500 mb-6">{bulkResult.message}</p>
+              <button
+                onClick={() => setBulkResult(null)}
+                className="w-full rounded-xl bg-slate-100 py-3 font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+              >
+                Đóng
+              </button>
             </motion.div>
           </div>
         )}

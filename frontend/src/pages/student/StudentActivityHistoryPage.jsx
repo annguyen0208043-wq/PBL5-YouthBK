@@ -81,35 +81,7 @@ export default function StudentActivityHistoryPage({ embedded = false } = {}) {
     return dbEvents.filter(e => e.isRegistered);
   }, [dbEvents, activeTab, joinedActivities, endedActivities]);
 
-  const requestCertificate = async (activity) => {
-    const existingRequest = certificateRequests.find((item) => item.eventId === activity.id);
-    if (existingRequest?.status === 'approved') {
-      setCertificateNotice('Hoạt động này đã có chứng nhận được duyệt. Bạn có thể xuất PDF ngay.');
-      return;
-    }
-    if (existingRequest?.status === 'pending') {
-      setCertificateNotice('Yêu cầu chứng nhận đã được gửi trước đó và đang chờ admin duyệt.');
-      return;
-    }
 
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('/api/certificates/request', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId: activity.id, activityTitle: activity.title })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setCertificateNotice(data.message || 'Lỗi gửi yêu cầu');
-      } else {
-        setCertificateNotice('Đã gửi yêu cầu cấp chứng nhận. Vui lòng chờ admin duyệt.');
-        fetchHistoryData();
-      }
-    } catch (err) {
-      setCertificateNotice('Lỗi kết nối máy chủ');
-    }
-  };
 
   const exportCertificatePdf = (request) => {
     const exportNode = document.createElement('div');
@@ -357,24 +329,10 @@ export default function StudentActivityHistoryPage({ embedded = false } = {}) {
                                     );
                                   }
                                   
-                                  const pendingCert = certificateRequests.find(c => c.eventId === event.id && c.status === 'pending');
-                                  if (pendingCert) {
-                                    return (
-                                      <span className="inline-flex w-full justify-center rounded-xl bg-amber-50 text-amber-600 px-3 py-2.5 text-xs font-bold border border-amber-100">
-                                        Đang chờ duyệt...
-                                      </span>
-                                    );
-                                  }
-
                                   return (
-                                    <button
-                                      type="button"
-                                      onClick={() => requestCertificate(event)}
-                                      className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-[#dce8f5] bg-white px-3 py-2.5 text-xs font-bold text-[#1747a6] transition-all hover:bg-[#eef6ff] hover:border-blue-200"
-                                    >
-                                      <FileBadge2 className="h-4 w-4" />
-                                      Yêu cầu cấp
-                                    </button>
+                                    <span className="inline-flex w-full justify-center rounded-xl bg-slate-50 text-slate-500 px-3 py-2.5 text-xs font-bold border border-slate-200">
+                                      Đang chờ cấp chứng nhận
+                                    </span>
                                   );
                                 })()}
                               </div>

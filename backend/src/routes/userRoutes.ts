@@ -5,6 +5,7 @@ import {
 } from '../controllers/userController';
 import { authMiddleware, adminMiddleware, adminOrLienChiMiddleware, AuthRequest } from '../middlewares/authMiddleware';
 import { uploadAvatar } from '../config/multer';
+import cloudinary from '../config/cloudinary';
 import User from '../models/User';
 
 const router = Router();
@@ -20,7 +21,20 @@ router.post('/profile/avatar', authMiddleware, uploadAvatar.single('avatar'), as
       res.status(400).json({ message: 'Vui lòng chọn ảnh đại diện' });
       return;
     }
-    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    
+    // Upload to Cloudinary
+    const uploadResult: any = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { folder: 'avatars', resource_type: 'auto' },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      );
+      uploadStream.end(req.file!.buffer);
+    });
+    
+    const avatarUrl = uploadResult.secure_url;
     const user = await User.findByPk(req.user?.id);
     if (!user) {
       res.status(404).json({ message: 'Không tìm thấy người dùng' });
