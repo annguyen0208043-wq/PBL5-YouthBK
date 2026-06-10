@@ -10,6 +10,7 @@ import EventDocument from '../models/EventDocument';
 import EventApproval from '../models/EventApproval';
 import User from '../models/User';
 import EventFeedback from '../models/EventFeedback';
+import Certificate from '../models/Certificate';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { isBeforeStart, isRegistrationOpen, hasSlots, isOwner } from '../guards/event.guards';
 import { writeAuditLog, getClientIp } from '../utils/auditLogHelper';
@@ -122,8 +123,8 @@ export const getEventById = async (req: AuthRequest, res: Response): Promise<voi
       include: [
         { model: User, as: 'creator', attributes: ['id', 'name', 'email', 'faculty'] },
         { model: User, as: 'leader', attributes: ['id', 'name', 'email', 'role', 'faculty'] },
-        { 
-          model: EventTimeline, 
+        {
+          model: EventTimeline,
           as: 'timelines',
           include: [{ model: EventTimelineDetail, as: 'details' }]
         },
@@ -193,9 +194,14 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       submit,
       leaderId
     } = req.body;
-    
+
     const userId = req.user?.id!;
     const role = req.user?.role!;
+
+    console.log(title);
+    console.log(locationName);
+    console.log(plannedStartDate);
+    console.log(plannedEndDate);
 
     if (!title || !locationName || !plannedStartDate || !plannedEndDate) {
       await transaction.rollback();
@@ -264,38 +270,37 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       }
     }
 
-    // Handle uploaded files
-    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
-    
-    // Save cover and other images
-    if (files && files.images) {
-      const captions = req.body.imageCaptions ? (typeof req.body.imageCaptions === 'string' ? JSON.parse(req.body.imageCaptions) : req.body.imageCaptions) : [];
-      const covers = req.body.imageIsCovers ? (typeof req.body.imageIsCovers === 'string' ? JSON.parse(req.body.imageIsCovers) : req.body.imageIsCovers) : [];
-
-      for (let i = 0; i < files.images.length; i++) {
-        const file = files.images[i];
-        await EventImage.create({
-          eventId: event.id,
-          imageUrl: `/uploads/events/${file.filename}`,
-          caption: captions[i] || null,
-          isCover: covers[i] === true || covers[i] === 'true' || covers[i] === 1 ? 1 : 0,
-          sortOrder: i
-        }, { transaction });
+    // Handle uploaded files (URLs from frontend)
+    if (req.body.uploadedImages) {
+      const images = typeof req.body.uploadedImages === 'string' ? JSON.parse(req.body.uploadedImages) : req.body.uploadedImages;
+      if (Array.isArray(images)) {
+        for (let i = 0; i < images.length; i++) {
+          const img = images[i];
+          await EventImage.create({
+            eventId: event.id,
+            imageUrl: img.url,
+            caption: img.caption || null,
+            isCover: img.isCover ? 1 : 0,
+            sortOrder: i
+          }, { transaction });
+        }
       }
     }
 
-    // Save attachments
-    if (files && files.documents) {
-      for (let i = 0; i < files.documents.length; i++) {
-        const file = files.documents[i];
-        await EventDocument.create({
-          eventId: event.id,
-          fileName: file.originalname,
-          fileUrl: `/uploads/events/${file.filename}`,
-          fileType: file.filename.split('.').pop() || null,
-          fileSize: file.size,
-          uploadedBy: userId
-        }, { transaction });
+    if (req.body.uploadedDocuments) {
+      const documents = typeof req.body.uploadedDocuments === 'string' ? JSON.parse(req.body.uploadedDocuments) : req.body.uploadedDocuments;
+      if (Array.isArray(documents)) {
+        for (let i = 0; i < documents.length; i++) {
+          const doc = documents[i];
+          await EventDocument.create({
+            eventId: event.id,
+            fileName: doc.fileName,
+            fileUrl: doc.url,
+            fileType: doc.fileType || null,
+            fileSize: doc.fileSize || 0,
+            uploadedBy: userId
+          }, { transaction });
+        }
       }
     }
 
@@ -437,47 +442,43 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       }
     }
 
-    // Handle uploaded files
-    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
-    
-    // Manage image uploads: optionally replace or append images.
-    // Here we will keep old files, unless user explicitly sends replacement.
-    // If new images are sent: append them. Or if 'replaceImages' flag is true, delete old.
-    if (files && files.images) {
+    // Handle uploaded files (URLs from frontend)
+    if (req.body.uploadedImages) {
       if (req.body.replaceImages === 'true' || req.body.replaceImages === true) {
         await EventImage.destroy({ where: { eventId: id }, transaction });
       }
-      
-      const captions = req.body.imageCaptions ? (typeof req.body.imageCaptions === 'string' ? JSON.parse(req.body.imageCaptions) : req.body.imageCaptions) : [];
-      const covers = req.body.imageIsCovers ? (typeof req.body.imageIsCovers === 'string' ? JSON.parse(req.body.imageIsCovers) : req.body.imageIsCovers) : [];
-
-      for (let i = 0; i < files.images.length; i++) {
-        const file = files.images[i];
-        await EventImage.create({
-          eventId: event.id,
-          imageUrl: `/uploads/events/${file.filename}`,
-          caption: captions[i] || null,
-          isCover: covers[i] === true || covers[i] === 'true' || covers[i] === 1 ? 1 : 0,
-          sortOrder: i
-        }, { transaction });
+      const images = typeof req.body.uploadedImages === 'string' ? JSON.parse(req.body.uploadedImages) : req.body.uploadedImages;
+      if (Array.isArray(images)) {
+        for (let i = 0; i < images.length; i++) {
+          const img = images[i];
+          await EventImage.create({
+            eventId: event.id,
+            imageUrl: img.url,
+            caption: img.caption || null,
+            isCover: img.isCover ? 1 : 0,
+            sortOrder: i
+          }, { transaction });
+        }
       }
     }
 
-    // Append attachments
-    if (files && files.documents) {
+    if (req.body.uploadedDocuments) {
       if (req.body.replaceDocuments === 'true' || req.body.replaceDocuments === true) {
         await EventDocument.destroy({ where: { eventId: id }, transaction });
       }
-      for (let i = 0; i < files.documents.length; i++) {
-        const file = files.documents[i];
-        await EventDocument.create({
-          eventId: event.id,
-          fileName: file.originalname,
-          fileUrl: `/uploads/events/${file.filename}`,
-          fileType: file.filename.split('.').pop() || null,
-          fileSize: file.size,
-          uploadedBy: userId
-        }, { transaction });
+      const documents = typeof req.body.uploadedDocuments === 'string' ? JSON.parse(req.body.uploadedDocuments) : req.body.uploadedDocuments;
+      if (Array.isArray(documents)) {
+        for (let i = 0; i < documents.length; i++) {
+          const doc = documents[i];
+          await EventDocument.create({
+            eventId: event.id,
+            fileName: doc.fileName,
+            fileUrl: doc.url,
+            fileType: doc.fileType || null,
+            fileSize: doc.fileSize || 0,
+            uploadedBy: userId
+          }, { transaction });
+        }
       }
     }
 
@@ -510,7 +511,7 @@ export const submitEvent = async (req: AuthRequest, res: Response): Promise<void
       res.status(403).json({ message: 'Không có quyền thao tác' });
       return;
     }
-    
+
     if (!['draft', 'revision_required'].includes(event.status)) {
       res.status(400).json({ message: 'Trạng thái sự kiện không hợp lệ để gửi duyệt' });
       return;
@@ -571,7 +572,7 @@ export const approveEvent = async (req: AuthRequest, res: Response): Promise<voi
   try {
     const { id } = req.params;
     const { actualStartDate, actualEndDate, note } = req.body;
-    
+
     const event = await Event.findByPk(id, { transaction });
     if (!event) {
       await transaction.rollback();
@@ -625,7 +626,7 @@ export const rejectEvent = async (req: AuthRequest, res: Response): Promise<void
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    
+
     const event = await Event.findByPk(id, { transaction });
     if (!event) {
       await transaction.rollback();
@@ -681,7 +682,7 @@ export const requestEventRevision = async (req: AuthRequest, res: Response): Pro
       res.status(400).json({ message: 'Lời nhắn và Hạn chỉnh sửa là bắt buộc' });
       return;
     }
-    
+
     const event = await Event.findByPk(id, { transaction });
     if (!event) {
       await transaction.rollback();
@@ -926,7 +927,7 @@ export const getEventRegistrations = async (req: AuthRequest, res: Response): Pr
   try {
     const { id } = req.params;
     const event = await Event.findByPk(id);
-    
+
     if (!event) {
       res.status(404).json({ message: 'Event not found' });
       return;
@@ -946,7 +947,14 @@ export const getEventRegistrations = async (req: AuthRequest, res: Response): Pr
       order: [['createdAt', 'DESC']]
     });
 
-    res.json({ registrations });
+    const bulkCertCount = await Certificate.count({
+      where: {
+        eventId: id,
+        isBulk: true
+      }
+    });
+
+    res.json({ registrations, hasBulkIssued: bulkCertCount > 0 });
   } catch (error) {
     console.error('Get registrations error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -1114,7 +1122,7 @@ export const deleteRegistration = async (req: AuthRequest, res: Response): Promi
 
     const lockEvent = await Event.findByPk(event.id, { transaction, lock: transaction.LOCK.UPDATE });
     const isValid = ['registered', 'attended', 'confirmed'].includes(registration.status);
-    
+
     if (isValid && lockEvent!.currentSlots > 0) {
       lockEvent!.currentSlots -= 1;
       await lockEvent!.save({ transaction });
@@ -1122,7 +1130,7 @@ export const deleteRegistration = async (req: AuthRequest, res: Response): Promi
 
     await registration.destroy({ transaction });
     await transaction.commit();
-    
+
     res.json({ message: 'Xóa sinh viên khỏi danh sách thành công' });
   } catch (error) {
     await transaction.rollback();

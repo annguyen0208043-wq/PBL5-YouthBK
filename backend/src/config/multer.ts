@@ -1,35 +1,15 @@
 import multer from 'multer';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
 
-// Đảm bảo thư mục uploads tồn tại
-const uploadDir = path.join(__dirname, '../../uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+// Sử dụng memory storage thay vì disk storage
+const storage = multer.memoryStorage();
+const avatarDir = path.join(__dirname, '../../uploads/avatars');
 
-const eventImageDir = path.join(uploadDir, 'events');
-if (!fs.existsSync(eventImageDir)) {
-  fs.mkdirSync(eventImageDir, { recursive: true });
-}
-
-const avatarDir = path.join(uploadDir, 'avatars');
 if (!fs.existsSync(avatarDir)) {
   fs.mkdirSync(avatarDir, { recursive: true });
 }
 
-// Storage configuration cho event images
-const eventStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, eventImageDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'event-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-// File filter
 const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowedTypes = [
     'image/jpeg',
@@ -41,7 +21,6 @@ const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.
     'application/pdf',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    // Office / Excel / PowerPoint
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-powerpoint',
@@ -52,12 +31,22 @@ const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Unsupported file type. Allowed: jpg, png, gif, webp, avif, pdf, doc, docx'));
+    cb(new Error('Unsupported file type. Allowed: jpg, png, gif, webp, pdf, doc, docx, xls, ppt, csv'));
   }
 };
 
+// Middleware chung cho upload 1 file
+export const uploadMemory = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
+
+// Giữ lại các export cũ nhưng chuyển sang memory storage để tránh lỗi import ở các route cũ
 export const uploadEventImages = multer({
-  storage: eventStorage,
+  storage,
   fileFilter,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB
@@ -66,7 +55,7 @@ export const uploadEventImages = multer({
 });
 
 export const uploadEventFiles = multer({
-  storage: eventStorage,
+  storage,
   fileFilter,
   limits: {
     fileSize: 15 * 1024 * 1024 // 15MB limit per file

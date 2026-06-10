@@ -6,6 +6,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
 import CustomDateTimePicker from '../../components/common/CustomDateTimePicker';
 import MapPickerModal from '../../components/common/MapPickerModal';
+import { uploadFile } from '../../utils/upload';
+
 
 export default function LienChiEditEventPage() {
   const { id } = useParams();
@@ -133,7 +135,7 @@ export default function LienChiEditEventPage() {
   const [existingImages, setExistingImages] = useState([]); // Array of { id, imageUrl, caption, isCover }
   const [documentUploads, setDocumentUploads] = useState([]); // Array of File
   const [existingDocuments, setExistingDocuments] = useState([]); // Array of { id, fileName }
-  
+
   const [replaceImages, setReplaceImages] = useState(false);
   const [replaceDocuments, setReplaceDocuments] = useState(false);
 
@@ -149,7 +151,7 @@ export default function LienChiEditEventPage() {
         if (!response.ok) throw new Error('Không thể tải thông tin sự kiện');
         const data = await response.json();
         const event = data.event;
-        
+
         // Convert to local datetime string format for input type="datetime-local"
         const formatDateTime = (isoStr) => {
           if (!isoStr) return '';
@@ -198,7 +200,7 @@ export default function LienChiEditEventPage() {
             })) : []
           })));
         }
-        
+
         if (event.images) {
           setExistingImages(event.images);
         }
@@ -438,7 +440,7 @@ export default function LienChiEditEventPage() {
 
     if (formData.registrationDeadline) {
       const regDeadline = new Date(formData.registrationDeadline);
-      
+
       const minRegDeadlineVal = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
       minRegDeadlineVal.setHours(0, 0, 0, 0);
       if (regDeadline < minRegDeadlineVal) {
@@ -459,46 +461,60 @@ export default function LienChiEditEventPage() {
     }
 
     setLoading(true);
+    setNotice('⏳ Đang upload file (nếu có), vui lòng đợi...');
     try {
-      const formDataToSend = new FormData();
-      
-      // Append core fields
-      Object.keys(formData).forEach(key => {
-        formDataToSend.append(key, formData[key]);
-      });
+      // 1. Upload images sequentially
+      const uploadedImagesData = [];
+      for (let i = 0; i < imageUploads.length; i++) {
+        const img = imageUploads[i];
+        setNotice(`⏳ Đang upload ảnh mới ${i + 1}/${imageUploads.length}...`);
+        const result = await uploadFile(img.file);
+        uploadedImagesData.push({
+          url: result.url,
+          caption: img.caption || '',
+          isCover: img.isCover
+        });
+      }
 
-      // Append parsed timeline
-      formDataToSend.append('timeline', JSON.stringify(phases));
+      // 2. Upload documents sequentially
+      const uploadedDocumentsData = [];
+      for (let i = 0; i < documentUploads.length; i++) {
+        const doc = documentUploads[i];
+        setNotice(`⏳ Đang upload tài liệu mới ${i + 1}/${documentUploads.length}...`);
+        const result = await uploadFile(doc);
+        uploadedDocumentsData.push({
+          url: result.url,
+          fileName: doc.name,
+          fileSize: doc.size,
+          fileType: doc.name.split('.').pop() || null
+        });
+      }
 
-      // Replace flags
-      formDataToSend.append('replaceImages', replaceImages ? 'true' : 'false');
-      formDataToSend.append('replaceDocuments', replaceDocuments ? 'true' : 'false');
+      setNotice('⏳ Đang lưu dữ liệu sự kiện...');
+      setNotice('⏳ Đang lưu dữ liệu sự kiện...');
 
-      // Append new image files and metadata
-      const imageCaptions = [];
-      const imageIsCovers = [];
-      imageUploads.forEach((img) => {
-        formDataToSend.append('images', img.file);
-        imageCaptions.push(img.caption || '');
-        imageIsCovers.push(img.isCover);
-      });
-      formDataToSend.append('imageCaptions', JSON.stringify(imageCaptions));
-      formDataToSend.append('imageIsCovers', JSON.stringify(imageIsCovers));
+      const payload = {
+        ...formData,
+        timeline: phases, // pass as object
+        replaceImages: replaceImages,
+        replaceDocuments: replaceDocuments,
+        submit: 'true'
+      };
 
-      // Append new document files
-      documentUploads.forEach(file => {
-        formDataToSend.append('documents', file);
-      });
-
-      // Set submit flag for review
-      formDataToSend.append('submit', 'true');
+      if (uploadedImagesData.length > 0) {
+        payload.uploadedImages = uploadedImagesData;
+      }
+      if (uploadedDocumentsData.length > 0) {
+        payload.uploadedDocuments = uploadedDocumentsData;
+      }
 
       const response = await fetch(`/api/events/${id}`, {
         method: 'PUT',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        body: formDataToSend,
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -534,9 +550,8 @@ export default function LienChiEditEventPage() {
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
-                className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
-                  errors.title ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
-                }`}
+                className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${errors.title ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  }`}
               />
             </label>
             <label className="block relative">
@@ -565,13 +580,13 @@ export default function LienChiEditEventPage() {
               )}
               {showLeaderDropdown && leaderSearch && (
                 <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-2xl border border-[#dce8f5] bg-white p-2 shadow-lg">
-                  {users.filter(u => 
+                  {users.filter(u =>
                     (u.studentId || '').toLowerCase().includes(leaderSearch.toLowerCase()) ||
                     (u.fullName || u.name || '').toLowerCase().includes(leaderSearch.toLowerCase())
                   ).length === 0 ? (
                     <div className="p-3 text-xs text-slate-500">Không tìm thấy người dùng phù hợp</div>
                   ) : (
-                    users.filter(u => 
+                    users.filter(u =>
                       (u.studentId || '').toLowerCase().includes(leaderSearch.toLowerCase()) ||
                       (u.fullName || u.name || '').toLowerCase().includes(leaderSearch.toLowerCase())
                     ).map(u => (
@@ -612,9 +627,8 @@ export default function LienChiEditEventPage() {
                 name="minParticipants"
                 value={formData.minParticipants}
                 onChange={handleInputChange}
-                className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
-                  errors.minParticipants ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
-                }`}
+                className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${errors.minParticipants ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  }`}
               />
             </label>
             <label className="block">
@@ -624,9 +638,8 @@ export default function LienChiEditEventPage() {
                 name="maxParticipants"
                 value={formData.maxParticipants}
                 onChange={handleInputChange}
-                className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
-                  errors.maxParticipants ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
-                }`}
+                className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${errors.maxParticipants ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  }`}
               />
             </label>
           </div>
@@ -698,9 +711,8 @@ export default function LienChiEditEventPage() {
                   name="locationName"
                   value={formData.locationName}
                   onChange={handleInputChange}
-                  className={`w-full rounded-xl border px-3 py-2 outline-none text-sm transition-all ${
-                    errors.locationName ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
-                  }`}
+                  className={`w-full rounded-xl border px-3 py-2 outline-none text-sm transition-all ${errors.locationName ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                    }`}
                 />
               </label>
               <div className="sm:col-span-2 flex gap-3 items-end">
@@ -835,10 +847,10 @@ export default function LienChiEditEventPage() {
                     <img src={URL.createObjectURL(item.file)} className="h-16 w-16 rounded-lg object-cover bg-white" />
                     <div className="flex-1 space-y-1">
                       <label className="flex items-center gap-1.5 text-[10px] text-slate-600 cursor-pointer font-semibold">
-                        <input 
-                          type="radio" 
+                        <input
+                          type="radio"
                           name="coverImage"
-                          checked={item.isCover} 
+                          checked={item.isCover}
                           onChange={() => handleImageCoverChange(idx)}
                           className="text-[#1747a6] focus:ring-[#1747a6]"
                         />
@@ -894,8 +906,8 @@ export default function LienChiEditEventPage() {
                         <p className="text-[10px] text-slate-500">{new Date(phase.startDate).toLocaleDateString('vi-VN')} - {new Date(phase.endDate).toLocaleDateString('vi-VN')}</p>
                       </div>
                       <div className="flex gap-2">
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={() => setActivePhaseIndexForMilestone(activePhaseIndexForMilestone === phaseIdx ? -1 : phaseIdx)}
                           className="text-[#1747a6] font-semibold hover:underline"
                         >
@@ -944,8 +956,8 @@ export default function LienChiEditEventPage() {
                           </label>
                           <label className="block">
                             <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Tiêu đề mốc *</span>
-                            <input 
-                              type="text" 
+                            <input
+                              type="text"
                               value={newMilestone.title}
                               onChange={(e) => setNewMilestone(prev => ({ ...prev, title: e.target.value }))}
                               className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
@@ -953,15 +965,15 @@ export default function LienChiEditEventPage() {
                           </label>
                           <label className="block">
                             <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Nội dung mốc</span>
-                            <textarea 
+                            <textarea
                               value={newMilestone.content}
                               onChange={(e) => setNewMilestone(prev => ({ ...prev, content: e.target.value }))}
                               className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
                               rows="2"
                             />
                           </label>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={() => handleAddMilestone(phaseIdx)}
                             className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#1747a6] py-2 text-white text-xs font-bold hover:bg-[#215cd1] transition-colors"
                           >
@@ -988,8 +1000,8 @@ export default function LienChiEditEventPage() {
               <div className="grid gap-3">
                 <label className="block">
                   <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Tiêu đề giai đoạn *</span>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={newPhase.title}
                     onChange={(e) => setNewPhase(prev => ({ ...prev, title: e.target.value }))}
                     className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
@@ -1027,15 +1039,15 @@ export default function LienChiEditEventPage() {
                 </div>
                 <label className="block">
                   <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Mô tả tổng quan giai đoạn</span>
-                  <textarea 
+                  <textarea
                     value={newPhase.description}
                     onChange={(e) => setNewPhase(prev => ({ ...prev, description: e.target.value }))}
                     className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
                     rows="2"
                   />
                 </label>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={handleAddPhase}
                   disabled={!formData.plannedStartDate || !formData.plannedEndDate}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#dce8f5] bg-white py-2.5 font-semibold text-[#1747a6] text-xs transition-all hover:bg-[#f3f8ff] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1075,9 +1087,8 @@ export default function LienChiEditEventPage() {
       {alertModal.show && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-[28px] border border-slate-100 bg-white p-6 shadow-2xl text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl ${
-              alertModal.type === 'success' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'
-            }`}>
+            <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl ${alertModal.type === 'success' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'
+              }`}>
               {alertModal.type === 'success' ? '✓' : '⚠️'}
             </div>
             <h3 className="text-lg font-black text-[#132b57]">
