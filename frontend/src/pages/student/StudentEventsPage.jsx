@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Clock3, Filter, LogOut, MapPin, Navigation, QrCode, Search, Sparkles, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock3, Filter, LogOut, MapPin, Navigation, QrCode, Search, Sparkles, XCircle, X } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import QRCode from 'react-qr-code';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
 import { defaultRegisteredEventIds, STORAGE_ATTENDANCE_CHECKINS_KEY, STORAGE_ATTENDANCE_WINDOW_KEY, STORAGE_REGISTERED_EVENTS_KEY } from '../../shared/student/studentData';
 import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
+import NotificationBell from './NotificationBell';
 
 const EARTH_RADIUS_METERS = 6371000;
 
@@ -135,52 +137,28 @@ function parseEventTimeRange(timeLabel) {
 }
 
 function buildAttendanceGate(event, attendanceWindowConfig) {
-  if (event.qrActive) {
-    return {
-      canCheckIn: true,
-      message: 'Mã QR điểm danh đang mở, bạn có thể điểm danh ngay!',
-    };
-  }
-
-  const now = new Date();
-  
-  let isEventInProgress = false;
-  if (event.startAt && event.endAt) {
-    isEventInProgress = now >= event.startAt && now <= event.endAt;
-  } else if (event.time) {
-    const eventRange = parseEventTimeRange(event.time);
-    isEventInProgress = eventRange ? now >= eventRange.startAt && now <= eventRange.endAt : false;
-  }
-
-  const isAdminWindowEnabled = Boolean(attendanceWindowConfig?.enabled);
-  const adminStartAt = attendanceWindowConfig?.startAt ? new Date(attendanceWindowConfig.startAt) : null;
-  const adminEndAt = attendanceWindowConfig?.endAt ? new Date(attendanceWindowConfig.endAt) : null;
-  const hasValidAdminRange =
-    adminStartAt instanceof Date &&
-    adminEndAt instanceof Date &&
-    !Number.isNaN(adminStartAt.getTime()) &&
-    !Number.isNaN(adminEndAt.getTime()) &&
-    adminStartAt < adminEndAt;
-  const isAdminWindowActive = isAdminWindowEnabled && hasValidAdminRange && now >= adminStartAt && now <= adminEndAt;
-
-  if (isEventInProgress || isAdminWindowActive) {
-    return {
-      canCheckIn: true,
-      message: isEventInProgress ? 'Sự kiện đang diễn ra: có thể điểm danh.' : 'Admin đang mở cửa sổ điểm danh.',
-    };
-  }
-
-  if (isAdminWindowEnabled && !hasValidAdminRange) {
+  if (event.rawStatus !== 'ongoing') {
     return {
       canCheckIn: false,
-      message: 'Khung giờ điểm danh do admin cấu hình chưa hợp lệ.',
+      message: 'Sự kiện chưa diễn ra hoặc đã kết thúc. Chỉ có thể điểm danh khi sự kiện đang diễn ra.',
+    };
+  }
+
+  if (!event.qrActive) {
+    return {
+      canCheckIn: false,
+      message: 'Liên chi đoàn chưa mở QR điểm danh cho sự kiện này.',
     };
   }
 
   return {
-    canCheckIn: false,
-    message: 'Chỉ điểm danh khi sự kiện đang diễn ra hoặc mã QR được mở.',
+    canCheckIn: true,
+    message: 'Mã QR điểm danh đang mở, bạn có thể điểm danh ngay!',
   };
+}
+
+function isMobileDevice() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 }
 
 function normalizeAudienceText(value) {
@@ -236,7 +214,7 @@ function canCancelRegistration(event) {
   return { allowed: true, reason: '' };
 }
 
-export default function StudentEventsPage() {
+export default function StudentEventsPage({ embedded = false } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const mainRef = useRef(null);
@@ -259,6 +237,7 @@ export default function StudentEventsPage() {
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState('');
   const [isTogglingEventId, setIsTogglingEventId] = useState(null);
+  const [selectedQRCheckInEvent, setSelectedQRCheckInEvent] = useState(null);
   const toastTimerRef = useRef(null);
   const qrVideoRef = useRef(null);
   const qrStreamRef = useRef(null);
@@ -269,7 +248,7 @@ export default function StudentEventsPage() {
     // Clear localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    
+
     // Redirect to login
     navigate('/login');
   };
@@ -400,7 +379,6 @@ export default function StudentEventsPage() {
               registrationDeadlineStr: e.registrationDeadline ? formatDateTime(e.registrationDeadline) : null,
             };
           });
-          
           setDbEvents(formattedEvents.sort((a, b) => {
             if (a.isNewestOpen !== b.isNewestOpen) return a.isNewestOpen ? -1 : 1;
             if (a.rawStatus === 'open_registration' && b.rawStatus !== 'open_registration') return -1;
@@ -456,79 +434,14 @@ export default function StudentEventsPage() {
     setIsScanningQr(false);
   };
 
-  const startQrScanner = async () => {
-    const BarcodeDetectorConstructor = window.BarcodeDetector;
-    if (!BarcodeDetectorConstructor || !navigator.mediaDevices?.getUserMedia) {
-      setFeedback('Trình duyệt chưa hỗ trợ quét camera. Vui lòng nhập mã QR thủ công.');
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      });
-
-      qrStreamRef.current = stream;
-      if (qrVideoRef.current) {
-        qrVideoRef.current.srcObject = stream;
-        await qrVideoRef.current.play();
-      }
-
-      qrDetectorRef.current = new BarcodeDetectorConstructor({ formats: ['qr_code'] });
-      setIsScanningQr(true);
-
-      const scanFrame = async () => {
-        if (!qrVideoRef.current || !qrDetectorRef.current) {
-          return;
-        }
-
-        try {
-          const barcodes = await qrDetectorRef.current.detect(qrVideoRef.current);
-          if (barcodes.length > 0 && barcodes[0].rawValue) {
-            setQrInput(barcodes[0].rawValue);
-            stopQrScanner();
-            return;
-          }
-        } catch {
-          // No-op: keep scanning next frame.
-        }
-
-        qrLoopFrameRef.current = window.requestAnimationFrame(scanFrame);
-      };
-
-      qrLoopFrameRef.current = window.requestAnimationFrame(scanFrame);
-    } catch {
-      setFeedback('Không thể truy cập camera. Hãy kiểm tra quyền camera trên trình duyệt.');
-      stopQrScanner();
-    }
-  };
-
-  const saveAttendanceState = (eventId, payload) => {
-    setAttendanceCheckins((current) => ({
-      ...current,
-      [eventId]: {
-        ...(current[eventId] || {}),
-        ...payload,
-      },
-    }));
-  };
-
-  const handleQRCheckIn = async (event) => {
-    const submittedValue = qrInput.trim();
-
-    if (!submittedValue) {
-      setFeedback('Vui lòng nhập hoặc quét mã QR.');
-      return;
-    }
-
+  const handleGPSCheckIn = async (event) => {
     if (!navigator.geolocation) {
       setFeedback('Thiết bị không hỗ trợ định vị GPS.');
       return;
     }
 
     setIsCheckingGps(true);
-    setFeedback('Đang lấy vị trí GPS và điểm danh...');
+    setFeedback('Đang lấy vị trí GPS và tiến hành điểm danh...');
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -537,14 +450,13 @@ export default function StudentEventsPage() {
           const longitude = position.coords.longitude;
           const token = localStorage.getItem('token');
 
-          const response = await fetch(`/api/events/${event.realId}/attendance/qr`, {
+          const response = await fetch(`/api/events/${event.realId}/attendance/gps`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              qrCode: submittedValue,
               latitude,
               longitude
             })
@@ -555,7 +467,6 @@ export default function StudentEventsPage() {
             setFeedback(data.message || 'Điểm danh thất bại');
           } else {
             setFeedback(`Điểm danh thành công: ${event.title}`);
-            setQrInput('');
             setOpenedAttendanceEventId('');
             if (fetchDbEventsRef.current) {
               fetchDbEventsRef.current();
@@ -567,8 +478,9 @@ export default function StudentEventsPage() {
           setIsCheckingGps(false);
         }
       },
-      () => {
-        setFeedback('Không lấy được vị trí. Vui lòng bật GPS và cho phép quyền truy cập vị trí.');
+      (error) => {
+        console.error('GPS error:', error);
+        setFeedback('Không lấy được vị trí. Vui lòng bật GPS và cho phép trình duyệt truy cập vị trí thiết bị.');
         setIsCheckingGps(false);
       },
       {
@@ -594,7 +506,7 @@ export default function StudentEventsPage() {
         },
         body: JSON.stringify({
           rating: feedbackRating,
-          content: feedbackInput
+          comment: feedbackInput
         })
       });
 
@@ -630,7 +542,7 @@ export default function StudentEventsPage() {
       setIsTogglingEventId(realId);
 
       const endpoint = isEnrolled ? `/api/events/${realId}/cancel-registration` : `/api/events/${realId}/register`;
-      
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -660,7 +572,7 @@ export default function StudentEventsPage() {
       setFeedback('Lỗi kết nối máy chủ');
       setIsTogglingEventId(null);
     }
-    
+
     if (toastTimerRef.current) {
       window.clearTimeout(toastTimerRef.current);
     }
@@ -687,9 +599,9 @@ export default function StudentEventsPage() {
   };
 
   return (
-    <div className="profile-page p-4 sm:p-6">
+    <div className={embedded ? 'w-full' : 'profile-page p-4 sm:p-6'}>
       <div className="profile-shell profile-card mx-auto flex w-full max-w-[1500px] overflow-hidden rounded-[32px] border border-[#d8e7f5] bg-[#f8fbfe]">
-        <aside className="app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col">
+        <aside className={embedded ? 'hidden' : 'app-sidebar hidden w-[290px] border-r border-[#dce9f6] bg-[linear-gradient(180deg,#113b90_0%,#1958c2_100%)] px-5 py-6 text-white lg:flex lg:flex-col'}>
           <div className="mb-8 flex items-center gap-3">
             <img src={doanLogo} alt="Logo Đoàn" className="h-12 w-12 rounded-full bg-white object-contain p-1.5" />
             <img src={schoolLogo} alt="Logo Bách Khoa" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5" />
@@ -726,6 +638,9 @@ export default function StudentEventsPage() {
             <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
               Lịch sử hoạt động
             </Link>
+            <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+              Thông báo
+            </Link>
           </nav>
 
           <div className="mt-auto pt-6">
@@ -747,23 +662,27 @@ export default function StudentEventsPage() {
                 <h1 className="mt-2 text-3xl font-black text-[#132b57]">Sự kiện dành cho sinh viên</h1>
                 <p className="mt-1 text-slate-500">Khám phá hoạt động nổi bật và đăng ký tham gia trực tiếp trên hệ thống.</p>
               </div>
-              <div
-                className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3"
-                aria-label="Mở trang chỉnh sửa thông tin cá nhân"
-              >
-                <div className="flex items-center gap-3">
-                  {user.avatarUrl ? (
-                    <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
-                  ) : (
-                    <div className="profile-user-avatar flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#1747a6,#4ba3ff)] text-sm font-black text-white">
-                      {userInitials}
+              <div className="flex items-center gap-3">
+                <NotificationBell />
+                <Link
+                  to="/sinhvien/profile"
+                  className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3 hover:bg-[#eef6ff] transition-all block text-slate-800 no-underline"
+                  aria-label="Mở trang chỉnh sửa thông tin cá nhân"
+                >
+                  <div className="flex items-center gap-3 w-full min-w-0">
+                    {user.avatarUrl ? (
+                      <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
+                    ) : (
+                      <div className="profile-user-avatar flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#1747a6,#4ba3ff)] text-sm font-black text-white">
+                        {userInitials}
+                      </div>
+                    )}
+                    <div className="profile-user-meta">
+                      <p className="profile-user-name font-bold text-[#132b57]">{user.fullName}</p>
+                      <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
                     </div>
-                  )}
-                  <div className="profile-user-meta">
-                    <p className="profile-user-name font-bold text-[#132b57]">{user.fullName}</p>
-                    <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
                   </div>
-                </div>
+                </Link>
               </div>
             </div>
           </div>
@@ -843,6 +762,8 @@ export default function StudentEventsPage() {
                 const checkinState = event.attendance || {};
                 const isCheckedIn = event.userRegistrationStatus === 'attended' || Boolean(checkinState.gpsVerified && checkinState.qrVerified && checkinState.checkedInAt);
                 const showAttendancePanel = openedAttendanceEventId === event.id && !isCheckedIn;
+                const isRegistrationDeadlineExpired = event.registrationDeadline && new Date() >= event.registrationDeadline;
+                const qrIssued = event.enrolled && (isRegistrationDeadlineExpired || event.rawStatus !== 'open_registration');
 
                 return (
                   <motion.article
@@ -989,14 +910,36 @@ export default function StudentEventsPage() {
                             whileTap={{ scale: 0.98 }}
                             onClick={() => toggleAttendancePanel(event.id)}
                             disabled={!event.enrolled || isCheckedIn}
-                            className={`rounded-2xl border px-4 py-3 font-semibold transition-all ${isCheckedIn ? 'border-emerald-200 bg-emerald-50 text-emerald-700 cursor-not-allowed opacity-90' : 'border-[#dce8f5] bg-white text-slate-600 hover:bg-[#f7fbff] disabled:cursor-not-allowed disabled:opacity-70'}`}
+                            className={`rounded-2xl border px-4 py-3 font-semibold transition-all ${
+                              isCheckedIn 
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 cursor-not-allowed opacity-90' 
+                                : event.enrolled && event.attendanceGate.canCheckIn
+                                  ? 'border-transparent bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 text-white shadow-[0_12px_24px_rgba(99,102,241,0.24)] hover:brightness-110'
+                                  : 'border-[#dce8f5] bg-white text-slate-600 hover:bg-[#f7fbff] disabled:cursor-not-allowed disabled:opacity-70'
+                            }`}
                           >
                             <span className="inline-flex items-center gap-2">
-                              {isCheckedIn ? <CheckCircle2 className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
-                              {!event.enrolled ? 'Đăng ký trước khi điểm danh' : isCheckedIn ? 'Đã điểm danh thành công' : 'Điểm danh GPS + QR'}
+                              {isCheckedIn ? <CheckCircle2 className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
+                              {!event.enrolled ? 'Đăng ký trước khi điểm danh' : isCheckedIn ? 'Đã điểm danh thành công' : 'Điểm danh GPS'}
                             </span>
                           </motion.button>
-                          
+
+                          {qrIssued && !isCheckedIn && (
+                            <motion.button
+                              type="button"
+                              whileHover={{ scale: 1.01 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => {
+                                setSelectedQRCheckInEvent(event);
+                              }}
+                              className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 font-semibold text-indigo-700 transition-all hover:bg-indigo-100"
+                            >
+                              <span className="inline-flex items-center gap-2">
+                                <QrCode className="h-4 w-4" />
+                                Xem QR điểm danh
+                              </span>
+                            </motion.button>
+                          )}
                           {['completed', 'ended', 'Đã kết thúc'].includes(event.status) && isCheckedIn && (
                             <motion.button
                               type="button"
@@ -1043,25 +986,33 @@ export default function StudentEventsPage() {
                             </div>
 
                             <div className="grid gap-3">
-                              <div className="rounded-2xl border border-[#dce8f5] bg-white p-4">
-                                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">ĐIỂM DANH (GPS + QR)</p>
-                                <p className="mt-2 text-sm text-slate-600">Nhập mã QR do sự kiện cung cấp. Hệ thống sẽ tự động lấy vị trí GPS để xác minh bạn đang ở sự kiện.</p>
-                                <div className="mt-3 flex flex-col gap-3">
-                                  <input
-                                    value={qrInput}
-                                    onChange={(inputEvent) => setQrInput(inputEvent.target.value)}
-                                    placeholder="Nhập mã QR..."
-                                    className="w-full rounded-xl border border-[#dce8f5] bg-[#f8fbff] px-3 py-2 text-sm outline-none focus:border-[#1f5dcc]"
-                                  />
+                              <div className="rounded-2xl border border-[#dce8f5] bg-white p-4 flex flex-col md:flex-row gap-6 items-center justify-between">
+                                <div className="flex-1">
+                                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Cách 1: Điểm danh bằng vị trí GPS</p>
+                                  <p className="mt-2 text-sm text-slate-600">Hệ thống sẽ tự động lấy vị trí thực tế của thiết bị và so khớp với địa điểm tổ chức sự kiện.</p>
                                   <button
                                     type="button"
-                                    onClick={() => handleQRCheckIn(event)}
+                                    onClick={() => handleGPSCheckIn(event)}
                                     disabled={isCheckingGps}
-                                    className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition-all hover:bg-indigo-700 disabled:opacity-70 flex justify-center items-center gap-2"
+                                    className="mt-3 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition-all hover:bg-indigo-700 disabled:opacity-70 flex justify-center items-center gap-2"
                                   >
-                                    {isCheckingGps ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span> : <Navigation className="h-4 w-4" />}
-                                    {isCheckingGps ? 'Đang điểm danh...' : 'Điểm danh ngay'}
+                                    {isCheckingGps ? (
+                                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                                    ) : (
+                                      <Navigation className="h-4 w-4" />
+                                    )}
+                                    {isCheckingGps ? 'Đang xác thực vị trí...' : 'Xác nhận điểm danh GPS'}
                                   </button>
+                                </div>
+                                
+                                <div className="border-t border-[#dce8f5] md:border-t-0 md:border-l pl-0 md:pl-6 pt-4 md:pt-0 flex flex-col items-center shrink-0">
+                                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400 mb-2 text-center">Cách 2: Quét mã QR cá nhân</p>
+                                  <div className="bg-white p-2.5 rounded-2xl border border-indigo-100 shadow-sm">
+                                    {typeof QRCode === 'function' || typeof QRCode === 'object' ? (
+                                      React.createElement(QRCode.default || QRCode, { value: `STUDENT-CHECKIN-${event.realId}-${user.id}`, size: 120 })
+                                    ) : null}
+                                  </div>
+                                  <p className="mt-2 text-[10px] text-slate-400 text-center max-w-[150px]">Trình mã này cho Cán bộ Đoàn quét điểm danh trực tiếp</p>
                                 </div>
                               </div>
                             </div>
@@ -1069,13 +1020,13 @@ export default function StudentEventsPage() {
                             {isCheckedIn && (
                               <p className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
                                 <CheckCircle2 className="h-4 w-4" />
-                                Hoàn tất điểm danh lúc {new Date(checkinState.checkedInAt).toLocaleString('vi-VN')}
+                                Hoàn tất điểm danh lúc {new Date(checkinState.checkedInAt || Date.now()).toLocaleString('vi-VN')}
                               </p>
                             )}
                             {!isCheckedIn && (
                               <p className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
                                 <XCircle className="h-4 w-4" />
-                                Cần hoàn thành đủ 2 bước GPS + QR để điểm danh thành công.
+                                Cần cung cấp quyền truy cập vị trí để hoàn thành điểm danh sự kiện.
                               </p>
                             )}
                           </div>
@@ -1119,6 +1070,128 @@ export default function StudentEventsPage() {
 
           </div>
         </main>
+
+        {/* Student QR Code Modal */}
+        <AnimatePresence>
+          {selectedQRCheckInEvent && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-md rounded-[32px] bg-white p-8 shadow-2xl relative text-center"
+              >
+                <button 
+                  onClick={() => setSelectedQRCheckInEvent(null)} 
+                  className="absolute right-5 top-5 rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                
+                <div className="w-16 h-16 rounded-2xl bg-[#eef6ff] text-[#1747a6] flex items-center justify-center mx-auto mb-4">
+                  <QrCode className="h-8 w-8" />
+                </div>
+
+                <h3 className="text-2xl font-black text-[#132b57] mb-1">Mã QR Điểm Danh</h3>
+                <p className="text-slate-500 text-sm mb-6">{selectedQRCheckInEvent.title}</p>
+                
+                <div className="bg-white p-4 rounded-3xl border border-indigo-100 shadow-md inline-block mb-6">
+                  {typeof QRCode === 'function' || typeof QRCode === 'object' ? (
+                    React.createElement(QRCode.default || QRCode, { 
+                      value: `STUDENT-CHECKIN-${selectedQRCheckInEvent.realId}-${user.id}`, 
+                      size: 200 
+                    })
+                  ) : null}
+                </div>
+
+                <div className="bg-slate-50 rounded-2xl p-4 text-left border border-slate-100 text-xs text-slate-600 space-y-2 mb-6">
+                  <p><strong>Họ tên:</strong> {user.fullName}</p>
+                  <p><strong>MSSV:</strong> {user.studentId}</p>
+                  <p className="border-t border-slate-200 pt-2 text-[#1f5dcc] font-medium leading-relaxed">
+                    * Trình mã QR này cho Cán bộ Đoàn để được quét điểm danh trực tiếp. Quét QR điểm danh sẽ tự động bỏ qua kiểm tra GPS.
+                  </p>
+                </div>
+
+                <button 
+                  type="button"
+                  onClick={() => setSelectedQRCheckInEvent(null)} 
+                  className="w-full rounded-2xl bg-[#1747a6] py-3.5 font-bold text-white hover:bg-[#205fd8] transition-colors shadow-lg shadow-indigo-100"
+                >
+                  Đóng
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Feedback Modal */}
+        <AnimatePresence>
+          {showFeedbackModal && selectedEventForFeedback && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-lg rounded-[32px] bg-white p-8 shadow-2xl relative"
+              >
+                <button 
+                  onClick={() => setShowFeedbackModal(false)} 
+                  className="absolute right-5 top-5 rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                <h3 className="text-2xl font-black text-[#132b57] mb-2">Đánh giá Sự kiện</h3>
+                <p className="text-slate-500 text-sm mb-6">Sự kiện: {selectedEventForFeedback.title}</p>
+                
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Đánh giá độ hài lòng:</label>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setFeedbackRating(star)}
+                          className="text-3xl focus:outline-none transition-transform active:scale-95 animate-none"
+                        >
+                          <span className={star <= feedbackRating ? 'text-amber-400' : 'text-slate-200'}>★</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Ý kiến đóng góp:</label>
+                    <textarea
+                      rows="4"
+                      value={feedbackInput}
+                      onChange={(e) => setFeedbackInput(e.target.value)}
+                      placeholder="Hãy chia sẻ trải nghiệm và góp ý của bạn về sự kiện này..."
+                      className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm focus:shadow-[0_0_0_4px_rgba(31,93,204,0.08)] transition-all"
+                    />
+                  </div>
+
+                  <div className="mt-4 flex gap-3">
+                    <button 
+                      type="button"
+                      onClick={() => setShowFeedbackModal(false)} 
+                      className="flex-1 rounded-2xl border border-slate-200 bg-white py-3 font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={handleSubmitFeedback} 
+                      className="flex-1 rounded-2xl bg-[#1747a6] py-3 font-bold text-white hover:bg-[#205fd8] transition-colors shadow-lg shadow-indigo-100"
+                    >
+                      Gửi đánh giá
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -18,7 +18,8 @@ import {
   updateRegistrationStatus,
   deleteRegistration,
   toggleEventQR,
-  checkInQR,
+  checkInGPS,
+  scanStudentQR,
   submitEventFeedback,
   getEventFeedbacks
 } from '../controllers/eventController';
@@ -50,7 +51,8 @@ router.post('/:id/below-min', authMiddleware, adminOrLienChiMiddleware, handleBe
 // Đăng ký sự kiện & Điểm danh (student)
 router.post('/:id/register', authMiddleware, registerForEvent);
 router.post('/:id/cancel-registration', authMiddleware, cancelRegistration);
-router.post('/:id/attendance/qr', authMiddleware, checkInQR);
+router.post('/:id/attendance/gps', authMiddleware, checkInGPS);
+router.post('/:id/attendance/scan-student', authMiddleware, adminOrLienChiMiddleware, scanStudentQR);
 router.post('/:id/feedback', authMiddleware, submitEventFeedback);
 
 // Admin/LienChi quản lý QR & Feedback

@@ -8,6 +8,7 @@ import doanLogo from '../../assets/logo-doan.png';
 import AdminLayout from '../../components/admin/AdminLayout';
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
 import { getStoredUserProfile, getUserInitials, isAdminRole, isLienChiRole } from '../../shared/user/session';
+import NotificationBell from '../student/NotificationBell';
 
 function UserIdentity({ user, subtitle }) {
   const userInitials = getUserInitials(user.fullName);
@@ -85,27 +86,46 @@ function ProfileLayout({ children, title, subtitle, user }) {
             <UserIdentity user={user} subtitle={user.studentId || 'Sinh viên'} />
           </div>
 
-          <nav className="space-y-2">
-            <Link to="/sinhvien/event" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-              Sự kiện của tôi
-            </Link>
-            <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Hồ sơ cá nhân</div>
-            <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-              Chat sinh viên
-            </Link>
-            <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
-              Lịch sử hoạt động
-            </Link>
-          </nav>
+          <div className="mb-6 rounded-3xl bg-white/10 p-4 backdrop-blur-md">
+            <p className="text-xs uppercase tracking-[0.28em] text-blue-100">Vai trò hiện tại</p>
+            <p className="mt-2 text-xl font-bold">{user.role || 'Sinh viên'}</p>
+            <p className="mt-2 text-sm text-blue-50/85">Quản lý thông tin cá nhân, cập nhật hồ sơ và theo dõi trạng thái tài khoản.</p>
+          </div>
 
-          <div className="mt-auto pt-6">
-            <button
-              onClick={handleLogout}
-              className="app-logout-button flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition-all"
-            >
-              <LogOut className="h-5 w-5 shrink-0" />
-              <span>Đăng xuất</span>
-            </button>
+          <div className="mt-auto rounded-3xl border border-white/10 bg-white/10 p-4">
+            <p className="text-sm font-semibold">Tiện ích tài khoản</p>
+            <ul className="mt-3 space-y-2 text-sm text-blue-50/90 mb-6">
+              <li>Xem thông tin cá nhân</li>
+              <li>Cập nhật hồ sơ</li>
+              <li>Đăng ký tham gia sự kiện</li>
+              <li>Theo dõi lịch sử hoạt động</li>
+            </ul>
+
+            <nav className="space-y-2">
+              <Link to="/sinhvien/event" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+                Sự kiện của tôi
+              </Link>
+              <div className="rounded-2xl bg-white px-4 py-3 font-semibold text-[#123d94] shadow-lg">Hồ sơ cá nhân</div>
+              <Link to="/sinhvien/chat" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+                Chat sinh viên
+              </Link>
+              <Link to="/sinhvien/history" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+                Lịch sử hoạt động
+              </Link>
+              <Link to="/sinhvien/notifications" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">
+                Thông báo
+              </Link>
+            </nav>
+
+            <div className="mt-6">
+              <button
+                onClick={handleLogout}
+                className="app-logout-button flex w-full items-center gap-3 rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10"
+              >
+                <LogOut className="h-5 w-5 shrink-0" />
+                <span>Đăng xuất</span>
+              </button>
+            </div>
           </div>
         </aside>
 
@@ -117,7 +137,10 @@ function ProfileLayout({ children, title, subtitle, user }) {
                 <h1 className="text-3xl font-black text-[#132b57]">{title}</h1>
                 <p className="mt-1 text-slate-500">{subtitle}</p>
               </div>
-              <HeaderIdentity user={user} />
+              <div className="flex items-center gap-3">
+                <NotificationBell />
+                <HeaderIdentity user={user} />
+              </div>
             </div>
           </div>
 

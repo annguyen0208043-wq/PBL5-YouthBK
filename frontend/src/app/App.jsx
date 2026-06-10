@@ -19,9 +19,11 @@ import LienChiEvidenceApprovalPage from '../pages/lienchi/LienChiEvidenceApprova
 import LienChiManagedEventsPage from '../pages/lienchi/LienChiManagedEventsPage';
 import LienChiEditEventPage from '../pages/lienchi/LienChiEditEventPage';
 import LienChiRegistrationsPage from '../pages/lienchi/LienChiRegistrationsPage';
+import LienChiNotificationsPage from '../pages/lienchi/LienChiNotificationsPage';
 import StudentActivityHistoryPage from '../pages/student/StudentActivityHistoryPage';
 import StudentChatPage from '../pages/student/StudentChatPage';
 import StudentEventsPage from '../pages/student/StudentEventsPage';
+import StudentNotificationPage from '../pages/student/StudentNotificationPage';
 import PersonalProfilePage from '../pages/profile/PersonalProfilePage';
 
 export default function App() {
@@ -52,12 +54,14 @@ export default function App() {
       <Route path="/lien-chi/events/manage/edit/:id" element={<LienChiEditEventPage />} />
       <Route path="/lien-chi/registrations" element={<LienChiRegistrationsPage />} />
       <Route path="/lien-chi/evidences" element={<LienChiEvidenceApprovalPage />} />
+      <Route path="/lien-chi/notifications" element={<LienChiNotificationsPage />} />
       
       {/* Student Routes */}
       <Route path="/sinhvien" element={<Navigate to="/sinhvien/event" replace />} />
       <Route path="/sinhvien/chat" element={<StudentChatPage />} />
       <Route path="/sinhvien/event" element={<StudentEventsPage />} />
       <Route path="/sinhvien/history" element={<StudentActivityHistoryPage />} />
+      <Route path="/sinhvien/notifications" element={<StudentNotificationPage />} />
       <Route path="/sinhvien/profile" element={<PersonalProfilePage />} />
     </Routes>
   );

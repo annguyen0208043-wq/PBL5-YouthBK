@@ -1,8 +1,9 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { BellRing, CalendarClock, PencilLine, XCircle, Loader, X, MapPin, Users, Tag, Clock, QrCode, MessageSquare, ChevronLeft, ChevronRight, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import QRCode from 'react-qr-code';
+import jsQR from 'jsqr';
 
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
 import { getStoredUserProfile } from '../../shared/user/session';
@@ -72,6 +73,179 @@ export default function LienChiManagedEventsPage() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  // Student QR Attendance Scanner States
+  const [isScanningStudent, setIsScanningStudent] = useState(false);
+  const [scanNotice, setScanNotice] = useState('');
+  const qrVideoRef = useRef(null);
+  const qrStreamRef = useRef(null);
+  const qrDetectorRef = useRef(null);
+  const qrLoopFrameRef = useRef(null);
+  const scanTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (qrLoopFrameRef.current) {
+      window.cancelAnimationFrame(qrLoopFrameRef.current);
+    }
+    if (qrStreamRef.current) {
+      qrStreamRef.current.getTracks().forEach((track) => track.stop());
+      qrStreamRef.current = null;
+    }
+    if (scanTimerRef.current) {
+      clearTimeout(scanTimerRef.current);
+    }
+  }, []);
+
+  const stopStudentScanner = () => {
+    if (qrLoopFrameRef.current) {
+      window.cancelAnimationFrame(qrLoopFrameRef.current);
+      qrLoopFrameRef.current = null;
+    }
+    if (qrStreamRef.current) {
+      qrStreamRef.current.getTracks().forEach((track) => track.stop());
+      qrStreamRef.current = null;
+    }
+    setIsScanningStudent(false);
+  };
+
+  const startStudentScanner = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setScanNotice('Trình duyệt chưa hỗ trợ truy cập camera.');
+      return;
+    }
+
+    try {
+      setScanNotice('Đang khởi động camera...');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+
+      qrStreamRef.current = stream;
+      setIsScanningStudent(true);
+      setScanNotice('Hãy đưa QR code của Sinh viên trước camera.');
+
+      const hasBarcodeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+      const BarcodeDetectorConstructor = hasBarcodeDetector ? window.BarcodeDetector : null;
+      
+      if (BarcodeDetectorConstructor) {
+        qrDetectorRef.current = new BarcodeDetectorConstructor({ formats: ['qr_code'] });
+      }
+
+      let lastScannedCode = '';
+      let coolDownActive = false;
+
+      // Create offscreen canvas for jsQR fallback if no native detector
+      let canvas = null;
+      let canvasContext = null;
+      if (!qrDetectorRef.current) {
+        canvas = document.createElement('canvas');
+        canvasContext = canvas.getContext('2d');
+      }
+
+      // Wait for React to render the video element in DOM before binding and starting play
+      setTimeout(() => {
+        if (!qrVideoRef.current) {
+          setScanNotice('Không tìm thấy phần tử hiển thị video.');
+          return;
+        }
+
+        qrVideoRef.current.srcObject = stream;
+        qrVideoRef.current.play()
+          .then(() => {
+            const scanFrame = async () => {
+              if (!qrVideoRef.current || !qrStreamRef.current) {
+                return;
+              }
+
+              try {
+                const video = qrVideoRef.current;
+                
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                  let qrCodeValue = null;
+
+                  if (qrDetectorRef.current) {
+                    const barcodes = await qrDetectorRef.current.detect(video);
+                    if (barcodes.length > 0 && barcodes[0].rawValue) {
+                      qrCodeValue = barcodes[0].rawValue;
+                    }
+                  } else if (canvasContext && canvas) {
+                    // jsQR fallback decoding
+                    const width = video.videoWidth;
+                    const height = video.videoHeight;
+                    canvas.width = width;
+                    canvas.height = height;
+                    canvasContext.drawImage(video, 0, 0, width, height);
+                    const imageData = canvasContext.getImageData(0, 0, width, height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                      inversionAttempts: 'dontInvert',
+                    });
+                    if (code) {
+                      qrCodeValue = code.data;
+                    }
+                  }
+
+                  if (qrCodeValue && !coolDownActive) {
+                    if (qrCodeValue !== lastScannedCode) {
+                      lastScannedCode = qrCodeValue;
+                      coolDownActive = true;
+                      
+                      // Trigger backend check-in!
+                      await handleCheckInStudentQR(qrCodeValue);
+                      
+                      // Cool down for 3 seconds before allowing scanning the same or another code
+                      scanTimerRef.current = setTimeout(() => {
+                        coolDownActive = false;
+                        lastScannedCode = '';
+                      }, 3000);
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error('QR scanner error:', err);
+              }
+
+              qrLoopFrameRef.current = window.requestAnimationFrame(scanFrame);
+            };
+
+            qrLoopFrameRef.current = window.requestAnimationFrame(scanFrame);
+          })
+          .catch((err) => {
+            console.error('Error starting video play:', err);
+            setScanNotice('Không thể khởi động luồng video từ camera.');
+          });
+      }, 150);
+    } catch (err) {
+      setScanNotice('Không thể truy cập camera. Vui lòng cấp quyền camera.');
+      stopStudentScanner();
+    }
+  };
+
+  const handleCheckInStudentQR = async (studentQrCode) => {
+    try {
+      setScanNotice('Đang đối chiếu dữ liệu...');
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/events/${selectedEventId}/attendance/scan-student`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ studentQrCode })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setScanNotice(`Lỗi: ${data.message || 'Điểm danh thất bại'}`);
+      } else {
+        setScanNotice(data.message || 'Điểm danh thành công!');
+        // Update local slot registrations or count
+        fetchEvents();
+      }
+    } catch (err) {
+      setScanNotice('Lỗi kết nối máy chủ');
+    }
+  };
+
   // Fetch all events created by this Lien Chi
   const fetchEvents = async () => {
     try {
@@ -90,7 +264,7 @@ export default function LienChiManagedEventsPage() {
       const data = await response.json();
       // Filter events created by current user
       const userEvents = data.events.filter(event => event.creator?.name === user.fullName);
-      
+
       setEvents(userEvents);
       setError('');
     } catch (err) {
@@ -135,8 +309,8 @@ export default function LienChiManagedEventsPage() {
     fetchDetail();
   }, [selectedEventId]);
 
-  const filters = ['Tất cả', 'Nháp', 'Chờ duyệt', 'Mở đăng ký', 'Dưới tối thiểu', 'Đang diễn ra', 'Cần sửa chữa', 'Đã kết thúc', 'Đã hủy'];
-  
+  const filters = ['Tất cả', 'Mở đăng ký', 'Đang diễn ra', 'Đã kết thúc'];
+
   const visibleEvents = useMemo(() => {
     return events.filter((event) => {
       const matchSearch = !search || event.title.toLowerCase().includes(search.toLowerCase());
@@ -182,7 +356,7 @@ export default function LienChiManagedEventsPage() {
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Lỗi khi giải quyết số lượng tối thiểu');
-      
+
       setNotice('Đã cập nhật quyết định giải quyết số lượng tối thiểu thành công.');
       setShowBelowMinModal(false);
       setBelowMinNote('');
@@ -209,7 +383,7 @@ export default function LienChiManagedEventsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Lỗi khi thao tác mã QR');
-      
+
       setNotice(data.message);
       // Update selectedEvent and list locally
       setSelectedEvent(curr => curr ? { ...curr, qrActive: data.qrActive, qrCode: data.qrCode } : null);
@@ -260,17 +434,17 @@ export default function LienChiManagedEventsPage() {
         <div className="grid gap-6 grid-cols-1">
           <section className="space-y-4">
             <div className="rounded-[28px] border border-[#dce8f5] bg-white p-5 shadow-sm">
-              <input 
-                value={search} 
-                onChange={(e) => setSearch(e.target.value)} 
-                placeholder="Tìm kiếm sự kiện theo tên..." 
-                className="w-full rounded-2xl border px-4 py-2 outline-none focus:border-[#1f5dcc]" 
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm kiếm sự kiện theo tên..."
+                className="w-full rounded-2xl border px-4 py-2 outline-none focus:border-[#1f5dcc]"
               />
               <div className="mt-3 flex flex-wrap gap-2">
                 {filters.map(f => (
-                  <button 
-                    key={f} 
-                    onClick={() => setActiveFilter(f)} 
+                  <button
+                    key={f}
+                    onClick={() => setActiveFilter(f)}
                     className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${activeFilter === f ? 'bg-[#1747a6] text-white shadow-md' : 'border border-[#dce8f5] bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
                   >
                     {f}
@@ -288,9 +462,8 @@ export default function LienChiManagedEventsPage() {
                     type="button"
                     whileHover={{ y: -3 }}
                     onClick={() => setSelectedEventId(event.id)}
-                    className={`w-full rounded-[28px] border p-4 text-left transition-all ${
-                      selectedEventId === event.id ? 'border-[#88b2ef] bg-[#eef6ff] shadow-sm' : 'border-[#dce8f5] bg-white'
-                    }`}
+                    className={`w-full rounded-[28px] border p-4 text-left transition-all ${selectedEventId === event.id ? 'border-[#88b2ef] bg-[#eef6ff] shadow-sm' : 'border-[#dce8f5] bg-white'
+                      }`}
                   >
                     <div className="flex gap-4">
                       {coverImage ? (
@@ -367,13 +540,13 @@ export default function LienChiManagedEventsPage() {
                   {selectedEvent.images && selectedEvent.images.length > 0 && (
                     <div className="mt-5 relative bg-slate-900 rounded-3xl overflow-hidden shadow-md group">
                       <div className="h-64 md:h-80 w-full flex items-center justify-center">
-                        <img 
-                          src={selectedEvent.images[carouselIndex].imageUrl} 
-                          alt="Cover carousel" 
-                          className="h-full w-full object-cover" 
+                        <img
+                          src={selectedEvent.images[carouselIndex].imageUrl}
+                          alt="Cover carousel"
+                          className="h-full w-full object-cover"
                         />
                       </div>
-                      
+
                       {selectedEvent.images[carouselIndex].caption && (
                         <div className="absolute bottom-0 inset-x-0 bg-black/60 px-5 py-3 text-sm text-white font-medium">
                           {selectedEvent.images[carouselIndex].caption}
@@ -383,27 +556,27 @@ export default function LienChiManagedEventsPage() {
                       {/* Navigation buttons */}
                       {selectedEvent.images.length > 1 && (
                         <>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={() => setCarouselIndex(prev => (prev === 0 ? selectedEvent.images.length - 1 : prev - 1))}
                             className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white p-2 rounded-full shadow-sm text-slate-700"
                           >
                             <ChevronLeft className="h-5 w-5" />
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={() => setCarouselIndex(prev => (prev === selectedEvent.images.length - 1 ? 0 : prev + 1))}
                             className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white p-2 rounded-full shadow-sm text-slate-700"
                           >
                             <ChevronRight className="h-5 w-5" />
                           </button>
-                          
+
                           {/* Indicator dots */}
                           <div className="absolute top-4 right-4 flex gap-1 bg-black/50 px-2 py-1 rounded-full">
                             {selectedEvent.images.map((_, i) => (
-                              <div 
-                                key={i} 
-                                className={`w-1.5 h-1.5 rounded-full transition-all ${i === carouselIndex ? 'bg-white scale-125' : 'bg-white/40'}`} 
+                              <div
+                                key={i}
+                                className={`w-1.5 h-1.5 rounded-full transition-all ${i === carouselIndex ? 'bg-white scale-125' : 'bg-white/40'}`}
                               />
                             ))}
                           </div>
@@ -460,10 +633,10 @@ export default function LienChiManagedEventsPage() {
                       <p className="mb-2 text-sm font-bold text-[#132b57]">Tài liệu đính kèm ({selectedEvent.documents.length})</p>
                       <div className="grid gap-2 sm:grid-cols-2">
                         {selectedEvent.documents.map(doc => (
-                          <a 
-                            key={doc.id} 
-                            href={doc.fileUrl} 
-                            target="_blank" 
+                          <a
+                            key={doc.id}
+                            href={doc.fileUrl}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-3 border border-slate-100 rounded-xl p-3 bg-slate-50 hover:bg-[#f3f7ff] hover:border-[#83a8ea] transition-all"
                           >
@@ -557,7 +730,7 @@ export default function LienChiManagedEventsPage() {
                           <div key={phase.id} className="border-l-2 border-[#1747a6]/20 pl-4 relative">
                             {/* Dot indicator */}
                             <div className="absolute w-3 h-3 rounded-full bg-[#1747a6] -left-[7px] top-1.5" />
-                            
+
                             <div className="flex items-baseline justify-between flex-wrap gap-2">
                               <h4 className="font-bold text-slate-800 text-sm">Giai đoạn {idx + 1}: {phase.title}</h4>
                               <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">
@@ -565,7 +738,7 @@ export default function LienChiManagedEventsPage() {
                               </span>
                             </div>
                             {phase.description && <p className="text-xs text-slate-500 mt-1">{phase.description}</p>}
-                            
+
                             {/* Detailed milestones under phase */}
                             {phase.details && phase.details.length > 0 && (
                               <div className="mt-2 space-y-2 bg-white rounded-xl p-3 border border-slate-100">
@@ -614,8 +787,8 @@ export default function LienChiManagedEventsPage() {
                     {['open_registration', 'ongoing', 'completed', 'ended'].includes(selectedEvent.status) && (
                       <>
                         <button type="button" onClick={() => setShowQRModal(true)} className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 font-bold text-white transition-all hover:bg-indigo-700">
-                          <QrCode className="h-5 w-5" />
-                          Điểm danh QR
+                          <MapPin className="h-5 w-5" />
+                          Điểm danh GPS
                         </button>
                         <button type="button" onClick={handleViewFeedbacks} className="inline-flex items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-3 font-semibold text-indigo-700 transition-all hover:bg-indigo-100">
                           <MessageSquare className="h-5 w-5" />
@@ -626,7 +799,7 @@ export default function LienChiManagedEventsPage() {
 
                     <button 
                       type="button" 
-                      onClick={() => navigate(`/lien-chi/events/registrations?eventId=${selectedEvent.id}`)} 
+                      onClick={() => navigate(`/lien-chi/registrations?eventId=${selectedEvent.id}`)} 
                       className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-slate-600 transition-all hover:bg-[#f3f8ff]"
                     >
                       Danh sách SV đăng ký
@@ -645,17 +818,17 @@ export default function LienChiManagedEventsPage() {
           <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-xl relative">
             <h3 className="text-xl font-black text-[#132b57] mb-1">Quyết định tổ chức sự kiện</h3>
             <p className="text-xs text-slate-500 mb-4">Sự kiện hiện không đạt số lượng tối thiểu ({selectedEvent?.currentSlots}/{selectedEvent?.minParticipants})</p>
-            
+
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setBelowMinAction('proceed')}
                 className={`py-3 rounded-xl font-bold transition-all border text-center ${belowMinAction === 'proceed' ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-slate-50 text-slate-600 border-slate-200'}`}
               >
                 Tiếp tục tổ chức
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setBelowMinAction('cancel')}
                 className={`py-3 rounded-xl font-bold transition-all border text-center ${belowMinAction === 'cancel' ? 'bg-rose-50 border-rose-400 text-rose-700' : 'bg-slate-50 text-slate-600 border-slate-200'}`}
               >
@@ -682,34 +855,81 @@ export default function LienChiManagedEventsPage() {
         </div>
       )}
 
-      {/* QR Modal */}
+      {/* GPS Modal */}
       {showQRModal && selectedEvent && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[32px] bg-white p-8 shadow-2xl text-center relative">
-            <button onClick={() => setShowQRModal(false)} className="absolute right-5 top-5 rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
+          <div className="w-full max-w-md rounded-[32px] bg-white p-8 shadow-2xl text-center relative max-h-[95vh] overflow-y-auto scrollbar-hide">
+            <button onClick={() => { stopStudentScanner(); setShowQRModal(false); }} className="absolute right-5 top-5 rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
               <X className="h-5 w-5" />
             </button>
-            <h3 className="text-2xl font-black text-[#132b57] mb-2">Điểm danh QR</h3>
-            <p className="text-slate-500 text-sm mb-6">Sự kiện: {selectedEvent.title}</p>
+            <h3 className="text-2xl font-black text-[#132b57] mb-2">Điểm danh Sự kiện</h3>
+            <p className="text-slate-500 text-sm mb-4">Sự kiện: {selectedEvent.title}</p>
 
-            {selectedEvent.qrActive && selectedEvent.qrCode ? (
+            <div className="text-left bg-slate-50 rounded-2xl p-4 mb-4 border border-slate-100 text-xs space-y-1.5 text-slate-600">
+              <p><strong>Địa điểm ghim:</strong> {selectedEvent.locationName || 'Chưa cấu hình'}</p>
+              <p><strong>Bán kính tự phục vụ:</strong> {selectedEvent.attendanceRadius ? `${selectedEvent.attendanceRadius}m` : 'N/A'}</p>
+            </div>
+
+            {selectedEvent.qrActive ? (
               <div className="flex flex-col items-center">
-                <div className="bg-white p-4 rounded-3xl shadow-lg border-2 border-indigo-100 mb-6">
-                  {typeof QRCode === 'function' || typeof QRCode === 'object' ? (
-                    React.createElement(QRCode.default || QRCode, { value: selectedEvent.qrCode, size: 250 })
-                  ) : null}
+                <div className="text-emerald-600 font-semibold mb-4 flex items-center gap-2 text-sm justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div> 
+                  Phiên điểm danh đang HOẠT ĐỘNG
                 </div>
-                <p className="font-mono bg-slate-100 px-4 py-2 rounded-xl text-lg font-bold tracking-widest">{selectedEvent.qrCode}</p>
-                <div className="text-emerald-600 font-semibold mt-4 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> Mã QR đang hoạt động</div>
-                <button onClick={() => handleToggleQR(false)} className="mt-6 w-full rounded-2xl bg-rose-100 text-rose-700 py-3 font-bold hover:bg-rose-200 transition-colors">Tắt mã QR</button>
+
+                {/* Video Scanner block */}
+                {isScanningStudent ? (
+                  <div className="w-full mb-4 relative rounded-2xl overflow-hidden border border-[#dce8f5] shadow-inner bg-black">
+                    <video
+                      ref={qrVideoRef}
+                      playsInline
+                      autoPlay
+                      muted
+                      className="w-full h-52 object-cover"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-40 h-40 border-2 border-indigo-400 border-dashed rounded-lg animate-pulse"></div>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={stopStudentScanner} 
+                      className="absolute bottom-3 right-3 bg-rose-600 text-white font-bold text-xs px-3 py-2 rounded-lg hover:bg-rose-700 shadow"
+                    >
+                      Dừng quét camera
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    type="button" 
+                    onClick={startStudentScanner} 
+                    className="w-full mb-4 inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 hover:bg-indigo-700 px-5 py-3.5 font-bold text-white shadow-md transition-colors"
+                  >
+                    <QrCode className="h-5 w-5" />
+                    Mở Camera quét QR Sinh viên
+                  </button>
+                )}
+
+                {scanNotice && (
+                  <div className={`w-full mb-4 rounded-xl px-4 py-3 text-xs font-semibold leading-relaxed border ${
+                    scanNotice.startsWith('Lỗi') || scanNotice.startsWith('Không')
+                      ? 'bg-rose-50 border-rose-200 text-rose-700' 
+                      : scanNotice.startsWith('Điểm danh thành công')
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                  }`}>
+                    {scanNotice}
+                  </div>
+                )}
+
+                <button onClick={() => { stopStudentScanner(); handleToggleQR(false); }} className="w-full rounded-2xl bg-rose-100 text-rose-700 py-3 font-bold hover:bg-rose-200 transition-colors mt-2">Đóng phiên điểm danh</button>
               </div>
             ) : (
-              <div className="flex flex-col items-center py-8">
-                <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                  <QrCode className="h-10 w-10 text-slate-400" />
+              <div className="flex flex-col items-center py-4">
+                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                  <MapPin className="h-8 w-8 text-slate-400" />
                 </div>
-                <p className="text-slate-600 mb-6">Mã QR điểm danh đang tắt.</p>
-                <button onClick={() => handleToggleQR(true)} className="w-full rounded-2xl bg-indigo-600 text-white py-3 font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Tạo & Bật mã QR</button>
+                <p className="text-slate-500 text-sm mb-6">Mở phiên để sinh viên có thể tự điểm danh bằng GPS hoặc bạn có thể quét QR cá nhân của sinh viên bằng camera laptop.</p>
+                <button onClick={() => handleToggleQR(true)} className="w-full rounded-2xl bg-indigo-600 text-white py-3 font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Mở phiên điểm danh</button>
               </div>
             )}
           </div>
@@ -725,7 +945,7 @@ export default function LienChiManagedEventsPage() {
             </button>
             <h3 className="text-2xl font-black text-[#132b57] mb-2">Đánh giá từ Sinh viên</h3>
             <p className="text-slate-500 text-sm mb-6">Sự kiện: {selectedEvent?.title}</p>
-            
+
             <div className="space-y-4">
               {feedbacks.length === 0 ? (
                 <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
@@ -746,7 +966,7 @@ export default function LienChiManagedEventsPage() {
                         <p className="text-xs text-slate-500">{new Date(fb.createdAt).toLocaleString('vi-VN')}</p>
                       </div>
                       <div className="ml-auto flex gap-1">
-                        {[1,2,3,4,5].map(star => (
+                        {[1, 2, 3, 4, 5].map(star => (
                           <span key={star} className={`text-lg ${star <= fb.rating ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
                         ))}
                       </div>
