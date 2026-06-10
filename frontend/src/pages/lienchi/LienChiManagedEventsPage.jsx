@@ -800,7 +800,7 @@ export default function LienChiManagedEventsPage() {
 
                     <button 
                       type="button" 
-                      onClick={() => navigate(`/lien-chi/events/registrations?eventId=${selectedEvent.id}`)} 
+                      onClick={() => navigate(`/lien-chi/registrations?eventId=${selectedEvent.id}`)} 
                       className="inline-flex items-center gap-2 rounded-2xl border border-[#dce8f5] bg-white px-5 py-3 font-semibold text-slate-600 transition-all hover:bg-[#f3f8ff]"
                     >
                       Danh sách SV đăng ký

@@ -16,6 +16,7 @@ const navSections = [
     items: [
       { to: '/lien-chi/events/create', label: 'Tạo sự kiện', icon: CalendarPlus2 },
       { to: '/lien-chi/events/manage', label: 'Sự kiện của tôi', icon: FilePenLine },
+      { to: '/lien-chi/registrations', label: 'Người đăng ký', icon: ClipboardList },
     ],
   },
   {
