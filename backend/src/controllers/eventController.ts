@@ -12,6 +12,7 @@ import User from '../models/User';
 import EventFeedback from '../models/EventFeedback';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { isBeforeStart, isRegistrationOpen, hasSlots, isOwner } from '../guards/event.guards';
+import { writeAuditLog, getClientIp } from '../utils/auditLogHelper';
 
 // Helper to calculate GPS distance
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -28,6 +29,32 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
 
 function deg2rad(deg: number) {
   return deg * (Math.PI / 180);
+}
+
+function normalizeAudienceText(value?: string | null) {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\b(khoa|lien chi doan|lien chi|doan khoa)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function canStudentAccessEvent(event: Event, userId: number) {
+  if (event.createdByRole === 'admin') {
+    return true;
+  }
+
+  const [student, creator] = await Promise.all([
+    User.findByPk(userId, { attributes: ['faculty', 'department'] }),
+    User.findByPk(event.createdBy, { attributes: ['faculty', 'department'] })
+  ]);
+
+  const studentFaculty = normalizeAudienceText(student?.faculty || student?.department);
+  const creatorFaculty = normalizeAudienceText(creator?.faculty || creator?.department);
+
+  return Boolean(studentFaculty && creatorFaculty && studentFaculty === creatorFaculty);
 }
 
 // 1. PUBLIC / GENERAL ENDPOINTS
@@ -56,7 +83,10 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
         ...(req.user ? [{
           model: EventRegistration,
           as: 'registrations',
-          where: { userId: req.user.id },
+          where: { 
+            userId: req.user.id,
+            status: { [Op.in]: ['registered', 'attended', 'confirmed', 'pending'] }
+          },
           required: false
         }] : [])
       ],
@@ -66,6 +96,7 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
     const formattedEvents = events.map(e => {
       const data = e.toJSON() as any;
       if (req.user && data.registrations && data.registrations.length > 0) {
+        // At this point, registrations are already filtered to valid statuses only
         data.isRegistered = true;
         data.userRegistrationStatus = data.registrations[0].status;
       } else {
@@ -85,6 +116,7 @@ export const getEvents = async (req: AuthRequest, res: Response): Promise<void> 
 export const getEventById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const canViewApprovalMessages = ['admin', 'lienchi'].includes(req.user?.role || '');
 
     const event = await Event.findByPk(id, {
       include: [
@@ -97,11 +129,18 @@ export const getEventById = async (req: AuthRequest, res: Response): Promise<voi
         },
         { model: EventImage, as: 'images' },
         { model: EventDocument, as: 'documents', include: [{ model: User, as: 'uploader', attributes: ['name'] }] },
-        { model: EventApproval, as: 'approvals', include: [{ model: User, as: 'approver', attributes: ['name'] }] },
+        ...(canViewApprovalMessages ? [{
+          model: EventApproval,
+          as: 'approvals',
+          include: [{ model: User, as: 'approver', attributes: ['name'] }]
+        }] : []),
         ...(req.user ? [{
           model: EventRegistration,
           as: 'registrations',
-          where: { userId: req.user.id },
+          where: { 
+            userId: req.user.id,
+            status: { [Op.in]: ['registered', 'attended', 'confirmed', 'pending'] }
+          },
           required: false
         }] : [])
       ],
@@ -118,6 +157,7 @@ export const getEventById = async (req: AuthRequest, res: Response): Promise<voi
 
     const data = event.toJSON() as any;
     if (req.user && data.registrations && data.registrations.length > 0) {
+      // At this point, registrations are already filtered to valid statuses only
       data.isRegistered = true;
       data.userRegistrationStatus = data.registrations[0].status;
     } else {
@@ -272,6 +312,21 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
         { model: EventImage, as: 'images' },
         { model: EventDocument, as: 'documents' }
       ]
+    });
+
+    // Ghi nhật ký
+    const statusLabel: Record<string, string> = {
+      open_registration: 'Mở đăng ký (không cần duyệt)',
+      pending: 'Chờ duyệt',
+      draft: 'Lưu nháp',
+    };
+    writeAuditLog({
+      userId,
+      action: `Tạo sự kiện "${title}"`,
+      targetType: 'Event',
+      targetId: event.id,
+      details: `Trạng thái ban đầu: ${statusLabel[status] ?? status}`,
+      ipAddress: getClientIp(req) ?? undefined,
     });
 
     res.status(201).json({ message: 'Tạo sự kiện thành công', event: fullEvent });
@@ -546,6 +601,17 @@ export const approveEvent = async (req: AuthRequest, res: Response): Promise<voi
     }, { transaction });
 
     await transaction.commit();
+
+    // Ghi nhật ký
+    writeAuditLog({
+      userId: req.user!.id,
+      action: `Duyệt sự kiện "${event.title}"`,
+      targetType: 'Event',
+      targetId: event.id,
+      details: note ? `Ghi chú: ${note}` : undefined,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
+
     res.json({ message: 'Duyệt sự kiện thành công. Sự kiện đã mở đăng ký.', event });
   } catch (error) {
     await transaction.rollback();
@@ -585,6 +651,17 @@ export const rejectEvent = async (req: AuthRequest, res: Response): Promise<void
     }, { transaction });
 
     await transaction.commit();
+
+    // Ghi nhật ký
+    writeAuditLog({
+      userId: req.user!.id,
+      action: `Từ chối sự kiện "${event.title}"`,
+      targetType: 'Event',
+      targetId: event.id,
+      details: reason ? `Lý do: ${reason}` : undefined,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
+
     res.json({ message: 'Đã từ chối duyệt sự kiện. Trạng thái chuyển thành Hủy.', event });
   } catch (error) {
     await transaction.rollback();
@@ -632,6 +709,17 @@ export const requestEventRevision = async (req: AuthRequest, res: Response): Pro
     }, { transaction });
 
     await transaction.commit();
+
+    // Ghi nhật ký
+    writeAuditLog({
+      userId: req.user!.id,
+      action: `Yêu cầu chỉnh sửa sự kiện "${event.title}"`,
+      targetType: 'Event',
+      targetId: event.id,
+      details: `Lời nhắn: ${message}`,
+      ipAddress: getClientIp(req) ?? undefined,
+    });
+
     res.json({ message: 'Đã gửi yêu cầu chỉnh sửa cho Liên chi đoàn', event });
   } catch (error) {
     await transaction.rollback();
@@ -711,6 +799,12 @@ export const registerForEvent = async (req: AuthRequest, res: Response): Promise
     if (!event) {
       await transaction.rollback();
       res.status(404).json({ message: 'Không tìm thấy sự kiện' });
+      return;
+    }
+
+    if (req.user?.role === 'student' && !(await canStudentAccessEvent(event, userId))) {
+      await transaction.rollback();
+      res.status(403).json({ message: 'Sá»± kiá»‡n nÃ y chá»‰ dÃ nh cho sinh viÃªn thuá»™c khoa phÃ¹ há»£p' });
       return;
     }
 
@@ -799,16 +893,13 @@ export const cancelRegistration = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // Constraint: Cancel at least 12 hours before event starts
-    const start = event.actualStartDate || event.plannedStartDate;
-    if (start) {
-      const startDateTime = new Date(start).getTime();
-      const nowTime = new Date().getTime();
-      const diffHours = (startDateTime - nowTime) / (1000 * 60 * 60);
-
-      if (diffHours < 12) {
+    // Check registration deadline
+    if (event.registrationDeadline) {
+      const now = new Date();
+      const deadline = new Date(event.registrationDeadline);
+      if (now >= deadline) {
         await transaction.rollback();
-        res.status(400).json({ message: 'Không thể hủy đăng ký khi sự kiện sắp diễn ra trong vòng 12 tiếng' });
+        res.status(400).json({ message: 'Hạn đăng ký đã hết, không thể hủy đăng ký' });
         return;
       }
     }
@@ -1062,9 +1153,12 @@ export const toggleEventQR = async (req: AuthRequest, res: Response): Promise<vo
       if (!event.qrCode) {
         event.qrCode = `BKYOUTH-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
       }
-      if (latitude !== undefined && longitude !== undefined) {
-        event.locationLat = latitude;
-        event.locationLng = longitude;
+      // Only set coordinates if they are not already set/pinned at creation/edit time
+      if (event.locationLat === null || event.locationLng === null) {
+        if (latitude !== undefined && longitude !== undefined) {
+          event.locationLat = latitude;
+          event.locationLng = longitude;
+        }
       }
     } else {
       event.qrActive = false;
@@ -1082,10 +1176,10 @@ export const toggleEventQR = async (req: AuthRequest, res: Response): Promise<vo
   }
 };
 
-export const checkInQR = async (req: AuthRequest, res: Response): Promise<void> => {
+export const checkInGPS = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { qrCode, latitude, longitude } = req.body;
+    const { latitude, longitude } = req.body;
     const userId = req.user?.id;
 
     if (!userId) {
@@ -1099,31 +1193,39 @@ export const checkInQR = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
+    if (event.status !== 'ongoing') {
+      res.status(400).json({ message: 'Sự kiện chưa bắt đầu hoặc đã kết thúc. Chỉ có thể điểm danh khi sự kiện đang diễn ra.' });
+      return;
+    }
+
     if (!event.qrActive) {
-      res.status(400).json({ message: 'Chức năng điểm danh QR hiện không bật' });
+      res.status(400).json({ message: 'Chức năng điểm danh hiện không bật' });
       return;
     }
 
-    if (event.qrCode !== qrCode) {
-      res.status(400).json({ message: 'Mã QR không khớp hoặc đã hết hiệu lực' });
+    // Check GPS radius (always mandatory)
+    if (!event.locationLat || !event.locationLng || !event.attendanceRadius) {
+      res.status(400).json({ message: 'Sự kiện chưa được cấu hình địa điểm định vị và bán kính điểm danh.' });
       return;
     }
 
-    // Check GPS radius if settings allow
-    if (event.locationLat && event.locationLng && event.attendanceRadius && latitude && longitude) {
-      const distKm = getDistanceFromLatLonInKm(
-        Number(event.locationLat),
-        Number(event.locationLng),
-        Number(latitude),
-        Number(longitude)
-      );
-      const distM = distKm * 1000;
-      if (distM > event.attendanceRadius) {
-        res.status(400).json({
-          message: `Vị trí điểm danh của bạn nằm ngoài bán kính cho phép (${Math.round(distM)}m, giới hạn ${event.attendanceRadius}m)`
-        });
-        return;
-      }
+    if (latitude === undefined || longitude === undefined || latitude === null || longitude === null) {
+      res.status(400).json({ message: 'Yêu cầu cấp quyền truy cập vị trí thiết bị để thực hiện điểm danh' });
+      return;
+    }
+
+    const distKm = getDistanceFromLatLonInKm(
+      Number(event.locationLat),
+      Number(event.locationLng),
+      Number(latitude),
+      Number(longitude)
+    );
+    const distM = distKm * 1000;
+    if (distM > event.attendanceRadius) {
+      res.status(400).json({
+        message: `Vị trí điểm danh của bạn nằm ngoài bán kính cho phép (${Math.round(distM)}m, giới hạn ${event.attendanceRadius}m)`
+      });
+      return;
     }
 
     const registration = await EventRegistration.findOne({
@@ -1142,13 +1244,13 @@ export const checkInQR = async (req: AuthRequest, res: Response): Promise<void> 
 
     registration.status = 'attended';
     registration.attendedAt = new Date();
-    if (latitude) registration.attendanceLat = latitude;
-    if (longitude) registration.attendanceLng = longitude;
+    registration.attendanceLat = latitude;
+    registration.attendanceLng = longitude;
     await registration.save();
 
-    res.json({ message: 'Điểm danh QR thành công!' });
+    res.json({ message: 'Điểm danh thành công!' });
   } catch (error) {
-    console.error('Check-in error:', error);
+    console.error('Check-in GPS error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
@@ -1218,6 +1320,85 @@ export const getEventFeedbacks = async (req: AuthRequest, res: Response): Promis
     res.json({ feedbacks });
   } catch (error) {
     console.error('Get feedbacks error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const scanStudentQR = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { studentQrCode } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const event = await Event.findByPk(id);
+    if (!event) {
+      res.status(404).json({ message: 'Sự kiện không tồn tại' });
+      return;
+    }
+
+    if (req.user?.role !== 'admin' && event.createdBy !== req.user?.id) {
+      res.status(403).json({ message: 'Không có quyền thực hiện hành động này' });
+      return;
+    }
+
+    if (event.status !== 'ongoing') {
+      res.status(400).json({ message: 'Sự kiện chưa bắt đầu hoặc đã kết thúc.' });
+      return;
+    }
+
+    if (!event.qrActive) {
+      res.status(400).json({ message: 'Phiên điểm danh hiện đang tắt.' });
+      return;
+    }
+
+    // Parse STUDENT-CHECKIN-${eventId}-${studentUserId}
+    const match = studentQrCode?.match(/^STUDENT-CHECKIN-(\d+)-(\d+)$/);
+    if (!match) {
+      res.status(400).json({ message: 'Mã QR sinh viên không đúng định dạng.' });
+      return;
+    }
+
+    const parsedEventId = parseInt(match[1], 10);
+    const studentUserId = parseInt(match[2], 10);
+
+    if (parsedEventId !== event.id) {
+      res.status(400).json({ message: 'Mã QR này thuộc về sự kiện khác.' });
+      return;
+    }
+
+    const registration = await EventRegistration.findOne({
+      where: { eventId: event.id, userId: studentUserId },
+      include: [{ model: User, attributes: ['id', 'name', 'studentId'] }]
+    });
+
+    if (!registration) {
+      res.status(400).json({ message: 'Sinh viên này chưa đăng ký tham gia sự kiện này.' });
+      return;
+    }
+
+    if (['attended', 'confirmed'].includes(registration.status)) {
+      const student = registration.getDataValue('User') as any;
+      res.status(400).json({ message: `Sinh viên ${student?.name || ''} (${student?.studentId || ''}) đã được điểm danh trước đó.` });
+      return;
+    }
+
+    registration.status = 'attended';
+    registration.attendedAt = new Date();
+    await registration.save();
+
+    const student = registration.getDataValue('User') as any;
+    res.json({
+      message: `Điểm danh thành công cho sinh viên ${student?.name || ''} (${student?.studentId || ''})!`,
+      studentName: student?.name || 'N/A',
+      studentId: student?.studentId || 'N/A'
+    });
+  } catch (error) {
+    console.error('Scan student QR error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };

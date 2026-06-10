@@ -12,6 +12,7 @@ import AdminNotificationsPage from '../pages/admin/AdminNotificationsPage';
 import AdminSystemSettingsPage from '../pages/admin/AdminSystemSettingsPage';
 import AdminUserManagementPage from '../pages/admin/AdminUserManagementPage';
 import AdminCertificateApprovalPage from '../pages/admin/AdminCertificateApprovalPage';
+import AdminEventsPage from '../pages/admin/AdminEventsPage';
 import LienChiCreateEventPage from '../pages/lienchi/LienChiCreateEventPage';
 import LienChiDashboardPage from '../pages/lienchi/LienChiDashboardPage';
 import LienChiEvidenceApprovalPage from '../pages/lienchi/LienChiEvidenceApprovalPage';
@@ -35,6 +36,8 @@ export default function App() {
       
       {/* Admin Routes */}
       <Route path="/admin" element={<AdminDashboardPage />} />
+      <Route path="/admin/profile" element={<PersonalProfilePage />} />
+      <Route path="/admin/events" element={<AdminEventsPage />} />
       <Route path="/admin/events/create" element={<AdminCreateEventPage />} />
       <Route path="/admin/event-approvals" element={<AdminEventApprovalPage />} />
       <Route path="/admin/certificates" element={<AdminCertificateApprovalPage />} />
@@ -46,6 +49,7 @@ export default function App() {
       
       {/* Lien Chi Routes */}
       <Route path="/lien-chi" element={<LienChiDashboardPage />} />
+      <Route path="/lien-chi/profile" element={<PersonalProfilePage />} />
       <Route path="/lien-chi/events/create" element={<LienChiCreateEventPage />} />
       <Route path="/lien-chi/events/manage" element={<LienChiManagedEventsPage />} />
       <Route path="/lien-chi/events/manage/edit/:id" element={<LienChiEditEventPage />} />
@@ -63,4 +67,3 @@ export default function App() {
     </Routes>
   );
 }
-

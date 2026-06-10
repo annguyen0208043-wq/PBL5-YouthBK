@@ -11,6 +11,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import chatRoutes from './routes/chatRoutes';
 import certificateRoutes from './routes/certificateRoutes';
 import uploadRoutes from './routes/uploadRoutes';
+import auditLogRoutes from './routes/auditLogRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import { registerChatSocket } from './sockets/chatSocket';
 import { initCronJobs } from './cron/event-status.cron';
@@ -61,11 +62,21 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'Server is running' });
+});
+
+
+// Global Error Handler
+app.use((err: any, req: Request, res: Response, next: any) => {
+  console.error('Global Error Handler:', err);
+  res.status(err.status || 400).json({
+    message: err.message || 'Lỗi server nội bộ'
+  });
 });
 
 // Database connection and server start

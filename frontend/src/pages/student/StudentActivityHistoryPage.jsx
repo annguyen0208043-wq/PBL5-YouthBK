@@ -197,8 +197,8 @@ export default function StudentActivityHistoryPage({ embedded = false } = {}) {
             </div>
           </div>
 
-          <div className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
-            <div className="flex items-center gap-3">
+          <Link to="/sinhvien/profile" className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md hover:bg-white/15 transition-all block text-white no-underline w-full min-w-0">
+            <div className="flex items-center gap-3 w-full min-w-0">
               {user.avatarUrl ? (
                 <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-14 w-14 rounded-2xl border border-white/25 object-cover" />
               ) : (
@@ -211,7 +211,7 @@ export default function StudentActivityHistoryPage({ embedded = false } = {}) {
                 <p className="profile-user-subtitle text-sm text-blue-100/85">MSSV: {user.studentId}</p>
               </div>
             </div>
-          </div>
+          </Link>
 
           <nav className="space-y-2">
             <Link to="/sinhvien/event" className="block rounded-2xl bg-white/5 px-4 py-3 font-semibold text-white transition-all hover:bg-white/10">

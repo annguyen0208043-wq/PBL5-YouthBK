@@ -1,19 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CalendarRange, LogOut, Save, ShieldCheck } from 'lucide-react';
+import { LogOut, Save, ShieldCheck, User, Mail, Phone, MapPin, School, Upload, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import schoolLogo from '../../assets/logo-bk.png';
 import doanLogo from '../../assets/logo-doan.png';
-import { getStoredUserProfile, getUserInitials } from '../../shared/user/session';
+import AdminLayout from '../../components/admin/AdminLayout';
+import LienChiLayout from '../../components/lienchi/LienChiLayout';
+import { getStoredUserProfile, getUserInitials, isAdminRole, isLienChiRole } from '../../shared/user/session';
 import NotificationBell from '../student/NotificationBell';
-
 
 function UserIdentity({ user, subtitle }) {
   const userInitials = getUserInitials(user.fullName);
 
   return (
-    <div className="profile-user-chip rounded-3xl bg-white/10 p-4 backdrop-blur-md">
-      <div className="flex items-center gap-3">
+    <div className="profile-user-chip rounded-[24px] bg-white/10 p-4 backdrop-blur-md w-full min-w-0">
+      <div className="flex items-center gap-3 w-full min-w-0">
         {user.avatarUrl ? (
           <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-14 w-14 rounded-2xl border border-white/25 object-cover" />
         ) : (
@@ -34,8 +36,8 @@ function HeaderIdentity({ user }) {
   const userInitials = getUserInitials(user.fullName);
 
   return (
-    <div className="profile-header-user rounded-3xl border border-[#dce8f5] bg-[#f7fbff] px-4 py-3">
-      <div className="flex items-center gap-3">
+    <div className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3">
+      <div className="flex items-center gap-3 w-full min-w-0">
         {user.avatarUrl ? (
           <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
         ) : (
@@ -45,7 +47,7 @@ function HeaderIdentity({ user }) {
         )}
         <div className="profile-user-meta">
           <p className="profile-user-name font-bold text-[#132b57]">{user.fullName}</p>
-          <p className="profile-user-subtitle text-sm text-slate-500">MSSV: {user.studentId}</p>
+          <p className="profile-user-subtitle text-sm text-slate-500">MSSV/Mã: {user.studentId || 'N/A'}</p>
         </div>
       </div>
     </div>
@@ -81,7 +83,7 @@ function ProfileLayout({ children, title, subtitle, user }) {
           </div>
 
           <div className="mb-6">
-            <UserIdentity user={user} subtitle={user.studentId} />
+            <UserIdentity user={user} subtitle={user.studentId || 'Sinh viên'} />
           </div>
 
           <div className="mb-6 rounded-3xl bg-white/10 p-4 backdrop-blur-md">
@@ -154,8 +156,20 @@ function StatusPill({ value }) {
 }
 
 export default function PersonalProfilePage() {
-  const [activeProfileTab, setActiveProfileTab] = useState('edit');
+  const [activeProfileTab, setActiveProfileTab] = useState('overview');
   const [user, setUser] = useState(getStoredUserProfile());
+  const [notice, setNotice] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const [editFormData, setEditFormData] = useState({
+    fullName: '',
+    phone: '',
+    faculty: '',
+    department: ''
+  });
+
   const userInitials = getUserInitials(user.fullName);
 
   useEffect(() => {
@@ -167,11 +181,22 @@ export default function PersonalProfilePage() {
         });
         if (response.ok) {
           const data = await response.json();
-          setUser(prev => ({
-            ...prev,
-            ...data.user,
-            communityPoints: data.user.communityPoints || 0
-          }));
+          const dbUser = data.user;
+          const updatedUser = {
+            ...user,
+            ...dbUser,
+            fullName: dbUser.name || dbUser.fullName,
+            communityPoints: dbUser.communityPoints || 0
+          };
+          setUser(updatedUser);
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          
+          setEditFormData({
+            fullName: dbUser.name || dbUser.fullName || '',
+            phone: dbUser.phone || '',
+            faculty: dbUser.faculty || '',
+            department: dbUser.department || ''
+          });
         }
       } catch (error) {
         console.error('Fetch profile error:', error);
@@ -180,13 +205,150 @@ export default function PersonalProfilePage() {
     fetchProfile();
   }, []);
 
-  return (
-    <ProfileLayout
-      title="Hồ sơ cá nhân"
-      subtitle="Quản lý thông tin tài khoản, cập nhật dữ liệu cá nhân và giữ hồ sơ luôn chính xác."
-      user={user}
-    >
-      <div className="mb-6 inline-flex rounded-2xl border border-[#dce8f5] bg-white p-1 shadow-sm">
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const triggerFileSelect = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setNotice('❌ Ảnh đại diện không được vượt quá 5MB');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    setNotice('');
+
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/users/profile/avatar', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const responseText = await response.text();
+      let data = {};
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = { message: responseText || `HTTP ${response.status}: Lỗi máy chủ` };
+      }
+      if (!response.ok) {
+        throw new Error(data.message || 'Lỗi khi tải ảnh đại diện');
+      }
+
+      const updatedAvatarUrl = data.avatarUrl;
+      const updatedUser = {
+        ...user,
+        avatar: updatedAvatarUrl,
+        avatarUrl: updatedAvatarUrl
+      };
+
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setNotice('✅ Cập nhật ảnh đại diện thành công!');
+      setTimeout(() => setNotice(''), 4000);
+    } catch (err) {
+      setNotice(`❌ Lỗi: ${err.message}`);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setNotice('');
+
+    if (!editFormData.fullName.trim()) {
+      setNotice('❌ Họ tên không được để trống');
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/users/profile', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fullName: editFormData.fullName,
+          phone: editFormData.phone,
+          faculty: editFormData.faculty,
+          department: editFormData.department
+        })
+      });
+
+      const responseText = await response.text();
+      let data = {};
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = { message: responseText || `HTTP ${response.status}: Lỗi máy chủ` };
+      }
+      if (!response.ok) {
+        throw new Error(data.message || 'Lỗi khi cập nhật thông tin');
+      }
+
+      const rawUser = data.user;
+      const updatedUser = {
+        ...user,
+        fullName: rawUser.name || rawUser.fullName,
+        phone: rawUser.phone,
+        faculty: rawUser.faculty,
+        department: rawUser.department
+      };
+
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setNotice('✅ Cập nhật thông tin cá nhân thành công!');
+      setTimeout(() => setNotice(''), 4000);
+    } catch (err) {
+      setNotice(`❌ Lỗi: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const ProfileContent = () => (
+    <div className="space-y-6">
+      {notice && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`rounded-2xl border px-4 py-3 text-sm font-semibold flex items-center gap-2 ${
+            notice.startsWith('✅')
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : 'border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          {notice.startsWith('✅') ? <CheckCircle2 className="h-5 w-5 shrink-0" /> : <AlertCircle className="h-5 w-5 shrink-0" />}
+          <span>{notice}</span>
+        </motion.div>
+      )}
+
+      {/* Tabs */}
+      <div className="inline-flex rounded-2xl border border-[#dce8f5] bg-white p-1 shadow-sm">
         {[
           ['overview', 'Tổng quan hồ sơ'],
           ['edit', 'Chỉnh sửa thông tin'],
@@ -195,170 +357,302 @@ export default function PersonalProfilePage() {
             key={id}
             type="button"
             onClick={() => setActiveProfileTab(id)}
-            className={`profile-tab rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${activeProfileTab === id ? 'bg-[#1747a6] text-white shadow-[0_10px_22px_rgba(23,71,166,0.22)]' : 'text-slate-600 hover:bg-[#eef6ff] hover:text-[#1747a6]'
-              }`}
+            className={`profile-tab rounded-xl px-5 py-2.5 text-sm font-bold transition-all ${
+              activeProfileTab === id
+                ? 'bg-[#1747a6] text-white shadow-[0_10px_22px_rgba(23,71,166,0.22)]'
+                : 'text-slate-600 hover:bg-[#eef6ff] hover:text-[#1747a6]'
+            }`}
           >
             {label}
           </button>
         ))}
       </div>
 
-      <div className={activeProfileTab === 'overview' ? 'grid gap-6 xl:grid-cols-[0.8fr_1.2fr]' : 'grid gap-6'}>
-        {activeProfileTab === 'overview' && (
-          <section className="space-y-5">
-            <div className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
-              <div className="flex flex-col items-center text-center">
+      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+        {/* Left Side: Avatar Card */}
+        <section className="space-y-5">
+          <div className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6 shadow-sm">
+            <div className="flex flex-col items-center text-center">
+              <div className="relative group cursor-pointer" onClick={triggerFileSelect}>
                 <div className="profile-avatar-ring">
                   {user.avatarUrl ? (
-                    <img src={user.avatarUrl} alt={user.fullName} className="profile-avatar-image h-28 w-28 rounded-full object-cover" />
+                    <img src={user.avatarUrl} alt={user.fullName} className="profile-avatar-image h-28 w-28 rounded-full object-cover transition-all duration-300 group-hover:brightness-75" />
                   ) : (
-                    <div className="flex h-28 w-28 items-center justify-center rounded-full bg-[linear-gradient(135deg,#1747a6,#4ba3ff)] text-3xl font-black text-white shadow-lg">
+                    <div className="flex h-28 w-28 items-center justify-center rounded-full bg-[linear-gradient(135deg,#1747a6,#4ba3ff)] text-3xl font-black text-white shadow-lg transition-all duration-300 group-hover:brightness-90">
                       {userInitials}
                     </div>
                   )}
-                </div>
-                <h3 className="mt-4 text-2xl font-black text-[#132b57]">{user.fullName}</h3>
-                <p className="mt-1 text-sm font-semibold text-[#1f5dcc]">{user.role} {user.faculty}</p>
-                <div className="mt-3">
-                  <StatusPill value="Đã xác nhận" />
-                </div>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                {[
-                  ['MSSV', user.studentId],
-                  ['Lớp sinh hoạt', user.className],
-                  ['Email', user.email],
-                  ['Vai trò', user.role],
-                  ['Điểm cộng đồng', user.communityPoints !== undefined ? user.communityPoints : 0],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-2xl bg-[#f8fbff] p-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-                    <p className="mt-2 font-semibold text-slate-700">{value}</p>
+                  {/* Upload overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    {uploadingAvatar ? (
+                      <Loader2 className="h-6 w-6 text-white animate-spin" />
+                    ) : (
+                      <Upload className="h-6 w-6 text-white" />
+                    )}
                   </div>
-                ))}
+                </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleAvatarChange}
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploadingAvatar}
+                />
               </div>
-            </div>
-
-            <div className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-5">
-              <h3 className="text-xl font-black text-[#132b57]">Trạng thái hồ sơ</h3>
-              <div className="mt-4 space-y-3">
-                {[
-                  'Thông tin học tập đã được đồng bộ từ tài khoản hiện tại.',
-                  'Bạn có thể cập nhật email cá nhân, số điện thoại và địa chỉ liên hệ.',
-                  'Các trường quan trọng như MSSV và vai trò được khóa để đảm bảo thống nhất dữ liệu.',
-                  'Mọi thay đổi sẽ được kiểm tra trước khi lưu vào hệ thống.',
-                ].map((step, index) => (
-                  <div key={step} className="flex gap-3 rounded-2xl bg-[#f6faff] p-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1747a6] text-sm font-bold text-white">{index + 1}</div>
-                    <p className="text-sm text-slate-600">{step}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {activeProfileTab === 'edit' && (
-          <section className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6">
-            <div className="flex flex-col gap-4 border-b border-[#e7eff8] pb-5 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Chỉnh sửa thông tin</p>
-                <h3 className="mt-2 text-2xl font-black text-[#132b57]">Cập nhật hồ sơ người dùng</h3>
-                <p className="mt-2 text-sm text-slate-500">Các trường được điền sẵn theo dữ liệu hiện tại để bạn chỉnh sửa trực tiếp.</p>
-              </div>
-              <button className="rounded-2xl border border-[#dce8f5] bg-[#f7fbff] px-4 py-3 font-semibold text-[#1f5dcc]">
-                Hủy thay đổi
+              <h3 className="mt-4 text-2xl font-black text-[#132b57] truncate w-full px-2" title={user.fullName}>{user.fullName}</h3>
+              <p className="mt-1 text-sm font-semibold text-[#1f5dcc] uppercase tracking-wider">{user.role || 'Người dùng'}</p>
+              
+              <button
+                type="button"
+                onClick={triggerFileSelect}
+                className="mt-3 flex items-center gap-1.5 rounded-xl border border-[#dce8f5] bg-[#f8fbff] px-4 py-2 text-xs font-bold text-[#1f5dcc] hover:bg-[#eef6ff] transition-all shadow-sm active:scale-95"
+                disabled={uploadingAvatar}
+              >
+                {uploadingAvatar ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                <span>Thay ảnh đại diện</span>
               </button>
+
+              <div className="mt-3">
+                <StatusPill value="Tài khoản hoạt động" />
+              </div>
             </div>
 
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Họ và tên</span>
-                <input className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.fullName} />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Email cá nhân</span>
-                <input type="email" className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.personalEmail} />
-              </label>
+            <div className="mt-6 space-y-3">
+              {[
+                ['Mã số / Username', user.studentId || 'N/A'],
+                ['Email liên hệ', user.email],
+                ['Vai trò', user.role || 'N/A'],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl bg-[#f8fbff] p-4 border border-[#e7eff8]">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+                  <p className="mt-1 font-semibold text-slate-700 truncate">{value}</p>
+                </div>
+              ))}
             </div>
+          </div>
+        </section>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Mã số sinh viên</span>
-                <input className="w-full rounded-2xl border border-[#dce8f5] bg-slate-50 px-4 py-3 text-slate-500 outline-none" defaultValue={user.studentId} disabled />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Vai trò</span>
-                <input className="w-full rounded-2xl border border-[#dce8f5] bg-slate-50 px-4 py-3 text-slate-500 outline-none" defaultValue={user.role} disabled />
-              </label>
-            </div>
-
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Số điện thoại</span>
-                <input className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.phone} />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Lớp sinh hoạt</span>
-                <input className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]" defaultValue={user.className} />
-              </label>
-            </div>
-
-            <label className="mt-4 block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">Địa chỉ liên hệ</span>
-              <textarea
-                rows="4"
-                className="w-full rounded-[24px] border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc]"
-                defaultValue={user.address}
-              />
-            </label>
-
-            <div className="mt-5 rounded-[24px] bg-[#eef6ff] p-4">
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-0.5 h-5 w-5 text-[#1f5dcc]" />
+        {/* Right Side: Details/Form Card */}
+        <section>
+          <AnimatePresence mode="wait">
+            {activeProfileTab === 'overview' && (
+              <motion.div
+                key="overview"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6 shadow-sm space-y-6"
+              >
                 <div>
-                  <p className="font-semibold text-[#14356b]">Lưu ý trước khi cập nhật</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Họ tên không chứa số, email đúng định dạng và các trường bắt buộc không được để trống.
-                  </p>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Thông tin tổng quan</p>
+                  <h3 className="mt-1 text-2xl font-black text-[#132b57]">Chi tiết hồ sơ</h3>
                 </div>
-              </div>
-            </div>
 
-            <div className="mt-5 rounded-[24px] border border-[#dce8f5] bg-[#f8fbff] p-4">
-              <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Hoạt động của bạn</p>
-              <h4 className="mt-2 text-lg font-black text-[#132b57]">Đăng ký hoạt động Đoàn - Hội</h4>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Truy cập danh sách sự kiện đang mở để đăng ký tham gia, theo dõi chỉ tiêu còn lại và quản lý các hoạt động bạn đã chọn.
-              </p>
-            </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Họ và tên</p>
+                    <p className="mt-1 text-base font-bold text-slate-800">{user.fullName}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Số điện thoại</p>
+                    <p className="mt-1 text-base font-bold text-slate-800">{user.phone || 'Chưa cập nhật'}</p>
+                  </div>
+                </div>
 
-            <div className="mt-4 rounded-[24px] border border-[#dce8f5] bg-white p-4">
-              <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Theo dõi tham gia</p>
-              <h4 className="mt-2 text-lg font-black text-[#132b57]">Lịch sử hoạt động</h4>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Xem nhanh những hoạt động đã tham gia, trạng thái điểm danh, kết quả cộng điểm và chứng nhận đã nhận.
-              </p>
-            </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Khoa / Đơn vị</p>
+                    <p className="mt-1 text-base font-bold text-slate-800">{user.faculty || 'Chưa cập nhật'}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Lớp / Phòng ban</p>
+                    <p className="mt-1 text-base font-bold text-slate-800">{user.department || 'Chưa cập nhật'}</p>
+                  </div>
+                </div>
 
-            <div className="mt-4 rounded-[24px] border border-[#dce8f5] bg-white p-4">
-              <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#1f5dcc]">Kết nối sinh viên</p>
-              <h4 className="mt-2 text-lg font-black text-[#132b57]">Chat và trao đổi nhóm</h4>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Trao đổi với bạn học, nhóm hoạt động và các kênh nội bộ sinh viên ngay trong hệ thống.
-              </p>
-            </div>
+                {!isAdminRole(user.role) && !isLienChiRole(user.role) && (
+                  <div className="p-4 rounded-2xl border border-[#e2f0fe] bg-[#f0f7ff] flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-[#1f5dcc] uppercase tracking-wider">Điểm hoạt động cộng đồng</p>
+                      <p className="mt-1 text-2xl font-black text-[#1747a6]">{user.communityPoints || 0} Điểm</p>
+                    </div>
+                    <CheckCircle2 className="h-10 w-10 text-[#1f5dcc] opacity-40" />
+                  </div>
+                )}
 
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button className="flex items-center gap-2 rounded-2xl bg-[#1747a6] px-5 py-3 font-bold text-white">
-                <Save className="h-5 w-5" />
-                Lưu thay đổi
-              </button>
-            </div>
-          </section>
-        )}
+
+              </motion.div>
+            )}
+
+            {activeProfileTab === 'edit' && (
+              <motion.div
+                key="edit"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="profile-panel rounded-[28px] border border-[#dce8f5] bg-white p-6 shadow-sm"
+              >
+                <div className="border-b border-[#e7eff8] pb-5">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#1f5dcc]">Cập nhật thông tin</p>
+                  <h3 className="mt-1 text-2xl font-black text-[#132b57]">Chỉnh sửa hồ sơ</h3>
+                  <p className="mt-2 text-sm text-slate-500">Các thay đổi sẽ được cập nhật trực tiếp trên toàn hệ thống.</p>
+                </div>
+
+                <form onSubmit={handleSaveProfile} className="mt-6 space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-slate-700">Họ và tên *</span>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                          <User className="h-5 w-5" />
+                        </div>
+                        <input
+                          name="fullName"
+                          value={editFormData.fullName}
+                          onChange={handleInputChange}
+                          className="w-full rounded-2xl border border-[#dce8f5] pl-11 pr-4 py-3 outline-none focus:border-[#1f5dcc] focus:ring-4 focus:ring-[#1f5dcc]/5 transition-all text-slate-800"
+                          placeholder="Nhập họ và tên"
+                          required
+                        />
+                      </div>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-slate-700">Số điện thoại</span>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                          <Phone className="h-5 w-5" />
+                        </div>
+                        <input
+                          name="phone"
+                          value={editFormData.phone}
+                          onChange={handleInputChange}
+                          className="w-full rounded-2xl border border-[#dce8f5] pl-11 pr-4 py-3 outline-none focus:border-[#1f5dcc] focus:ring-4 focus:ring-[#1f5dcc]/5 transition-all text-slate-800"
+                          placeholder="Nhập số điện thoại"
+                        />
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-slate-700">Khoa / Đơn vị</span>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                          <School className="h-5 w-5" />
+                        </div>
+                        <input
+                          name="faculty"
+                          value={editFormData.faculty}
+                          onChange={handleInputChange}
+                          className="w-full rounded-2xl border border-[#dce8f5] pl-11 pr-4 py-3 outline-none focus:border-[#1f5dcc] focus:ring-4 focus:ring-[#1f5dcc]/5 transition-all text-slate-800"
+                          placeholder="Nhập khoa hoặc phòng ban lớn"
+                        />
+                      </div>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-slate-700">Lớp / Phòng ban</span>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                          <MapPin className="h-5 w-5" />
+                        </div>
+                        <input
+                          name="department"
+                          value={editFormData.department}
+                          onChange={handleInputChange}
+                          className="w-full rounded-2xl border border-[#dce8f5] pl-11 pr-4 py-3 outline-none focus:border-[#1f5dcc] focus:ring-4 focus:ring-[#1f5dcc]/5 transition-all text-slate-800"
+                          placeholder="Nhập lớp học hoặc phòng ban chi tiết"
+                        />
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 pt-2">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-slate-400">MSSV / Mã số (Khóa)</span>
+                      <input
+                        className="w-full rounded-2xl border border-[#e2ecf5] bg-slate-50/80 px-4 py-3 text-slate-400 outline-none cursor-not-allowed"
+                        value={user.studentId || 'N/A'}
+                        disabled
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-slate-400">Email liên kết (Khóa)</span>
+                      <input
+                        className="w-full rounded-2xl border border-[#e2ecf5] bg-slate-50/80 px-4 py-3 text-slate-400 outline-none cursor-not-allowed"
+                        value={user.email}
+                        disabled
+                      />
+                    </label>
+                  </div>
+
+
+
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="flex items-center gap-2 rounded-2xl bg-[#1747a6] px-6 py-3 font-bold text-white shadow-lg shadow-[#1747a6]/20 transition-all hover:bg-[#205fd8] disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {submitting ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <Save className="h-5 w-5" />
+                      )}
+                      {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
       </div>
+    </div>
+  );
+
+  const role = (user.role || '').trim().toLowerCase();
+  
+  if (isAdminRole(role)) {
+    return (
+      <AdminLayout
+        title="Hồ sơ cá nhân"
+        subtitle="Xem và cập nhật thông tin cá nhân của quản trị viên Đoàn trường."
+        currentPath="/admin/profile"
+      >
+        <ProfileContent />
+      </AdminLayout>
+    );
+  }
+
+  if (isLienChiRole(role)) {
+    return (
+      <LienChiLayout
+        title="Hồ sơ cá nhân"
+        subtitle="Xem và cập nhật thông tin cá nhân của cán bộ Liên chi đoàn."
+        currentPath="/lien-chi/profile"
+      >
+        <ProfileContent />
+      </LienChiLayout>
+    );
+  }
+
+  // Fallback to student space layout
+  return (
+    <ProfileLayout
+      title="Hồ sơ cá nhân"
+      subtitle="Quản lý thông tin tài khoản, cập nhật dữ liệu cá nhân sinh viên."
+      user={user}
+    >
+      <ProfileContent />
     </ProfileLayout>
   );
 }

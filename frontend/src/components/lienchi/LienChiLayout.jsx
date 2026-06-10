@@ -83,8 +83,8 @@ export default function LienChiLayout({ title, subtitle, currentPath, children }
             </div>
           </div>
 
-          <div className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md">
-            <div className="flex items-center gap-3">
+          <Link to="/lien-chi/profile" className="profile-user-chip mb-6 rounded-[24px] bg-white/10 p-4 backdrop-blur-md hover:bg-white/15 transition-all block text-white no-underline w-full min-w-0">
+            <div className="flex items-center gap-3 w-full min-w-0">
               {user.avatarUrl ? (
                 <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-14 w-14 rounded-2xl border border-white/25 object-cover" />
               ) : (
@@ -97,7 +97,7 @@ export default function LienChiLayout({ title, subtitle, currentPath, children }
                 <p className="profile-user-subtitle text-sm text-blue-100/85">{user.role || 'Liên chi Đoàn'}</p>
               </div>
             </div>
-          </div>
+          </Link>
 
           <div className="admin-sidebar-nav">
             {navSections.map((section) => (
@@ -146,8 +146,8 @@ export default function LienChiLayout({ title, subtitle, currentPath, children }
                 <h1 className="text-3xl font-black text-[#132b57]">{title}</h1>
                 <p className="mt-1 text-slate-500">{subtitle}</p>
               </div>
-              <div className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3">
-                <div className="flex items-center gap-3">
+              <Link to="/lien-chi/profile" className="profile-header-user rounded-[24px] border border-[#dce8f5] bg-[#f7fbff] px-4 py-3 hover:bg-[#eef6ff] transition-all block text-slate-800 no-underline">
+                <div className="flex items-center gap-3 w-full min-w-0">
                   {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.fullName} className="profile-user-avatar h-12 w-12 rounded-2xl object-cover" />
                   ) : (
@@ -160,7 +160,7 @@ export default function LienChiLayout({ title, subtitle, currentPath, children }
                     <p className="profile-user-subtitle text-sm text-slate-500">{user.faculty || 'Văn phòng Liên chi'}</p>
                   </div>
                 </div>
-              </div>
+              </Link>
             </div>
           </div>
 
