@@ -18,7 +18,7 @@ export default function LienChiRegistrationsPage() {
   const [registrations, setRegistrations] = useState([]);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // States for manual add
   const [newStudentId, setNewStudentId] = useState('');
   const [addFeedback, setAddFeedback] = useState({ type: '', message: '' });
@@ -34,7 +34,8 @@ export default function LienChiRegistrationsPage() {
   const isEventEnded = currentEvent && ['ended', 'completed'].includes(currentEvent.status);
   const isRegistrationExpired = currentEvent && currentEvent.registrationDeadline && new Date() > new Date(currentEvent.registrationDeadline);
   const isListLocked = isEventEnded || isRegistrationExpired;
-  
+  const isBeforeCheckInPhase = currentEvent && ['draft', 'pending', 'open_registration'].includes(currentEvent.status);
+
   const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false);
   const [bulkResult, setBulkResult] = useState(null);
 
@@ -59,16 +60,16 @@ export default function LienChiRegistrationsPage() {
       if (response.ok) {
         const data = await response.json();
         // Updated filter to match the new 9-status lifecycle: open_registration, ongoing, ended, completed
-        let approvedEvents = data.events.filter(e => 
+        let approvedEvents = data.events.filter(e =>
           ['open_registration', 'ongoing', 'ended', 'completed'].includes(e.status)
         );
 
         setEvents(approvedEvents);
-        
+
         // Try to read eventId from query params first
         const params = new URLSearchParams(window.location.search);
         const urlEventId = params.get('eventId');
-        
+
         if (urlEventId && approvedEvents.some(e => String(e.id) === String(urlEventId))) {
           setSelectedEventId(urlEventId);
         } else if (approvedEvents.length > 0) {
@@ -148,7 +149,7 @@ export default function LienChiRegistrationsPage() {
   const handleIssueCertificate = async (reg) => {
     const studentUser = reg.User || {};
     const event = events.find(e => e.id === selectedEventId) || { title: 'Sự kiện BK-Youth' };
-    
+
     // Auto-approve in backend if not already requested
     try {
       const token = localStorage.getItem('token') || '';
@@ -160,7 +161,7 @@ export default function LienChiRegistrationsPage() {
     } catch (e) {
       console.log('Error auto-requesting certificate:', e);
     }
-    
+
     // Generate PDF immediately for Lien Chi to download
     const exportNode = document.createElement('div');
     exportNode.style.position = 'fixed';
@@ -225,7 +226,7 @@ export default function LienChiRegistrationsPage() {
   const handleAddStudent = async (e) => {
     e.preventDefault();
     if (!newStudentId.trim()) return;
-    
+
     try {
       setAddFeedback({ type: 'info', message: 'Đang xử lý...' });
       const token = localStorage.getItem('token') || '';
@@ -270,12 +271,12 @@ export default function LienChiRegistrationsPage() {
   const confirmBulkIssueCertificates = async () => {
     setShowBulkConfirmModal(false);
     const eligibleRegs = registrations.filter(r => ['attended', 'confirmed'].includes(r.status));
-    
+
     setIsBulkIssuing(true);
     setBulkProgress({ current: 0, total: eligibleRegs.length });
 
     let successCount = 0;
-    
+
     // Create hidden div
     const exportNode = document.createElement('div');
     exportNode.style.position = 'fixed';
@@ -319,7 +320,7 @@ export default function LienChiRegistrationsPage() {
 
       try {
         const canvas = await html2canvas(exportNode, { scale: 2, useCORS: true, backgroundColor: '#f7faff' });
-        
+
         // Convert canvas to File
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
         const file = new File([blob], `certificate-${studentUser.studentId}.png`, { type: 'image/png' });
@@ -473,7 +474,7 @@ export default function LienChiRegistrationsPage() {
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-1.5">
                             {/* Confirmed Action */}
-                            {!isListLocked && ['registered', 'attended', 'absent'].includes(reg.status) && (
+                            {!isListLocked && !isBeforeCheckInPhase && ['registered', 'attended', 'absent'].includes(reg.status) && (
                               <button
                                 onClick={() => handleUpdateStatus(reg.id, 'confirmed')}
                                 className="rounded-lg p-2 text-emerald-600 transition-colors hover:bg-emerald-50"
@@ -482,9 +483,9 @@ export default function LienChiRegistrationsPage() {
                                 <ClipboardCheck className="h-5 w-5" />
                               </button>
                             )}
-                            
+
                             {/* Certificate creation shortcut */}
-                            {!isListLocked && reg.status === 'confirmed' && (
+                            {!isListLocked && !isBeforeCheckInPhase && reg.status === 'confirmed' && (
                               <button
                                 onClick={() => handleIssueCertificate(reg)}
                                 className="rounded-lg p-2 text-[#1747a6] transition-colors hover:bg-blue-50"
@@ -495,7 +496,7 @@ export default function LienChiRegistrationsPage() {
                             )}
 
                             {/* Mark Attended (Manual QR bypass) */}
-                            {!isListLocked && ['registered', 'absent', 'cancelled'].includes(reg.status) && (
+                            {!isListLocked && !isBeforeCheckInPhase && ['registered', 'absent', 'cancelled'].includes(reg.status) && (
                               <button
                                 onClick={() => handleUpdateStatus(reg.id, 'attended')}
                                 className="rounded-lg p-2 text-indigo-500 transition-colors hover:bg-indigo-50"
@@ -506,7 +507,7 @@ export default function LienChiRegistrationsPage() {
                             )}
 
                             {/* Mark Absent */}
-                            {!isListLocked && ['registered', 'attended', 'confirmed'].includes(reg.status) && (
+                            {!isListLocked && !isBeforeCheckInPhase && ['registered', 'attended', 'confirmed'].includes(reg.status) && (
                               <button
                                 onClick={() => handleUpdateStatus(reg.id, 'absent')}
                                 className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
@@ -544,11 +545,10 @@ export default function LienChiRegistrationsPage() {
               <button
                 onClick={() => setShowBulkConfirmModal(true)}
                 disabled={isBulkIssuing || hasBulkIssued}
-                className={`flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold text-white shadow-lg transition-all ${
-                  hasBulkIssued 
-                    ? 'bg-slate-400 cursor-not-allowed shadow-none' 
+                className={`flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold text-white shadow-lg transition-all ${hasBulkIssued
+                    ? 'bg-slate-400 cursor-not-allowed shadow-none'
                     : 'bg-gradient-to-r from-[#1747a6] to-[#205fd8] shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 disabled:transform-none'
-                }`}
+                  }`}
               >
                 <Award className="h-5 w-5" />
                 {hasBulkIssued ? 'Đã cấp chứng nhận hàng loạt' : 'Cấp chứng nhận hàng loạt'}
@@ -582,37 +582,33 @@ export default function LienChiRegistrationsPage() {
             </div>
 
             {isListLocked && (
-              <div className="mt-3 text-sm font-semibold text-rose-500">
-                Sự kiện đã hết hạn đăng ký hoặc đã kết thúc. Không thể chỉnh sửa danh sách.
-              </div>
             )}
-              
-              <AnimatePresence>
-                {addFeedback.message && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className={`flex items-center gap-2 rounded-xl p-3 text-sm font-semibold ${
-                      addFeedback.type === 'error' ? 'bg-red-50 text-red-600' :
-                      addFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-600' :
-                      'bg-blue-50 text-blue-600'
-                    }`}
-                  >
-                    <AlertCircle className="h-4 w-4" />
-                    {addFeedback.message}
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
-              <button
-                type="submit"
-                disabled={isListLocked || !selectedEventId}
-                className="flex items-center justify-center gap-2 rounded-xl bg-[#1747a6] px-6 py-3 font-bold text-white transition-all hover:bg-[#205fd8] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:transform-none"
-              >
-                <Save className="h-5 w-5" />
-                Thêm sinh viên
-              </button>
+            <AnimatePresence>
+              {addFeedback.message && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className={`flex items-center gap-2 rounded-xl p-3 text-sm font-semibold ${addFeedback.type === 'error' ? 'bg-red-50 text-red-600' :
+                      addFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-600' :
+                        'bg-blue-50 text-blue-600'
+                    }`}
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  {addFeedback.message}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <button
+              type="submit"
+              disabled={isListLocked || !selectedEventId}
+              className="flex items-center justify-center gap-2 rounded-xl bg-[#1747a6] px-6 py-3 font-bold text-white transition-all hover:bg-[#205fd8] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:transform-none"
+            >
+              <Save className="h-5 w-5" />
+              Thêm sinh viên
+            </button>
           </div>
         </div>
       </div>
@@ -696,9 +692,9 @@ export default function LienChiRegistrationsPage() {
               </div>
               <h2 className="text-2xl font-black text-[#132b57] mb-2">Đang cấp chứng nhận</h2>
               <p className="text-slate-500 mb-8">Vui lòng không đóng cửa sổ này. Quá trình tạo ảnh và tải lên máy chủ có thể mất vài phút.</p>
-              
+
               <div className="relative h-4 w-full overflow-hidden rounded-full bg-slate-100">
-                <motion.div 
+                <motion.div
                   className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-indigo-600"
                   animate={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }}
                 />
