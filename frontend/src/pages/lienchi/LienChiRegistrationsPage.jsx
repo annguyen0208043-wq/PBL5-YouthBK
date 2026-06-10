@@ -560,7 +560,7 @@ export default function LienChiRegistrationsPage() {
         {/* Khung chức năng */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Thêm người đăng ký */}
-          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
+          <form onSubmit={handleAddStudent} className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-6 flex items-center gap-3">
               <div className="rounded-xl bg-[#eef6ff] p-3 text-[#1747a6]">
                 <UserPlus className="h-6 w-6" />
@@ -582,6 +582,9 @@ export default function LienChiRegistrationsPage() {
             </div>
 
             {isListLocked && (
+              <div className="mt-3 text-sm font-semibold text-rose-500">
+                Sự kiện đã hết hạn đăng ký hoặc đã kết thúc. Không thể chỉnh sửa danh sách.
+              </div>
             )}
 
             <AnimatePresence>
@@ -609,7 +612,7 @@ export default function LienChiRegistrationsPage() {
               <Save className="h-5 w-5" />
               Thêm sinh viên
             </button>
-          </div>
+          </form>
         </div>
       </div>
 

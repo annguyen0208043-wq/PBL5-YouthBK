@@ -507,68 +507,6 @@ export default function PersonalProfilePage() {
                       </div>
                       <CheckCircle2 className="h-10 w-10 text-[#1f5dcc] opacity-40" />
                     </div>
-
-                    <div className="mt-6 border-t border-[#e7eff8] pt-6 space-y-4">
-                      <div className="flex items-center gap-2">
-                        <History className="h-5 w-5 text-[#1f5dcc]" />
-                        <h4 className="text-lg font-bold text-[#132b57]">Lịch sử điểm phục vụ cộng đồng</h4>
-                      </div>
-
-                      {loadingHistory ? (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader2 className="h-8 w-8 text-[#1f5dcc] animate-spin" />
-                        </div>
-                      ) : pointsHistory.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-400 text-sm bg-[#fafbfe]">
-                          Chưa có lịch sử nhận điểm phục vụ cộng đồng.
-                        </div>
-                      ) : (
-                        <div className="overflow-hidden rounded-2xl border border-[#dce8f5] bg-white shadow-sm">
-                          <div className="overflow-x-auto">
-                            <table className="w-full border-collapse text-left text-sm">
-                              <thead className="bg-[#f7fbff] border-b border-[#dce8f5] text-xs font-bold uppercase tracking-wider text-slate-500">
-                                <tr>
-                                  <th className="px-4 py-3">Ngày nhận</th>
-                                  <th className="px-4 py-3">Nội dung / Sự kiện</th>
-                                  <th className="px-4 py-3 text-right">Điểm cộng</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-[#e7eff8] text-slate-700">
-                                {pointsHistory.map((item) => (
-                                  <tr key={item.id} className="hover:bg-[#fcfdfe] transition-colors">
-                                    <td className="px-4 py-3.5 whitespace-nowrap font-medium text-slate-500">
-                                      {new Date(item.createdAt).toLocaleDateString('vi-VN', {
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                        year: 'numeric'
-                                      })}
-                                    </td>
-                                    <td className="px-4 py-3.5">
-                                      <div className="font-semibold text-[#132b57] break-words line-clamp-2">
-                                        {item.reason}
-                                      </div>
-                                      {item.eventId && (
-                                        <Link
-                                          to={`/sinhvien/event?eventId=${item.eventId}`}
-                                          className="mt-1 inline-flex items-center text-xs font-semibold text-[#1f5dcc] hover:underline"
-                                        >
-                                          Xem chi tiết sự kiện
-                                        </Link>
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
-                                        +{item.points} Điểm
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </>
                 )}
 

@@ -5,12 +5,30 @@ import { motion } from 'framer-motion';
 import AdminLayout from '../../components/admin/AdminLayout';
 import CustomDateTimePicker from '../../components/common/CustomDateTimePicker';
 import InlineMapPicker from '../../components/common/InlineMapPicker';
+import { uploadFile } from '../../utils/upload';
 
 export default function AdminCreateEventPage() {
   const [loading, setLoading] = useState(false);
   const [alertModal, setAlertModal] = useState({ show: false, type: 'error', message: '' });
   const [errors, setErrors] = useState({});
   const [showMapPicker, setShowMapPicker] = useState(false);
+
+  // Editing state for phases
+  const [editingPhaseIndex, setEditingPhaseIndex] = useState(-1);
+  const [editingPhaseData, setEditingPhaseData] = useState({
+    title: '',
+    startDate: '',
+    endDate: '',
+    description: ''
+  });
+
+  // Editing state for milestones
+  const [editingMilestone, setEditingMilestone] = useState({ phaseIdx: -1, mileIdx: -1 });
+  const [editingMilestoneData, setEditingMilestoneData] = useState({
+    dateTime: '',
+    title: '',
+    content: ''
+  });
 
   const setNotice = (msg) => {
     if (!msg) return;
@@ -57,10 +75,12 @@ export default function AdminCreateEventPage() {
           setFormData(prev => ({ ...prev, leaderId: matched.id }));
           setLeaderSearch(matched.studentId || matched.email || '');
           setLeaderNameDisplay(matched.fullName || matched.name);
+          setErrors(prev => ({ ...prev, leaderId: '' }));
         } else {
           setFormData(prev => ({ ...prev, leaderId: u.id }));
           setLeaderSearch(u.studentId || u.email || '');
           setLeaderNameDisplay(u.name || u.fullName || '');
+          setErrors(prev => ({ ...prev, leaderId: '' }));
         }
       }
     } catch (err) {
@@ -76,6 +96,7 @@ export default function AdminCreateEventPage() {
       setFormData(prev => ({ ...prev, leaderId: matched.id }));
       setLeaderNameDisplay(matched.fullName || matched.name);
       setShowLeaderDropdown(false);
+      setErrors(prev => ({ ...prev, leaderId: '' }));
     } else {
       setFormData(prev => ({ ...prev, leaderId: '' }));
       setLeaderNameDisplay('');
@@ -88,6 +109,7 @@ export default function AdminCreateEventPage() {
     setLeaderSearch(u.studentId || u.email || '');
     setLeaderNameDisplay(u.fullName || u.name);
     setShowLeaderDropdown(false);
+    setErrors(prev => ({ ...prev, leaderId: '' }));
   };
 
   useEffect(() => {
@@ -151,9 +173,9 @@ export default function AdminCreateEventPage() {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
 
-    // Real-time validation for participant fields
+    // Real-time validation
     setErrors((prev) => {
-      const next = { ...prev, [name]: false };
+      const next = { ...prev, [name]: '' };
       if (name === 'minParticipants' || name === 'maxParticipants') {
         const minRaw = name === 'minParticipants' ? value : formData.minParticipants;
         const maxRaw = name === 'maxParticipants' ? value : formData.maxParticipants;
@@ -162,32 +184,46 @@ export default function AdminCreateEventPage() {
 
         // Validate min
         if (minRaw !== '') {
-          next.minParticipants = isNaN(minVal) || minVal < 5;
-          next.minParticipantsMsg = next.minParticipants ? 'Tối thiểu phải từ 5 người trở lên' : '';
+          if (isNaN(minVal) || minVal <= 5) {
+            next.minParticipants = 'Số lượng tối thiểu phải lớn hơn 5 người';
+          } else {
+            next.minParticipants = '';
+          }
         } else {
-          next.minParticipants = false;
-          next.minParticipantsMsg = '';
+          next.minParticipants = '';
         }
 
         // Validate max
         if (maxRaw !== '') {
-          next.maxParticipants = isNaN(maxVal) || maxVal > 100000;
-          next.maxParticipantsMsg = next.maxParticipants ? 'Tối đa không vượt quá 100,000 người' : '';
+          if (isNaN(maxVal) || maxVal > 100000) {
+            next.maxParticipants = 'Tối đa không vượt quá 100,000 người';
+          } else {
+            next.maxParticipants = '';
+          }
         } else {
-          next.maxParticipants = false;
-          next.maxParticipantsMsg = '';
+          next.maxParticipants = '';
         }
 
         // Validate min < max
         if (minVal !== null && maxVal !== null && !isNaN(minVal) && !isNaN(maxVal)) {
           if (maxVal <= minVal) {
-            next.maxParticipants = true;
-            next.maxParticipantsMsg = 'Số lượng tối đa phải lớn hơn tối thiểu';
+            next.maxParticipants = 'Số lượng tối đa phải lớn hơn số lượng tối thiểu';
           }
         }
-      } else if (prev[name]) {
-        // Clear other field errors on change
-        next[name] = false;
+      } else if (name === 'communityPoints') {
+        if (value !== '') {
+          const pts = parseInt(value, 10);
+          if (isNaN(pts) || pts < 0) {
+            next.communityPoints = 'Điểm cộng đồng phải là số không âm';
+          }
+        }
+      } else if (name === 'attendanceRadius') {
+        if (value !== '') {
+          const rad = parseInt(value, 10);
+          if (isNaN(rad) || rad <= 0) {
+            next.attendanceRadius = 'Bán kính điểm danh phải là số dương';
+          }
+        }
       }
       return next;
     });
@@ -279,6 +315,62 @@ export default function AdminCreateEventPage() {
     if (activePhaseIndexForMilestone === index) {
       setActivePhaseIndexForMilestone(-1);
     }
+    if (editingPhaseIndex === index) {
+      setEditingPhaseIndex(-1);
+    }
+  };
+
+  // Phase Edit Handlers
+  const handleStartEditPhase = (index) => {
+    setEditingPhaseIndex(index);
+    setEditingPhaseData({
+      title: phases[index].title,
+      startDate: phases[index].startDate,
+      endDate: phases[index].endDate,
+      description: phases[index].description || ''
+    });
+  };
+
+  const handleSaveEditPhase = (index) => {
+    if (!editingPhaseData.title || !editingPhaseData.startDate || !editingPhaseData.endDate) {
+      setNotice('❌ Vui lòng điền đầy đủ tiêu đề, ngày bắt đầu và kết thúc của giai đoạn');
+      return;
+    }
+    if (!formData.plannedStartDate || !formData.plannedEndDate) {
+      setNotice('❌ Vui lòng chọn thời gian bắt đầu và kết thúc dự kiến của sự kiện trước.');
+      return;
+    }
+    const eventStartDateOnly = formData.plannedStartDate.split('T')[0];
+    const eventEndDateOnly = formData.plannedEndDate.split('T')[0];
+
+    if (editingPhaseData.startDate < eventStartDateOnly || editingPhaseData.startDate > eventEndDateOnly) {
+      setNotice(`❌ Ngày bắt đầu của giai đoạn phải nằm trong khoảng thời gian của sự kiện (${new Date(formData.plannedStartDate).toLocaleDateString('vi-VN')} - ${new Date(formData.plannedEndDate).toLocaleDateString('vi-VN')})`);
+      return;
+    }
+    if (editingPhaseData.endDate < eventStartDateOnly || editingPhaseData.endDate > eventEndDateOnly) {
+      setNotice(`❌ Ngày kết thúc của giai đoạn phải nằm trong khoảng thời gian của sự kiện (${new Date(formData.plannedStartDate).toLocaleDateString('vi-VN')} - ${new Date(formData.plannedEndDate).toLocaleDateString('vi-VN')})`);
+      return;
+    }
+    if (editingPhaseData.startDate > editingPhaseData.endDate) {
+      setNotice('❌ Ngày bắt đầu của giai đoạn phải trước hoặc trùng ngày kết thúc.');
+      return;
+    }
+
+    setPhases(prev => prev.map((p, i) => {
+      if (i === index) {
+        return {
+          ...p,
+          ...editingPhaseData
+        };
+      }
+      return p;
+    }));
+    setEditingPhaseIndex(-1);
+    setNotice('');
+  };
+
+  const handleCancelEditPhase = () => {
+    setEditingPhaseIndex(-1);
   };
 
   const handleAddMilestone = (phaseIdx) => {
@@ -321,6 +413,55 @@ export default function AdminCreateEventPage() {
       }
       return phase;
     }));
+    if (editingMilestone.phaseIdx === phaseIdx && editingMilestone.mileIdx === milestoneIdx) {
+      setEditingMilestone({ phaseIdx: -1, mileIdx: -1 });
+    }
+  };
+
+  // Milestone Edit Handlers
+  const handleStartEditMilestone = (phaseIdx, mileIdx) => {
+    setEditingMilestone({ phaseIdx, mileIdx });
+    const m = phases[phaseIdx].details[mileIdx];
+    setEditingMilestoneData({
+      dateTime: m.dateTime,
+      title: m.title,
+      content: m.content || ''
+    });
+  };
+
+  const handleSaveEditMilestone = (phaseIdx, mileIdx) => {
+    if (!editingMilestoneData.title || !editingMilestoneData.dateTime) {
+      setNotice('❌ Vui lòng nhập tiêu đề và thời điểm diễn ra của mốc chi tiết');
+      return;
+    }
+
+    const phase = phases[phaseIdx];
+    const mileDateOnly = editingMilestoneData.dateTime.split('T')[0];
+    if (mileDateOnly < phase.startDate || mileDateOnly > phase.endDate) {
+      setNotice(`❌ Ngày diễn ra mốc chi tiết phải nằm trong giai đoạn ${phase.title} (${new Date(phase.startDate).toLocaleDateString('vi-VN')} - ${new Date(phase.endDate).toLocaleDateString('vi-VN')})`);
+      return;
+    }
+
+    setPhases(prev => prev.map((phaseItem, pIdx) => {
+      if (pIdx === phaseIdx) {
+        const updatedDetails = phaseItem.details.map((m, mIdx) => {
+          if (mIdx === mileIdx) {
+            return { ...editingMilestoneData };
+          }
+          return m;
+        });
+        updatedDetails.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+        return { ...phaseItem, details: updatedDetails };
+      }
+      return phaseItem;
+    }));
+
+    setEditingMilestone({ phaseIdx: -1, mileIdx: -1 });
+    setNotice('');
+  };
+
+  const handleCancelEditMilestone = () => {
+    setEditingMilestone({ phaseIdx: -1, mileIdx: -1 });
   };
 
   // Save draft locally
@@ -341,121 +482,142 @@ export default function AdminCreateEventPage() {
 
   const handleSubmitEvent = async () => {
     const newErrors = {};
-    if (!formData.title) newErrors.title = true;
-    if (!formData.locationName) newErrors.locationName = true;
-    if (!formData.plannedStartDate) newErrors.plannedStartDate = true;
-    if (!formData.plannedEndDate) newErrors.plannedEndDate = true;
+    if (!formData.title) newErrors.title = 'Tên sự kiện là bắt buộc';
+    if (!formData.locationName) newErrors.locationName = 'Tên địa điểm là bắt buộc';
+    if (!formData.plannedStartDate) newErrors.plannedStartDate = 'Thời gian bắt đầu dự kiến là bắt buộc';
+    if (!formData.plannedEndDate) newErrors.plannedEndDate = 'Thời gian kết thúc dự kiến là bắt buộc';
+    if (!formData.leaderId) newErrors.leaderId = 'Vui lòng chọn người chủ trì sự kiện';
 
-    // Participant range validation: min >= 5, max <= 100000
+    // Participant range validation: min > 5, max <= 100000
     if (formData.minParticipants) {
       const minP = parseInt(formData.minParticipants, 10);
-      if (isNaN(minP) || minP < 5) {
-        newErrors.minParticipants = true;
-        newErrors.minParticipantsMsg = 'Tối thiểu phải từ 5 người trở lên';
+      if (isNaN(minP) || minP <= 5) {
+        newErrors.minParticipants = 'Số lượng tối thiểu phải lớn hơn 5 người';
       }
     }
     if (formData.maxParticipants) {
       const maxP = parseInt(formData.maxParticipants, 10);
       if (isNaN(maxP) || maxP > 100000) {
-        newErrors.maxParticipants = true;
-        newErrors.maxParticipantsMsg = 'Tối đa không vượt quá 100,000 người';
+        newErrors.maxParticipants = 'Tối đa không vượt quá 100,000 người';
       }
     }
     if (formData.minParticipants && formData.maxParticipants) {
       const minP = parseInt(formData.minParticipants, 10);
       const maxP = parseInt(formData.maxParticipants, 10);
       if (!isNaN(minP) && !isNaN(maxP) && maxP <= minP) {
-        newErrors.maxParticipants = true;
-        newErrors.maxParticipantsMsg = 'Số lượng tối đa phải lớn hơn tối thiểu';
+        newErrors.maxParticipants = 'Số lượng tối đa phải lớn hơn số lượng tối thiểu';
       }
     }
 
-    setErrors(newErrors);
-
-    if (Object.keys(newErrors).length > 0) {
-      if (newErrors.title || newErrors.locationName || newErrors.plannedStartDate || newErrors.plannedEndDate) {
-        setNotice('❌ Vui lòng điền đầy đủ các trường bắt buộc (các ô viền đỏ).');
-      } else if (newErrors.minParticipants || newErrors.maxParticipants) {
-        setNotice('❌ Số lượng sinh viên không hợp lệ. Vui lòng kiểm tra lại (các ô viền đỏ).');
+    if (formData.communityPoints) {
+      const pts = parseInt(formData.communityPoints, 10);
+      if (isNaN(pts) || pts < 0) {
+        newErrors.communityPoints = 'Điểm cộng đồng phải là số không âm';
       }
-      return;
+    }
+
+    if (formData.attendanceRadius) {
+      const rad = parseInt(formData.attendanceRadius, 10);
+      if (isNaN(rad) || rad <= 0) {
+        newErrors.attendanceRadius = 'Bán kính điểm danh phải là số dương';
+      }
     }
 
     const today = new Date();
-    const startDt = new Date(formData.plannedStartDate);
-    const endDt = new Date(formData.plannedEndDate);
-
-    // Event must start at least 48h after now
-    const minStartDt = new Date(today.getTime() + 48 * 60 * 60 * 1000);
-    if (startDt < minStartDt) {
-      newErrors.plannedStartDate = true;
-      setErrors(newErrors);
-      setNotice('❌ Thời gian bắt đầu dự kiến phải sau thời điểm hiện tại ít nhất 48 giờ (2 ngày).');
-      return;
+    if (formData.plannedStartDate) {
+      const startDt = new Date(formData.plannedStartDate);
+      const minStartDt = new Date(today.getTime() + 48 * 60 * 60 * 1000);
+      if (startDt < minStartDt) {
+        newErrors.plannedStartDate = 'Thời gian bắt đầu dự kiến phải sau thời điểm hiện tại ít nhất 48 giờ (2 ngày)';
+      }
     }
 
-    if (startDt >= endDt) {
-      newErrors.plannedStartDate = true;
-      newErrors.plannedEndDate = true;
-      setErrors(newErrors);
-      setNotice('❌ Thời gian kết thúc dự kiến phải sau thời gian bắt đầu.');
-      return;
+    if (formData.plannedStartDate && formData.plannedEndDate) {
+      const startDt = new Date(formData.plannedStartDate);
+      const endDt = new Date(formData.plannedEndDate);
+      if (startDt >= endDt) {
+        newErrors.plannedEndDate = 'Thời gian kết thúc dự kiến phải sau thời gian bắt đầu';
+      }
     }
 
     if (formData.registrationDeadline) {
       const regDeadline = new Date(formData.registrationDeadline);
 
       if (regDeadline <= today) {
-        newErrors.registrationDeadline = true;
-        setErrors(newErrors);
-        setNotice('❌ Hạn đăng ký phải sau thời điểm hiện tại.');
-        return;
-      }
-
-      // Hạn đăng ký phải trước plannedStartDate tối thiểu 24h
-      const maxRegDeadlineVal = new Date(startDt.getTime() - 24 * 60 * 60 * 1000);
-      if (regDeadline > maxRegDeadlineVal) {
-        newErrors.registrationDeadline = true;
-        setErrors(newErrors);
-        setNotice('❌ Hạn đăng ký phải trước thời gian bắt đầu sự kiện tối thiểu 24 giờ.');
-        return;
+        newErrors.registrationDeadline = 'Hạn đăng ký phải sau thời điểm hiện tại';
+      } else if (formData.plannedStartDate) {
+        const startDt = new Date(formData.plannedStartDate);
+        // Hạn đăng ký phải trước plannedStartDate tối thiểu 24h
+        const maxRegDeadlineVal = new Date(startDt.getTime() - 24 * 60 * 60 * 1000);
+        if (regDeadline > maxRegDeadlineVal) {
+          newErrors.registrationDeadline = 'Hạn đăng ký phải trước thời gian bắt đầu sự kiện tối thiểu 24 giờ';
+        }
       }
     }
 
+    if (!formData.locationLat || !formData.locationLng) {
+      newErrors.locationCoords = 'Vui lòng chọn tọa độ vị trí sự kiện trên bản đồ';
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      setNotice('❌ Vui lòng điền và sửa các lỗi nhập liệu bên dưới (các ô viền đỏ).');
+      return;
+    }
+
     setLoading(true);
+    setNotice('⏳ Đang upload file (nếu có), vui lòng đợi...');
     try {
-      const formDataToSend = new FormData();
-      
-      // Append core fields
-      Object.keys(formData).forEach(key => {
-        formDataToSend.append(key, formData[key]);
-      });
+      // 1. Upload images sequentially
+      const uploadedImagesData = [];
+      for (let i = 0; i < imageUploads.length; i++) {
+        const img = imageUploads[i];
+        setNotice(`⏳ Đang upload ảnh ${i + 1}/${imageUploads.length}...`);
+        const result = await uploadFile(img.file);
+        uploadedImagesData.push({
+          url: result.url,
+          caption: img.caption || '',
+          isCover: img.isCover
+        });
+      }
 
-      // Append parsed timeline
-      formDataToSend.append('timeline', JSON.stringify(phases));
+      // 2. Upload documents sequentially
+      const uploadedDocumentsData = [];
+      for (let i = 0; i < documentUploads.length; i++) {
+        const doc = documentUploads[i];
+        setNotice(`⏳ Đang upload tài liệu ${i + 1}/${documentUploads.length}...`);
+        const result = await uploadFile(doc);
+        uploadedDocumentsData.push({
+          url: result.url,
+          fileName: doc.name,
+          fileSize: doc.size,
+          fileType: doc.name.split('.').pop() || null
+        });
+      }
 
-      // Append image files and metadata
-      const imageCaptions = [];
-      const imageIsCovers = [];
-      imageUploads.forEach((img) => {
-        formDataToSend.append('images', img.file);
-        imageCaptions.push(img.caption || '');
-        imageIsCovers.push(img.isCover);
-      });
-      formDataToSend.append('imageCaptions', JSON.stringify(imageCaptions));
-      formDataToSend.append('imageIsCovers', JSON.stringify(imageIsCovers));
+      setNotice('⏳ Đang lưu dữ liệu sự kiện...');
 
-      // Append document files
-      documentUploads.forEach(file => {
-        formDataToSend.append('documents', file);
-      });
+      const payload = {
+        ...formData,
+        timeline: phases,
+        submit: 'true'
+      };
+
+      if (uploadedImagesData.length > 0) {
+        payload.uploadedImages = uploadedImagesData;
+      }
+      if (uploadedDocumentsData.length > 0) {
+        payload.uploadedDocuments = uploadedDocumentsData;
+      }
 
       const response = await fetch('/api/events', {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        body: formDataToSend,
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -512,13 +674,18 @@ export default function AdminCreateEventPage() {
                 value={formData.title}
                 onChange={handleInputChange}
                 className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
-                  errors.title ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  errors.title ? 'border-rose-500 focus:border-rose-500 bg-rose-50/30' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
                 }`}
               />
+              {errors.title && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.title}
+                </p>
+              )}
             </label>
             <label className="block relative">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-semibold text-slate-700">Người chủ trì (Leader)</span>
+                <span className="text-sm font-semibold text-slate-700">Người chủ trì (Leader) *</span>
                 <button
                   type="button"
                   onClick={handleSelectSelfAsLeader}
@@ -533,12 +700,19 @@ export default function AdminCreateEventPage() {
                 onChange={(e) => handleLeaderSearchChange(e.target.value)}
                 onFocus={() => setShowLeaderDropdown(true)}
                 onBlur={() => setTimeout(() => setShowLeaderDropdown(false), 200)}
-                className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm"
+                className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm ${
+                  errors.leaderId ? 'border-rose-500 bg-rose-50/30 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                }`}
               />
               {leaderNameDisplay && (
                 <div className="mt-1 text-xs font-bold text-emerald-600">
                   ✓ Người chủ trì: {leaderNameDisplay}
                 </div>
+              )}
+              {errors.leaderId && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.leaderId}
+                </p>
               )}
               {showLeaderDropdown && leaderSearch && (
                 <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-2xl border border-[#dce8f5] bg-white p-2 shadow-lg">
@@ -592,12 +766,12 @@ export default function AdminCreateEventPage() {
                 min={5}
                 placeholder="Ít nhất 5"
                 className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
-                  errors.minParticipants ? 'border-rose-500 bg-rose-50 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  errors.minParticipants ? 'border-rose-500 bg-rose-50/30 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
                 }`}
               />
-              {errors.minParticipants && errors.minParticipantsMsg && (
+              {errors.minParticipants && (
                 <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
-                  <span>⚠</span> {errors.minParticipantsMsg}
+                  <span>⚠</span> {errors.minParticipants}
                 </p>
               )}
             </label>
@@ -611,12 +785,12 @@ export default function AdminCreateEventPage() {
                 max={100000}
                 placeholder="Tối đa 100,000"
                 className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
-                  errors.maxParticipants ? 'border-rose-500 bg-rose-50 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  errors.maxParticipants ? 'border-rose-500 bg-rose-50/30 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
                 }`}
               />
-              {errors.maxParticipants && errors.maxParticipantsMsg && (
+              {errors.maxParticipants && (
                 <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
-                  <span>⚠</span> {errors.maxParticipantsMsg}
+                  <span>⚠</span> {errors.maxParticipants}
                 </p>
               )}
             </label>
@@ -627,9 +801,16 @@ export default function AdminCreateEventPage() {
                 name="communityPoints"
                 value={formData.communityPoints}
                 onChange={handleInputChange}
-                className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm"
+                className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm ${
+                  errors.communityPoints ? 'border-rose-500 bg-rose-50/30 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                }`}
                 placeholder="Ví dụ: 5"
               />
+              {errors.communityPoints && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.communityPoints}
+                </p>
+              )}
             </label>
           </div>
 
@@ -650,12 +831,17 @@ export default function AdminCreateEventPage() {
                     }
                     return nextData;
                   });
-                  if (errors.plannedStartDate) setErrors(prev => ({ ...prev, plannedStartDate: false }));
+                  if (errors.plannedStartDate) setErrors(prev => ({ ...prev, plannedStartDate: '' }));
                 }}
                 min={minPlannedStart}
                 placeholder="Ngày giờ bắt đầu"
-                hasError={errors.plannedStartDate}
+                hasError={!!errors.plannedStartDate}
               />
+              {errors.plannedStartDate && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.plannedStartDate}
+                </p>
+              )}
             </label>
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">Kết thúc dự kiến *</span>
@@ -663,13 +849,18 @@ export default function AdminCreateEventPage() {
                 value={formData.plannedEndDate}
                 onChange={(val) => {
                   setFormData(prev => ({ ...prev, plannedEndDate: val }));
-                  if (errors.plannedEndDate) setErrors(prev => ({ ...prev, plannedEndDate: false }));
+                  if (errors.plannedEndDate) setErrors(prev => ({ ...prev, plannedEndDate: '' }));
                 }}
                 min={formData.plannedStartDate}
                 disabled={!formData.plannedStartDate}
                 placeholder="Ngày giờ kết thúc"
-                hasError={errors.plannedEndDate}
+                hasError={!!errors.plannedEndDate}
               />
+              {errors.plannedEndDate && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.plannedEndDate}
+                </p>
+              )}
             </label>
           </div>
 
@@ -678,12 +869,21 @@ export default function AdminCreateEventPage() {
               <span className="mb-2 block text-sm font-semibold text-slate-700">Hạn đăng ký</span>
               <CustomDateTimePicker
                 value={formData.registrationDeadline}
-                onChange={(val) => setFormData(prev => ({ ...prev, registrationDeadline: val }))}
+                onChange={(val) => {
+                  setFormData(prev => ({ ...prev, registrationDeadline: val }));
+                  if (errors.registrationDeadline) setErrors(prev => ({ ...prev, registrationDeadline: '' }));
+                }}
                 min={minRegDeadline}
                 max={maxRegDeadline}
                 disabled={!formData.plannedStartDate || !formData.plannedEndDate}
                 placeholder="Hạn sinh viên đăng ký"
+                hasError={!!errors.registrationDeadline}
               />
+              {errors.registrationDeadline && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.registrationDeadline}
+                </p>
+              )}
             </label>
             <div className="hidden sm:block"></div>
           </div>
@@ -701,9 +901,14 @@ export default function AdminCreateEventPage() {
                   value={formData.locationName}
                   onChange={handleInputChange}
                   className={`w-full rounded-xl border px-3 py-2 outline-none text-sm transition-all ${
-                    errors.locationName ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                    errors.locationName ? 'border-rose-500 focus:border-rose-500 bg-rose-50/30' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
                   }`}
                 />
+                {errors.locationName && (
+                  <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                    <span>⚠</span> {errors.locationName}
+                  </p>
+                )}
               </label>
               <div className="grid grid-cols-2 gap-4 sm:col-span-2">
                 <label className="block">
@@ -742,8 +947,14 @@ export default function AdminCreateEventPage() {
                       locationLat: coords.lat,
                       locationLng: coords.lng
                     }));
+                    if (errors.locationCoords) setErrors(prev => ({ ...prev, locationCoords: '' }));
                   }}
                 />
+                {errors.locationCoords && (
+                  <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                    <span>⚠</span> {errors.locationCoords}
+                  </p>
+                )}
               </div>
               <label className="block sm:col-span-2">
                 <span className="mb-1 block text-xs font-semibold text-slate-600">Bán kính điểm danh (mét)</span>
@@ -752,8 +963,15 @@ export default function AdminCreateEventPage() {
                   name="attendanceRadius"
                   value={formData.attendanceRadius}
                   onChange={handleInputChange}
-                  className="w-full rounded-xl border border-[#dce8f5] px-3 py-2 outline-none focus:border-[#1f5dcc] text-sm"
+                  className={`w-full rounded-xl border px-3 py-2 outline-none text-sm ${
+                    errors.attendanceRadius ? 'border-rose-500 bg-rose-50/30 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  }`}
                 />
+                {errors.attendanceRadius && (
+                  <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                    <span>⚠</span> {errors.attendanceRadius}
+                  </p>
+                )}
               </label>
             </div>
           </div>
@@ -860,39 +1078,181 @@ export default function AdminCreateEventPage() {
               <div className="space-y-3 pt-2">
                 {phases.map((phase, phaseIdx) => (
                   <div key={phaseIdx} className="rounded-2xl border border-[#eef5fc] bg-[#f8fbfd] p-3 text-xs space-y-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <span className="font-bold text-slate-700 text-sm">GD {phaseIdx + 1}: {phase.title}</span>
-                        <p className="text-[10px] text-slate-500">{new Date(phase.startDate).toLocaleDateString('vi-VN')} - {new Date(phase.endDate).toLocaleDateString('vi-VN')}</p>
+                    {editingPhaseIndex === phaseIdx ? (
+                      <div className="bg-white rounded-xl border p-3 space-y-3 shadow-inner">
+                        <p className="font-bold text-slate-700 text-xs">Chỉnh sửa Giai đoạn {phaseIdx + 1}</p>
+                        <div className="space-y-2">
+                          <label className="block">
+                            <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Tiêu đề *</span>
+                            <input 
+                              type="text" 
+                              value={editingPhaseData.title}
+                              onChange={(e) => setEditingPhaseData(prev => ({ ...prev, title: e.target.value }))}
+                              className="rounded-xl border border-[#dce8f5] px-3 py-1.5 text-xs w-full outline-none focus:border-[#1f5dcc]"
+                            />
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="block">
+                              <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Bắt đầu</span>
+                              <CustomDateTimePicker
+                                value={editingPhaseData.startDate}
+                                onChange={(val) => setEditingPhaseData(prev => ({ ...prev, startDate: val }))}
+                                min={formData.plannedStartDate ? formData.plannedStartDate.split('T')[0] : undefined}
+                                max={formData.plannedEndDate ? formData.plannedEndDate.split('T')[0] : undefined}
+                                placeholder="Bắt đầu"
+                                dateOnly
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Kết thúc</span>
+                              <CustomDateTimePicker
+                                value={editingPhaseData.endDate}
+                                onChange={(val) => setEditingPhaseData(prev => ({ ...prev, endDate: val }))}
+                                min={editingPhaseData.startDate || (formData.plannedStartDate ? formData.plannedStartDate.split('T')[0] : undefined)}
+                                max={formData.plannedEndDate ? formData.plannedEndDate.split('T')[0] : undefined}
+                                placeholder="Kết thúc"
+                                dateOnly
+                              />
+                            </label>
+                          </div>
+                          <label className="block">
+                            <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Mô tả</span>
+                            <textarea 
+                              value={editingPhaseData.description}
+                              onChange={(e) => setEditingPhaseData(prev => ({ ...prev, description: e.target.value }))}
+                              className="rounded-xl border border-[#dce8f5] px-3 py-1.5 text-xs w-full outline-none focus:border-[#1f5dcc]"
+                              rows="2"
+                            />
+                          </label>
+                        </div>
+                        <div className="flex gap-2">
+                          <button 
+                            type="button" 
+                            onClick={() => handleSaveEditPhase(phaseIdx)}
+                            className="flex-1 rounded-xl bg-emerald-600 py-1.5 font-bold text-white text-[10px] hover:bg-emerald-700 transition-colors"
+                          >
+                            Lưu GD
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={handleCancelEditPhase}
+                            className="flex-1 rounded-xl bg-slate-100 py-1.5 font-bold text-slate-600 text-[10px] hover:bg-slate-200 transition-colors border"
+                          >
+                            Hủy
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button 
-                          type="button" 
-                          onClick={() => setActivePhaseIndexForMilestone(activePhaseIndexForMilestone === phaseIdx ? -1 : phaseIdx)}
-                          className="text-[#1747a6] font-semibold hover:underline"
-                        >
-                          {activePhaseIndexForMilestone === phaseIdx ? 'Đóng mốc' : '+ Thêm mốc'}
-                        </button>
-                        <button type="button" onClick={() => handleRemovePhase(phaseIdx)} className="text-red-500 hover:text-red-700">
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                    {phase.description && <p className="text-slate-600 bg-white p-2 rounded-lg border border-slate-100">{phase.description}</p>}
+                    ) : (
+                      <>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-bold text-slate-700 text-sm">GD {phaseIdx + 1}: {phase.title}</span>
+                            <p className="text-[10px] text-slate-500">{new Date(phase.startDate).toLocaleDateString('vi-VN')} - {new Date(phase.endDate).toLocaleDateString('vi-VN')}</p>
+                          </div>
+                          <div className="flex gap-2 items-center">
+                            <button 
+                              type="button" 
+                              onClick={() => handleStartEditPhase(phaseIdx)}
+                              className="text-[#1747a6] font-semibold hover:underline"
+                            >
+                              Sửa GD
+                            </button>
+                            <span className="text-slate-300">|</span>
+                            <button 
+                              type="button" 
+                              onClick={() => setActivePhaseIndexForMilestone(activePhaseIndexForMilestone === phaseIdx ? -1 : phaseIdx)}
+                              className="text-[#1747a6] font-semibold hover:underline"
+                            >
+                              {activePhaseIndexForMilestone === phaseIdx ? 'Đóng mốc' : '+ Thêm mốc'}
+                            </button>
+                            <button type="button" onClick={() => handleRemovePhase(phaseIdx)} className="text-red-500 hover:text-red-700 ml-1">
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                        {phase.description && <p className="text-slate-600 bg-white p-2 rounded-lg border border-slate-100">{phase.description}</p>}
+                      </>
+                    )}
 
                     {/* Milestones listed inside phase */}
                     {phase.details && phase.details.length > 0 && (
                       <div className="bg-white border rounded-xl p-2 space-y-1.5 shadow-sm">
                         {phase.details.map((mile, mileIdx) => (
-                          <div key={mileIdx} className="flex justify-between items-center bg-slate-50 p-1.5 rounded-lg">
-                            <div>
-                              <span className="font-bold text-slate-700">{mile.title}</span>
-                              <span className="text-[10px] text-slate-400 font-mono ml-2">({new Date(mile.dateTime).toLocaleString('vi-VN')})</span>
-                              {mile.content && <p className="text-slate-500 mt-0.5">{mile.content}</p>}
-                            </div>
-                            <button type="button" onClick={() => handleRemoveMilestone(phaseIdx, mileIdx)} className="text-slate-400 hover:text-red-500">
-                              <X className="h-3 w-3" />
-                            </button>
+                          <div key={mileIdx}>
+                            {editingMilestone.phaseIdx === phaseIdx && editingMilestone.mileIdx === mileIdx ? (
+                              <div className="bg-slate-50 border rounded-lg p-2.5 space-y-2 text-[10px] shadow-inner">
+                                <p className="font-bold text-[#132b57]">Chỉnh sửa mốc chi tiết</p>
+                                <div className="space-y-1.5">
+                                  <label className="block">
+                                    <span className="text-[9px] text-slate-500 block mb-0.5 font-semibold">Thời gian *</span>
+                                    <CustomDateTimePicker
+                                      value={editingMilestoneData.dateTime}
+                                      onChange={(val) => setEditingMilestoneData(prev => ({ ...prev, dateTime: val }))}
+                                      min={phases[phaseIdx]?.startDate}
+                                      max={phases[phaseIdx]?.endDate ? phases[phaseIdx].endDate + 'T23:59' : undefined}
+                                      placeholder="Thời gian"
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <span className="text-[9px] text-slate-500 block mb-0.5 font-semibold">Tiêu đề mốc *</span>
+                                    <input 
+                                      type="text" 
+                                      value={editingMilestoneData.title}
+                                      onChange={(e) => setEditingMilestoneData(prev => ({ ...prev, title: e.target.value }))}
+                                      className="rounded-lg border border-[#dce8f5] px-2 py-1 text-xs w-full outline-none focus:border-[#1f5dcc]"
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <span className="text-[9px] text-slate-500 block mb-0.5 font-semibold">Nội dung</span>
+                                    <textarea 
+                                      value={editingMilestoneData.content}
+                                      onChange={(e) => setEditingMilestoneData(prev => ({ ...prev, content: e.target.value }))}
+                                      className="rounded-lg border border-[#dce8f5] px-2 py-1 text-xs w-full outline-none focus:border-[#1f5dcc]"
+                                      rows="2"
+                                    />
+                                  </label>
+                                </div>
+                                <div className="flex gap-2 pt-1">
+                                  <button 
+                                    type="button" 
+                                    onClick={() => handleSaveEditMilestone(phaseIdx, mileIdx)}
+                                    className="flex-1 rounded bg-emerald-600 py-1 font-bold text-white text-[9px] hover:bg-emerald-700 transition-colors"
+                                  >
+                                    Lưu mốc
+                                  </button>
+                                  <button 
+                                    type="button" 
+                                    onClick={handleCancelEditMilestone}
+                                    className="flex-1 rounded bg-slate-200 py-1 font-bold text-slate-600 text-[9px] hover:bg-slate-300 transition-colors border"
+                                  >
+                                    Hủy
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex justify-between items-center bg-slate-50 p-1.5 rounded-lg">
+                                <div className="flex-1 min-w-0 pr-2">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-bold text-slate-700 truncate">{mile.title}</span>
+                                    <span className="text-[10px] text-slate-400 font-mono">({new Date(mile.dateTime).toLocaleString('vi-VN')})</span>
+                                  </div>
+                                  {mile.content && <p className="text-slate-500 mt-0.5 break-words">{mile.content}</p>}
+                                </div>
+                                <div className="flex gap-1.5 items-center shrink-0">
+                                  <button 
+                                    type="button" 
+                                    onClick={() => handleStartEditMilestone(phaseIdx, mileIdx)}
+                                    className="text-[10px] text-[#1747a6] hover:underline font-semibold"
+                                  >
+                                    Sửa
+                                  </button>
+                                  <span className="text-slate-300">|</span>
+                                  <button type="button" onClick={() => handleRemoveMilestone(phaseIdx, mileIdx)} className="text-slate-400 hover:text-red-500">
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

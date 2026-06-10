@@ -4,14 +4,20 @@ import { motion } from 'framer-motion';
 
 import LienChiLayout from '../../components/lienchi/LienChiLayout';
 import CustomDateTimePicker from '../../components/common/CustomDateTimePicker';
-import MapPickerModal from '../../components/common/MapPickerModal';
+import InlineMapPicker from '../../components/common/InlineMapPicker';
 import { uploadFile } from '../../utils/upload';
 
 export default function LienChiCreateEventPage() {
   const [loading, setLoading] = useState(false);
   const [alertModal, setAlertModal] = useState({ show: false, type: 'error', message: '' });
   const [errors, setErrors] = useState({});
-  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [editingPhaseIndex, setEditingPhaseIndex] = useState(-1);
+  const [editingPhaseData, setEditingPhaseData] = useState({
+    title: '',
+    startDate: '',
+    endDate: '',
+    description: ''
+  });
 
   const setNotice = (msg) => {
     if (!msg) return;
@@ -150,13 +156,62 @@ export default function LienChiCreateEventPage() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: false }));
-    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Real-time validation
+    setErrors((prev) => {
+      const next = { ...prev, [name]: '' };
+      if (name === 'minParticipants' || name === 'maxParticipants') {
+        const minRaw = name === 'minParticipants' ? value : formData.minParticipants;
+        const maxRaw = name === 'maxParticipants' ? value : formData.maxParticipants;
+        const minVal = minRaw !== '' ? parseInt(minRaw, 10) : null;
+        const maxVal = maxRaw !== '' ? parseInt(maxRaw, 10) : null;
+
+        // Validate min
+        if (minRaw !== '') {
+          if (isNaN(minVal) || minVal <= 5) {
+            next.minParticipants = 'Số lượng tối thiểu phải lớn hơn 5 người';
+          } else {
+            next.minParticipants = '';
+          }
+        } else {
+          next.minParticipants = '';
+        }
+
+        // Validate max
+        if (maxRaw !== '') {
+          if (isNaN(maxVal) || maxVal > 100000) {
+            next.maxParticipants = 'Số lượng tối đa không vượt quá 100,000 người';
+          } else {
+            next.maxParticipants = '';
+          }
+        } else {
+          next.maxParticipants = '';
+        }
+
+        // Validate min < max
+        if (minVal !== null && maxVal !== null && !isNaN(minVal) && !isNaN(maxVal)) {
+          if (maxVal <= minVal) {
+            next.maxParticipants = 'Số lượng tối đa phải lớn hơn số lượng tối thiểu';
+          }
+        }
+      } else if (name === 'communityPoints') {
+        if (value !== '') {
+          const pts = parseInt(value, 10);
+          if (isNaN(pts) || pts < 0) {
+            next.communityPoints = 'Điểm cộng đồng phải là số không âm';
+          }
+        }
+      } else if (name === 'attendanceRadius') {
+        if (value !== '') {
+          const rad = parseInt(value, 10);
+          if (isNaN(rad) || rad <= 0) {
+            next.attendanceRadius = 'Bán kính điểm danh phải là số dương';
+          }
+        }
+      }
+      return next;
+    });
   };
 
   // Image Upload helpers
@@ -264,6 +319,70 @@ export default function LienChiCreateEventPage() {
     if (activePhaseIndexForMilestone === index) {
       setActivePhaseIndexForMilestone(-1);
     }
+    if (editingPhaseIndex === index) {
+      setEditingPhaseIndex(-1);
+    }
+  };
+
+  const handleStartEditPhase = (index) => {
+    setEditingPhaseIndex(index);
+    setEditingPhaseData({
+      title: phases[index].title,
+      startDate: phases[index].startDate,
+      endDate: phases[index].endDate,
+      description: phases[index].description || ''
+    });
+  };
+
+  const handleSaveEditPhase = (index) => {
+    if (!editingPhaseData.title || !editingPhaseData.startDate || !editingPhaseData.endDate) {
+      setNotice('❌ Vui lòng điền đầy đủ tiêu đề, ngày bắt đầu và kết thúc của giai đoạn');
+      return;
+    }
+    if (!formData.plannedStartDate || !formData.plannedEndDate) {
+      setNotice('❌ Vui lòng chọn thời gian bắt đầu và kết thúc dự kiến của sự kiện trước.');
+      return;
+    }
+    const eventStartDateOnly = formData.plannedStartDate.split('T')[0];
+    const eventEndDateOnly = formData.plannedEndDate.split('T')[0];
+
+    if (editingPhaseData.startDate < eventStartDateOnly || editingPhaseData.startDate > eventEndDateOnly) {
+      setNotice(`❌ Ngày bắt đầu của giai đoạn phải nằm trong khoảng thời gian của sự kiện (${new Date(formData.plannedStartDate).toLocaleDateString('vi-VN')} - ${new Date(formData.plannedEndDate).toLocaleDateString('vi-VN')})`);
+      return;
+    }
+    if (editingPhaseData.endDate < eventStartDateOnly || editingPhaseData.endDate > eventEndDateOnly) {
+      setNotice(`❌ Ngày kết thúc của giai đoạn phải nằm trong khoảng thời gian của sự kiện (${new Date(formData.plannedStartDate).toLocaleDateString('vi-VN')} - ${new Date(formData.plannedEndDate).toLocaleDateString('vi-VN')})`);
+      return;
+    }
+    if (editingPhaseData.startDate > editingPhaseData.endDate) {
+      setNotice('❌ Ngày bắt đầu của giai đoạn phải trước hoặc trùng ngày kết thúc.');
+      return;
+    }
+
+    // Overlap check
+    const overlapping = phases.find((p, idx) =>
+      idx !== index && editingPhaseData.startDate <= p.endDate && editingPhaseData.endDate >= p.startDate
+    );
+    if (overlapping) {
+      setNotice(`❌ Giai đoạn bị trùng với giai đoạn "${overlapping.title}" (${new Date(overlapping.startDate + 'T00:00').toLocaleDateString('vi-VN')} – ${new Date(overlapping.endDate + 'T00:00').toLocaleDateString('vi-VN')}).`);
+      return;
+    }
+
+    setPhases(prev => prev.map((p, i) => {
+      if (i === index) {
+        return {
+          ...p,
+          ...editingPhaseData
+        };
+      }
+      return p;
+    }));
+    setEditingPhaseIndex(-1);
+    setNotice('');
+  };
+
+  const handleCancelEditPhase = () => {
+    setEditingPhaseIndex(-1);
   };
 
   const handleAddMilestone = (phaseIdx) => {
@@ -344,87 +463,87 @@ export default function LienChiCreateEventPage() {
   // Submit to backend
   const handleSubmitEvent = async () => {
     const newErrors = {};
-    if (!formData.title) newErrors.title = true;
-    if (!formData.locationName) newErrors.locationName = true;
-    if (!formData.plannedStartDate) newErrors.plannedStartDate = true;
-    if (!formData.plannedEndDate) newErrors.plannedEndDate = true;
+    if (!formData.title) newErrors.title = 'Tên sự kiện là bắt buộc';
+    if (!formData.locationName) newErrors.locationName = 'Tên địa điểm là bắt buộc';
+    if (!formData.plannedStartDate) newErrors.plannedStartDate = 'Thời gian bắt đầu dự kiến là bắt buộc';
+    if (!formData.plannedEndDate) newErrors.plannedEndDate = 'Thời gian kết thúc dự kiến là bắt buộc';
 
     // Participant range validation: min > 5, max <= 100000
     if (formData.minParticipants) {
       const minP = parseInt(formData.minParticipants, 10);
       if (isNaN(minP) || minP <= 5) {
-        newErrors.minParticipants = true;
+        newErrors.minParticipants = 'Số lượng tối thiểu phải lớn hơn 5 người';
       }
     }
     if (formData.maxParticipants) {
       const maxP = parseInt(formData.maxParticipants, 10);
       if (isNaN(maxP) || maxP > 100000) {
-        newErrors.maxParticipants = true;
+        newErrors.maxParticipants = 'Số lượng tối đa không vượt quá 100,000 người';
       }
     }
     if (formData.minParticipants && formData.maxParticipants) {
       const minP = parseInt(formData.minParticipants, 10);
       const maxP = parseInt(formData.maxParticipants, 10);
-      if (!isNaN(minP) && !isNaN(maxP) && maxP < minP) {
-        newErrors.minParticipants = true;
-        newErrors.maxParticipants = true;
+      if (!isNaN(minP) && !isNaN(maxP) && maxP <= minP) {
+        newErrors.maxParticipants = 'Số lượng tối đa phải lớn hơn số lượng tối thiểu';
       }
     }
 
-    setErrors(newErrors);
-
-    if (Object.keys(newErrors).length > 0) {
-      if (newErrors.title || newErrors.locationName || newErrors.plannedStartDate || newErrors.plannedEndDate) {
-        setNotice('❌ Vui lòng điền đầy đủ các trường bắt buộc (các ô viền đỏ).');
-      } else if (newErrors.minParticipants && newErrors.maxParticipants) {
-        setNotice('❌ Số lượng tối đa phải lớn hơn hoặc bằng số lượng tối thiểu.');
-      } else if (newErrors.minParticipants) {
-        setNotice('❌ Số lượng tối thiểu phải lớn hơn 5 người.');
-      } else if (newErrors.maxParticipants) {
-        setNotice('❌ Số lượng tối đa không được vượt quá 100,000 người.');
+    if (formData.communityPoints) {
+      const pts = parseInt(formData.communityPoints, 10);
+      if (isNaN(pts) || pts < 0) {
+        newErrors.communityPoints = 'Điểm cộng đồng phải là số không âm';
       }
-      return;
+    }
+
+    if (formData.attendanceRadius) {
+      const rad = parseInt(formData.attendanceRadius, 10);
+      if (isNaN(rad) || rad <= 0) {
+        newErrors.attendanceRadius = 'Bán kính điểm danh phải là số dương';
+      }
     }
 
     const today = new Date();
-    const startDt = new Date(formData.plannedStartDate);
-    const endDt = new Date(formData.plannedEndDate);
-
-    // Event must start at least 48h after now
-    const minStartDt = new Date(today.getTime() + 48 * 60 * 60 * 1000);
-    if (startDt < minStartDt) {
-      newErrors.plannedStartDate = true;
-      setErrors(newErrors);
-      setNotice('❌ Thời gian bắt đầu dự kiến phải sau thời điểm hiện tại ít nhất 48 giờ (2 ngày).');
-      return;
+    if (formData.plannedStartDate) {
+      const startDt = new Date(formData.plannedStartDate);
+      const minStartDt = new Date(today.getTime() + 48 * 60 * 60 * 1000);
+      if (startDt < minStartDt) {
+        newErrors.plannedStartDate = 'Thời gian bắt đầu dự kiến phải sau thời điểm hiện tại ít nhất 48 giờ (2 ngày)';
+      }
     }
 
-    if (startDt >= endDt) {
-      newErrors.plannedStartDate = true;
-      newErrors.plannedEndDate = true;
-      setErrors(newErrors);
-      setNotice('❌ Thời gian kết thúc dự kiến phải sau thời gian bắt đầu (chính xác đến từng phút, ngày).');
-      return;
+    if (formData.plannedStartDate && formData.plannedEndDate) {
+      const startDt = new Date(formData.plannedStartDate);
+      const endDt = new Date(formData.plannedEndDate);
+      if (startDt >= endDt) {
+        newErrors.plannedEndDate = 'Thời gian kết thúc dự kiến phải sau thời gian bắt đầu';
+      }
     }
 
     if (formData.registrationDeadline) {
       const regDeadline = new Date(formData.registrationDeadline);
 
       if (regDeadline <= today) {
-        newErrors.registrationDeadline = true;
-        setErrors(newErrors);
-        setNotice('❌ Hạn đăng ký phải sau thời điểm hiện tại.');
-        return;
+        newErrors.registrationDeadline = 'Hạn đăng ký phải sau thời điểm hiện tại';
+      } else if (formData.plannedStartDate) {
+        const startDt = new Date(formData.plannedStartDate);
+        // Hạn đăng ký phải trước plannedStartDate tối thiểu 24h
+        const maxRegDeadlineVal = new Date(startDt.getTime() - 24 * 60 * 60 * 1000);
+        if (regDeadline > maxRegDeadlineVal) {
+          newErrors.registrationDeadline = 'Hạn đăng ký phải trước thời gian bắt đầu sự kiện tối thiểu 24 giờ';
+        }
       }
+    }
 
-      // Hạn đăng ký phải trước plannedStartDate tối thiểu 24h
-      const maxRegDeadlineVal = new Date(startDt.getTime() - 24 * 60 * 60 * 1000);
-      if (regDeadline > maxRegDeadlineVal) {
-        newErrors.registrationDeadline = true;
-        setErrors(newErrors);
-        setNotice('❌ Hạn đăng ký phải trước thời gian bắt đầu sự kiện tối thiểu 24 giờ.');
-        return;
-      }
+    if (!formData.locationLat || !formData.locationLng) {
+      newErrors.locationCoords = 'Vui lòng chọn tọa độ vị trí sự kiện trên bản đồ';
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      setNotice('❌ Vui lòng điền và sửa các lỗi nhập liệu bên dưới (các ô viền đỏ).');
+      return;
     }
 
     setLoading(true);
@@ -536,9 +655,14 @@ export default function LienChiCreateEventPage() {
                 value={formData.title}
                 onChange={handleInputChange}
                 className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
-                  errors.title ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  errors.title ? 'border-rose-500 focus:border-rose-500 bg-rose-50/30' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
                 }`}
               />
+              {errors.title && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.title}
+                </p>
+              )}
             </label>
             <label className="block relative">
               <div className="flex justify-between items-center mb-2">
@@ -614,9 +738,14 @@ export default function LienChiCreateEventPage() {
                 value={formData.minParticipants}
                 onChange={handleInputChange}
                 className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
-                  errors.minParticipants ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  errors.minParticipants ? 'border-rose-500 focus:border-rose-500 bg-rose-50/30' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
                 }`}
               />
+              {errors.minParticipants && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.minParticipants}
+                </p>
+              )}
             </label>
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">SL tối đa</span>
@@ -626,9 +755,14 @@ export default function LienChiCreateEventPage() {
                 value={formData.maxParticipants}
                 onChange={handleInputChange}
                 className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm transition-all ${
-                  errors.maxParticipants ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  errors.maxParticipants ? 'border-rose-500 focus:border-rose-500 bg-rose-50/30' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
                 }`}
               />
+              {errors.maxParticipants && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.maxParticipants}
+                </p>
+              )}
             </label>
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">Điểm cộng đồng</span>
@@ -637,9 +771,16 @@ export default function LienChiCreateEventPage() {
                 name="communityPoints"
                 value={formData.communityPoints}
                 onChange={handleInputChange}
-                className="w-full rounded-2xl border border-[#dce8f5] px-4 py-3 outline-none focus:border-[#1f5dcc] text-sm"
+                className={`w-full rounded-2xl border px-4 py-3 outline-none text-sm ${
+                  errors.communityPoints ? 'border-rose-500 bg-rose-50/30 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                }`}
                 placeholder="Ví dụ: 5"
               />
+              {errors.communityPoints && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.communityPoints}
+                </p>
+              )}
             </label>
           </div>
 
@@ -660,12 +801,17 @@ export default function LienChiCreateEventPage() {
                     }
                     return nextData;
                   });
-                  if (errors.plannedStartDate) setErrors(prev => ({ ...prev, plannedStartDate: false }));
+                  if (errors.plannedStartDate) setErrors(prev => ({ ...prev, plannedStartDate: '' }));
                 }}
                 min={minPlannedStart}
                 placeholder="Ngày giờ bắt đầu"
-                hasError={errors.plannedStartDate}
+                hasError={!!errors.plannedStartDate}
               />
+              {errors.plannedStartDate && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.plannedStartDate}
+                </p>
+              )}
             </label>
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">Kết thúc dự kiến *</span>
@@ -673,13 +819,18 @@ export default function LienChiCreateEventPage() {
                 value={formData.plannedEndDate}
                 onChange={(val) => {
                   setFormData(prev => ({ ...prev, plannedEndDate: val }));
-                  if (errors.plannedEndDate) setErrors(prev => ({ ...prev, plannedEndDate: false }));
+                  if (errors.plannedEndDate) setErrors(prev => ({ ...prev, plannedEndDate: '' }));
                 }}
                 min={formData.plannedStartDate}
                 disabled={!formData.plannedStartDate}
                 placeholder="Ngày giờ kết thúc"
-                hasError={errors.plannedEndDate}
+                hasError={!!errors.plannedEndDate}
               />
+              {errors.plannedEndDate && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.plannedEndDate}
+                </p>
+              )}
             </label>
           </div>
 
@@ -688,12 +839,21 @@ export default function LienChiCreateEventPage() {
               <span className="mb-2 block text-sm font-semibold text-slate-700">Hạn đăng ký</span>
               <CustomDateTimePicker
                 value={formData.registrationDeadline}
-                onChange={(val) => setFormData(prev => ({ ...prev, registrationDeadline: val }))}
+                onChange={(val) => {
+                  setFormData(prev => ({ ...prev, registrationDeadline: val }));
+                  if (errors.registrationDeadline) setErrors(prev => ({ ...prev, registrationDeadline: '' }));
+                }}
                 min={minRegDeadline}
                 max={maxRegDeadline}
                 disabled={!formData.plannedStartDate || !formData.plannedEndDate}
                 placeholder="Hạn sinh viên đăng ký"
+                hasError={!!errors.registrationDeadline}
               />
+              {errors.registrationDeadline && (
+                <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                  <span>⚠</span> {errors.registrationDeadline}
+                </p>
+              )}
             </label>
             <div className="hidden sm:block"></div>
           </div>
@@ -711,12 +871,17 @@ export default function LienChiCreateEventPage() {
                   value={formData.locationName}
                   onChange={handleInputChange}
                   className={`w-full rounded-xl border px-3 py-2 outline-none text-sm transition-all ${
-                    errors.locationName ? 'border-rose-500 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                    errors.locationName ? 'border-rose-500 focus:border-rose-500 bg-rose-50/30' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
                   }`}
                 />
+                {errors.locationName && (
+                  <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                    <span>⚠</span> {errors.locationName}
+                  </p>
+                )}
               </label>
-              <div className="sm:col-span-2 flex gap-3 items-end">
-                <label className="block flex-1">
+              <div className="grid grid-cols-2 gap-4 sm:col-span-2">
+                <label className="block">
                   <span className="mb-1 block text-xs font-semibold text-slate-600">Vĩ độ (Latitude) *</span>
                   <input
                     type="number"
@@ -724,11 +889,11 @@ export default function LienChiCreateEventPage() {
                     name="locationLat"
                     value={formData.locationLat}
                     readOnly
-                    placeholder="Chọn từ bản đồ"
+                    placeholder="Chưa chọn"
                     className="w-full rounded-xl border border-[#dce8f5] bg-slate-50 px-3 py-2 outline-none text-sm font-mono cursor-not-allowed"
                   />
                 </label>
-                <label className="block flex-1">
+                <label className="block">
                   <span className="mb-1 block text-xs font-semibold text-slate-600">Kinh độ (Longitude) *</span>
                   <input
                     type="number"
@@ -736,18 +901,30 @@ export default function LienChiCreateEventPage() {
                     name="locationLng"
                     value={formData.locationLng}
                     readOnly
-                    placeholder="Chọn từ bản đồ"
+                    placeholder="Chưa chọn"
                     className="w-full rounded-xl border border-[#dce8f5] bg-slate-50 px-3 py-2 outline-none text-sm font-mono cursor-not-allowed"
                   />
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowMapPicker(true)}
-                  className="px-4 py-2 bg-[#1747a6] text-white text-xs font-bold rounded-xl hover:bg-[#205fd8] transition-all h-[38px] flex items-center gap-1.5 whitespace-nowrap animate-pulse hover:animate-none"
-                >
-                  <MapPin className="h-4 w-4" />
-                  Mở bản đồ
-                </button>
+              </div>
+              <div className="sm:col-span-2">
+                <span className="mb-1.5 block text-xs font-semibold text-slate-600 font-bold">Bản đồ chọn tọa độ (GPS):</span>
+                <InlineMapPicker
+                  lat={formData.locationLat}
+                  lng={formData.locationLng}
+                  onChange={(coords) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      locationLat: coords.lat,
+                      locationLng: coords.lng
+                    }));
+                    if (errors.locationCoords) setErrors(prev => ({ ...prev, locationCoords: '' }));
+                  }}
+                />
+                {errors.locationCoords && (
+                  <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                    <span>⚠</span> {errors.locationCoords}
+                  </p>
+                )}
               </div>
               <label className="block sm:col-span-2">
                 <span className="mb-1 block text-xs font-semibold text-slate-600">Bán kính điểm danh (mét)</span>
@@ -756,8 +933,15 @@ export default function LienChiCreateEventPage() {
                   name="attendanceRadius"
                   value={formData.attendanceRadius}
                   onChange={handleInputChange}
-                  className="w-full rounded-xl border border-[#dce8f5] px-3 py-2 outline-none focus:border-[#1f5dcc] text-sm"
+                  className={`w-full rounded-xl border px-3 py-2 outline-none text-sm ${
+                    errors.attendanceRadius ? 'border-rose-500 bg-rose-50/30 focus:border-rose-500' : 'border-[#dce8f5] focus:border-[#1f5dcc]'
+                  }`}
                 />
+                {errors.attendanceRadius && (
+                  <p className="mt-1.5 text-xs text-rose-500 font-semibold flex items-center gap-1">
+                    <span>⚠</span> {errors.attendanceRadius}
+                  </p>
+                )}
               </label>
             </div>
           </div>
@@ -864,25 +1048,100 @@ export default function LienChiCreateEventPage() {
               <div className="space-y-3 pt-2">
                 {phases.map((phase, phaseIdx) => (
                   <div key={phaseIdx} className="rounded-2xl border border-[#eef5fc] bg-[#f8fbfd] p-3 text-xs space-y-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <span className="font-bold text-slate-700 text-sm">GD {phaseIdx + 1}: {phase.title}</span>
-                        <p className="text-[10px] text-slate-500">{new Date(phase.startDate).toLocaleDateString('vi-VN')} - {new Date(phase.endDate).toLocaleDateString('vi-VN')}</p>
+                    {editingPhaseIndex === phaseIdx ? (
+                      <div className="bg-white rounded-xl border p-3 space-y-3 shadow-inner">
+                        <p className="font-bold text-slate-700 text-xs">Chỉnh sửa Giai đoạn {phaseIdx + 1}</p>
+                        <div className="space-y-2">
+                          <label className="block">
+                            <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Tiêu đề *</span>
+                            <input 
+                              type="text" 
+                              value={editingPhaseData.title}
+                              onChange={(e) => setEditingPhaseData(prev => ({ ...prev, title: e.target.value }))}
+                              className="rounded-xl border border-[#dce8f5] px-3 py-1.5 text-xs w-full outline-none focus:border-[#1f5dcc]"
+                            />
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="block">
+                              <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Bắt đầu</span>
+                              <CustomDateTimePicker
+                                dateOnly
+                                value={editingPhaseData.startDate}
+                                onChange={(val) => setEditingPhaseData(prev => ({ ...prev, startDate: val }))}
+                                min={formData.plannedStartDate ? formData.plannedStartDate.split('T')[0] : undefined}
+                                max={editingPhaseData.endDate || (formData.plannedEndDate ? formData.plannedEndDate.split('T')[0] : undefined)}
+                                placeholder="Ngày bắt đầu"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Kết thúc</span>
+                              <CustomDateTimePicker
+                                dateOnly
+                                value={editingPhaseData.endDate}
+                                onChange={(val) => setEditingPhaseData(prev => ({ ...prev, endDate: val }))}
+                                min={editingPhaseData.startDate || (formData.plannedStartDate ? formData.plannedStartDate.split('T')[0] : undefined)}
+                                max={formData.plannedEndDate ? formData.plannedEndDate.split('T')[0] : undefined}
+                                placeholder="Ngày kết thúc"
+                              />
+                            </label>
+                          </div>
+                          <label className="block">
+                            <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Mô tả</span>
+                            <textarea 
+                              value={editingPhaseData.description}
+                              onChange={(e) => setEditingPhaseData(prev => ({ ...prev, description: e.target.value }))}
+                              className="rounded-xl border border-[#dce8f5] px-3 py-1.5 text-xs w-full outline-none focus:border-[#1f5dcc]"
+                              rows="2"
+                            />
+                          </label>
+                          <div className="flex gap-2">
+                            <button 
+                              type="button" 
+                              onClick={() => handleSaveEditPhase(phaseIdx)}
+                              className="flex-1 rounded-xl bg-[#1747a6] py-1.5 text-white font-bold hover:bg-[#1f5dcc] transition-colors"
+                            >
+                              Lưu GD
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={handleCancelEditPhase}
+                              className="rounded-xl border border-[#dce8f5] bg-white px-4 py-1.5 font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
+                            >
+                              Hủy
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button 
-                          type="button" 
-                          onClick={() => setActivePhaseIndexForMilestone(activePhaseIndexForMilestone === phaseIdx ? -1 : phaseIdx)}
-                          className="text-[#1747a6] font-semibold hover:underline"
-                        >
-                          {activePhaseIndexForMilestone === phaseIdx ? 'Đóng mốc' : '+ Thêm mốc'}
-                        </button>
-                        <button type="button" onClick={() => handleRemovePhase(phaseIdx)} className="text-red-500 hover:text-red-700">
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                    {phase.description && <p className="text-slate-600 bg-white p-2 rounded-lg border border-slate-100">{phase.description}</p>}
+                    ) : (
+                      <>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-bold text-slate-700 text-sm">GD {phaseIdx + 1}: {phase.title}</span>
+                            <p className="text-[10px] text-slate-500">{new Date(phase.startDate).toLocaleDateString('vi-VN')} - {new Date(phase.endDate).toLocaleDateString('vi-VN')}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button 
+                              type="button" 
+                              onClick={() => handleStartEditPhase(phaseIdx)}
+                              className="text-xs font-bold text-[#1f5dcc] hover:underline"
+                            >
+                              Sửa
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => setActivePhaseIndexForMilestone(activePhaseIndexForMilestone === phaseIdx ? -1 : phaseIdx)}
+                              className="text-[#1747a6] font-semibold hover:underline"
+                            >
+                              {activePhaseIndexForMilestone === phaseIdx ? 'Đóng mốc' : '+ Thêm mốc'}
+                            </button>
+                            <button type="button" onClick={() => handleRemovePhase(phaseIdx)} className="text-red-500 hover:text-red-700">
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                        {phase.description && <p className="text-slate-600 bg-white p-2 rounded-lg border border-slate-100">{phase.description}</p>}
+                      </>
+                    )}
 
                     {/* Milestones listed inside phase */}
                     {phase.details && phase.details.length > 0 && (
@@ -1074,21 +1333,7 @@ export default function LienChiCreateEventPage() {
           </div>
         </div>
       )}
-      {/* Map Picker Modal */}
-      <MapPickerModal
-        show={showMapPicker}
-        onClose={() => setShowMapPicker(false)}
-        onConfirm={(coords) => {
-          setFormData(prev => ({
-            ...prev,
-            locationLat: coords.lat,
-            locationLng: coords.lng
-          }));
-          setShowMapPicker(false);
-        }}
-        initialLat={formData.locationLat}
-        initialLng={formData.locationLng}
-      />
+
     </LienChiLayout>
   );
 }
