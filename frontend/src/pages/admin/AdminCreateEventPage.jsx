@@ -41,10 +41,10 @@ export default function AdminCreateEventPage() {
   const [leaderNameDisplay, setLeaderNameDisplay] = useState('');
 
   const today = new Date();
-  const minPlannedStart = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString();
-  const minRegDeadline = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString();
+  const minPlannedStart = new Date(today.getTime() + 48 * 60 * 60 * 1000).toISOString();
+  const minRegDeadline = new Date().toISOString();
   const maxRegDeadline = formData.plannedStartDate
-    ? new Date(new Date(formData.plannedStartDate).getTime() - 2 * 24 * 60 * 60 * 1000).toISOString()
+    ? new Date(new Date(formData.plannedStartDate).getTime() - 24 * 60 * 60 * 1000).toISOString()
     : undefined;
 
   const handleSelectSelfAsLeader = () => {
@@ -385,12 +385,12 @@ export default function AdminCreateEventPage() {
     const startDt = new Date(formData.plannedStartDate);
     const endDt = new Date(formData.plannedEndDate);
 
-    // Event must start at least 2 days (48 hours) after today (due to "sau ngày hôm nay 1 ngày" -> gap of 1 day)
-    const minStartDt = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
+    // Event must start at least 48h after now
+    const minStartDt = new Date(today.getTime() + 48 * 60 * 60 * 1000);
     if (startDt < minStartDt) {
       newErrors.plannedStartDate = true;
       setErrors(newErrors);
-      setNotice('❌ Thời gian bắt đầu dự kiến phải sau ngày hôm nay tối thiểu 1 ngày trống (từ ngày mùng 11 nếu hôm nay là mùng 9).');
+      setNotice('❌ Thời gian bắt đầu dự kiến phải sau thời điểm hiện tại ít nhất 48 giờ (2 ngày).');
       return;
     }
 
@@ -398,28 +398,26 @@ export default function AdminCreateEventPage() {
       newErrors.plannedStartDate = true;
       newErrors.plannedEndDate = true;
       setErrors(newErrors);
-      setNotice('❌ Thời gian kết thúc dự kiến phải sau thời gian bắt đầu (chính xác đến từng phút, ngày).');
+      setNotice('❌ Thời gian kết thúc dự kiến phải sau thời gian bắt đầu.');
       return;
     }
 
     if (formData.registrationDeadline) {
       const regDeadline = new Date(formData.registrationDeadline);
-      
-      const minRegDeadlineVal = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
-      minRegDeadlineVal.setHours(0, 0, 0, 0);
-      if (regDeadline < minRegDeadlineVal) {
+
+      if (regDeadline <= today) {
         newErrors.registrationDeadline = true;
         setErrors(newErrors);
-        setNotice('❌ Hạn đăng ký phải sau ngày hôm nay tối thiểu 1 ngày trống (từ ngày mùng 11 nếu hôm nay là mùng 9).');
+        setNotice('❌ Hạn đăng ký phải sau thời điểm hiện tại.');
         return;
       }
 
-      // Hạn đăng ký phải trước plannedStartDate tối thiểu 2 ngày (có 1 ngày trống ở giữa, vd dự kiến 15 thì hạn trễ nhất là 13)
-      const maxRegDeadlineVal = new Date(startDt.getTime() - 2 * 24 * 60 * 60 * 1000);
+      // Hạn đăng ký phải trước plannedStartDate tối thiểu 24h
+      const maxRegDeadlineVal = new Date(startDt.getTime() - 24 * 60 * 60 * 1000);
       if (regDeadline > maxRegDeadlineVal) {
         newErrors.registrationDeadline = true;
         setErrors(newErrors);
-        setNotice('❌ Hạn đăng ký phải diễn ra trước thời gian bắt đầu dự kiến tối thiểu 1 ngày trống (hạn trễ nhất là ngày 13 nếu bắt đầu vào ngày 15).');
+        setNotice('❌ Hạn đăng ký phải trước thời gian bắt đầu sự kiện tối thiểu 24 giờ.');
         return;
       }
     }
@@ -645,7 +643,7 @@ export default function AdminCreateEventPage() {
                     const nextData = { ...prev, plannedStartDate: val };
                     if (prev.registrationDeadline && val) {
                       const regTime = new Date(prev.registrationDeadline).getTime();
-                      const maxRegTime = new Date(val).getTime() - 2 * 24 * 60 * 60 * 1000;
+                      const maxRegTime = new Date(val).getTime() - 24 * 60 * 60 * 1000;
                       if (regTime > maxRegTime) {
                         nextData.registrationDeadline = '';
                       }
@@ -905,19 +903,14 @@ export default function AdminCreateEventPage() {
                       <div className="border-t border-slate-100 pt-2 space-y-2 mt-2">
                         <p className="font-bold text-[#132b57] text-[11px]">Thêm mốc chi tiết vào Giai đoạn:</p>
                         <div className="grid gap-2">
-                          <input 
-                            type="datetime-local" 
-                            value={newMilestone.dateTime}
-                            onChange={(e) => setNewMilestone(prev => ({ ...prev, dateTime: e.target.value }))}
-                            className="rounded border p-1 w-full"
-                          />
                           <label className="block">
                             <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Thời gian diễn ra mốc *</span>
-                            <input 
-                              type="datetime-local" 
+                            <CustomDateTimePicker
                               value={newMilestone.dateTime}
-                              onChange={(e) => setNewMilestone(prev => ({ ...prev, dateTime: e.target.value }))}
-                              className="rounded border p-1 w-full text-xs"
+                              onChange={(val) => setNewMilestone(prev => ({ ...prev, dateTime: val }))}
+                              min={phases[phaseIdx]?.startDate}
+                              max={phases[phaseIdx]?.endDate ? phases[phaseIdx].endDate + 'T23:59' : undefined}
+                              placeholder="Chọn ngày giờ diễn ra"
                             />
                           </label>
                           <label className="block">
@@ -926,7 +919,7 @@ export default function AdminCreateEventPage() {
                               type="text" 
                               value={newMilestone.title}
                               onChange={(e) => setNewMilestone(prev => ({ ...prev, title: e.target.value }))}
-                              className="rounded border p-1 w-full text-xs"
+                              className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
                             />
                           </label>
                           <label className="block">
@@ -934,14 +927,14 @@ export default function AdminCreateEventPage() {
                             <textarea 
                               value={newMilestone.content}
                               onChange={(e) => setNewMilestone(prev => ({ ...prev, content: e.target.value }))}
-                              className="rounded border p-1 w-full text-xs"
+                              className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
                               rows="2"
                             />
                           </label>
                           <button 
                             type="button" 
                             onClick={() => handleAddMilestone(phaseIdx)}
-                            className="bg-[#1747a6] text-white py-1 rounded font-bold hover:bg-[#215cd1]"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1747a6] py-2 font-bold text-white text-xs hover:bg-[#205fd8] transition-colors"
                           >
                             Xác nhận thêm mốc
                           </button>
@@ -963,26 +956,32 @@ export default function AdminCreateEventPage() {
                     type="text" 
                     value={newPhase.title}
                     onChange={(e) => setNewPhase(prev => ({ ...prev, title: e.target.value }))}
-                    className="rounded-xl border p-2 text-xs w-full"
+                    className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
                   />
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="block">
-                    <span className="text-[10px] text-slate-500">Bắt đầu giai đoạn</span>
-                    <input 
-                      type="date" 
+                    <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Bắt đầu giai đoạn</span>
+                    <CustomDateTimePicker
                       value={newPhase.startDate}
-                      onChange={(e) => setNewPhase(prev => ({ ...prev, startDate: e.target.value }))}
-                      className="rounded-xl border p-2 text-xs w-full"
+                      onChange={(val) => setNewPhase(prev => ({ ...prev, startDate: val }))}
+                      min={formData.plannedStartDate ? formData.plannedStartDate.split('T')[0] : undefined}
+                      max={formData.plannedEndDate ? formData.plannedEndDate.split('T')[0] : undefined}
+                      disabled={!formData.plannedStartDate}
+                      placeholder="Ngày bắt đầu"
+                      dateOnly
                     />
                   </label>
                   <label className="block">
-                    <span className="text-[10px] text-slate-500">Kết thúc giai đoạn</span>
-                    <input 
-                      type="date" 
+                    <span className="text-[10px] text-slate-500 font-semibold mb-1 block">Kết thúc giai đoạn</span>
+                    <CustomDateTimePicker
                       value={newPhase.endDate}
-                      onChange={(e) => setNewPhase(prev => ({ ...prev, endDate: e.target.value }))}
-                      className="rounded-xl border p-2 text-xs w-full"
+                      onChange={(val) => setNewPhase(prev => ({ ...prev, endDate: val }))}
+                      min={newPhase.startDate || (formData.plannedStartDate ? formData.plannedStartDate.split('T')[0] : undefined)}
+                      max={formData.plannedEndDate ? formData.plannedEndDate.split('T')[0] : undefined}
+                      disabled={!newPhase.startDate}
+                      placeholder="Ngày kết thúc"
+                      dateOnly
                     />
                   </label>
                 </div>
@@ -991,7 +990,7 @@ export default function AdminCreateEventPage() {
                   <textarea 
                     value={newPhase.description}
                     onChange={(e) => setNewPhase(prev => ({ ...prev, description: e.target.value }))}
-                    className="rounded-xl border p-2 text-xs w-full"
+                    className="rounded-xl border border-[#dce8f5] px-3 py-2 text-xs w-full outline-none focus:border-[#1f5dcc]"
                     rows="2"
                   />
                 </label>

@@ -42,10 +42,10 @@ export default function LienChiCreateEventPage() {
   const [leaderNameDisplay, setLeaderNameDisplay] = useState('');
 
   const today = new Date();
-  const minPlannedStart = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString();
-  const minRegDeadline = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString();
+  const minPlannedStart = new Date(today.getTime() + 48 * 60 * 60 * 1000).toISOString();
+  const minRegDeadline = new Date().toISOString();
   const maxRegDeadline = formData.plannedStartDate
-    ? new Date(new Date(formData.plannedStartDate).getTime() - 2 * 24 * 60 * 60 * 1000).toISOString()
+    ? new Date(new Date(formData.plannedStartDate).getTime() - 24 * 60 * 60 * 1000).toISOString()
     : undefined;
 
   const handleSelectSelfAsLeader = () => {
@@ -390,12 +390,12 @@ export default function LienChiCreateEventPage() {
     const startDt = new Date(formData.plannedStartDate);
     const endDt = new Date(formData.plannedEndDate);
 
-    // Event must start at least 2 days (48 hours) after today (due to "sau ngày hôm nay 1 ngày" -> gap of 1 day)
-    const minStartDt = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
+    // Event must start at least 48h after now
+    const minStartDt = new Date(today.getTime() + 48 * 60 * 60 * 1000);
     if (startDt < minStartDt) {
       newErrors.plannedStartDate = true;
       setErrors(newErrors);
-      setNotice('❌ Thời gian bắt đầu dự kiến phải sau ngày hôm nay tối thiểu 1 ngày trống (từ ngày mùng 11 nếu hôm nay là mùng 9).');
+      setNotice('❌ Thời gian bắt đầu dự kiến phải sau thời điểm hiện tại ít nhất 48 giờ (2 ngày).');
       return;
     }
 
@@ -409,22 +409,20 @@ export default function LienChiCreateEventPage() {
 
     if (formData.registrationDeadline) {
       const regDeadline = new Date(formData.registrationDeadline);
-      
-      const minRegDeadlineVal = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
-      minRegDeadlineVal.setHours(0, 0, 0, 0);
-      if (regDeadline < minRegDeadlineVal) {
+
+      if (regDeadline <= today) {
         newErrors.registrationDeadline = true;
         setErrors(newErrors);
-        setNotice('❌ Hạn đăng ký phải sau ngày hôm nay tối thiểu 1 ngày trống (từ ngày mùng 11 nếu hôm nay là mùng 9).');
+        setNotice('❌ Hạn đăng ký phải sau thời điểm hiện tại.');
         return;
       }
 
-      // Hạn đăng ký phải trước plannedStartDate tối thiểu 2 ngày (có 1 ngày trống ở giữa, vd dự kiến 15 thì hạn trễ nhất là 13)
-      const maxRegDeadlineVal = new Date(startDt.getTime() - 2 * 24 * 60 * 60 * 1000);
+      // Hạn đăng ký phải trước plannedStartDate tối thiểu 24h
+      const maxRegDeadlineVal = new Date(startDt.getTime() - 24 * 60 * 60 * 1000);
       if (regDeadline > maxRegDeadlineVal) {
         newErrors.registrationDeadline = true;
         setErrors(newErrors);
-        setNotice('❌ Hạn đăng ký phải diễn ra trước thời gian bắt đầu dự kiến tối thiểu 1 ngày trống (hạn trễ nhất là ngày 13 nếu bắt đầu vào ngày 15).');
+        setNotice('❌ Hạn đăng ký phải trước thời gian bắt đầu sự kiện tối thiểu 24 giờ.');
         return;
       }
     }
@@ -655,7 +653,7 @@ export default function LienChiCreateEventPage() {
                     const nextData = { ...prev, plannedStartDate: val };
                     if (prev.registrationDeadline && val) {
                       const regTime = new Date(prev.registrationDeadline).getTime();
-                      const maxRegTime = new Date(val).getTime() - 2 * 24 * 60 * 60 * 1000;
+                      const maxRegTime = new Date(val).getTime() - 1 * 24 * 60 * 60 * 1000;
                       if (regTime > maxRegTime) {
                         nextData.registrationDeadline = '';
                       }

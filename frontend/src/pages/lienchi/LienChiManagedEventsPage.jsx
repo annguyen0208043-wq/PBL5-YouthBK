@@ -68,6 +68,8 @@ export default function LienChiManagedEventsPage() {
   const [showQRModal, setShowQRModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbacks, setFeedbacks] = useState([]);
+  const [showEndEventModal, setShowEndEventModal] = useState(false);
+  const [endingEvent, setEndingEvent] = useState(false);
 
   // Detailed event data (loaded when clicked)
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -405,6 +407,34 @@ export default function LienChiManagedEventsPage() {
       setShowFeedbackModal(true);
     } catch (err) {
       setNotice(err.message);
+    }
+  };
+
+  const handleEndEvent = async () => {
+    try {
+      setEndingEvent(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/events/${selectedEventId}/end`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi khi kết thúc sự kiện');
+      setNotice(`Sự kiện đã kết thúc lúc ${new Date(data.actualEndDate).toLocaleString('vi-VN')}`);
+      setShowEndEventModal(false);
+      fetchEvents();
+      // Refresh selected event detail
+      if (selectedEventId) {
+        const detailRes = await fetch(`/api/events/${selectedEventId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const detailData = await detailRes.json();
+        if (detailRes.ok) setSelectedEvent(detailData.event);
+      }
+    } catch (err) {
+      setNotice(err.message);
+    } finally {
+      setEndingEvent(false);
     }
   };
 
@@ -797,6 +827,17 @@ export default function LienChiManagedEventsPage() {
                       </>
                     )}
 
+                    {selectedEvent.status === 'ongoing' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowEndEventModal(true)}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-rose-600 px-5 py-3 font-bold text-white transition-all hover:bg-rose-700 shadow-sm"
+                      >
+                        <XCircle className="h-5 w-5" />
+                        Kết thúc sự kiện
+                      </button>
+                    )}
+
                     <button 
                       type="button" 
                       onClick={() => navigate(`/lien-chi/registrations?eventId=${selectedEvent.id}`)} 
@@ -1023,6 +1064,46 @@ export default function LienChiManagedEventsPage() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* End Event Confirm Modal */}
+      {showEndEventModal && selectedEvent && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-[28px] bg-white p-6 shadow-2xl relative">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-full bg-rose-100 flex items-center justify-center mb-4">
+                <XCircle className="h-8 w-8 text-rose-600" />
+              </div>
+              <h3 className="text-xl font-black text-[#132b57] mb-2">Kết thúc sự kiện?</h3>
+              <p className="text-sm text-slate-500 mb-1">
+                Bạn sắp kết thúc sự kiện:
+              </p>
+              <p className="text-sm font-bold text-slate-800 mb-3">"{selectedEvent.title}"</p>
+              <div className="w-full rounded-2xl bg-rose-50 border border-rose-200 px-4 py-3 text-xs text-rose-700 font-semibold mb-5 text-left">
+                ⚠️ Thời gian kết thúc sẽ được ghi nhận là <strong>ngay lúc này</strong> và trạng thái sự kiện sẽ chuyển thành <strong>Đã kết thúc</strong>. Hành động này không thể hoàn tác.
+              </div>
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => setShowEndEventModal(false)}
+                  disabled={endingEvent}
+                  className="flex-1 rounded-2xl border border-slate-200 bg-white py-3 font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  onClick={handleEndEvent}
+                  disabled={endingEvent}
+                  className="flex-1 rounded-2xl bg-rose-600 py-3 font-bold text-white hover:bg-rose-700 transition-colors shadow-sm disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {endingEvent ? (
+                    <><Loader className="h-4 w-4 animate-spin" /> Đang xử lý...</>
+                  ) : (
+                    <>Xác nhận kết thúc</>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

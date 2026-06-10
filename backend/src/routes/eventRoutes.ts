@@ -6,6 +6,7 @@ import {
   updateEvent,
   deleteEvent,
   submitEvent,
+  endEvent,
   registerForEvent,
   cancelRegistration,
   getPendingEvents,
@@ -43,6 +44,9 @@ router.post('/', authMiddleware, adminOrLienChiMiddleware, createEvent);
 router.put('/:id', authMiddleware, adminOrLienChiMiddleware, updateEvent);
 router.post('/:id/submit', authMiddleware, adminOrLienChiMiddleware, submitEvent);
 router.delete('/:id', authMiddleware, adminOrLienChiMiddleware, deleteEvent);
+
+// Kết thúc sự kiện sớm (Lien Chi / Admin)
+router.post('/:id/end', authMiddleware, adminOrLienChiMiddleware, endEvent);
 
 // Below Minimum Resolution (Lien Chi)
 router.post('/:id/below-min', authMiddleware, adminOrLienChiMiddleware, handleBelowMinimum);

@@ -170,7 +170,7 @@ export default function CustomDateTimePicker({ value, onChange, min, max, disabl
     else setCalMonth(calMonth + 1);
   };
 
-  const monthNames = ["Tháng 1","Tháng 2","Tháng 3","Tháng 4","Tháng 5","Tháng 6","Tháng 7","Tháng 8","Tháng 9","Tháng 10","Tháng 11","Tháng 12"];
+  const monthNames = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
 
   const handleDaySelect = (d) => {
     const newDateStr = `${calYear}-${pad(calMonth + 1)}-${pad(d)}`;
@@ -202,13 +202,12 @@ export default function CustomDateTimePicker({ value, onChange, min, max, disabl
           key={d}
           type="button"
           onClick={(e) => { e.stopPropagation(); if (!disabledDay) handleDaySelect(d); }}
-          className={`h-8 w-8 flex items-center justify-center rounded-full text-sm font-medium transition-all ${
-            disabledDay
+          className={`h-8 w-8 flex items-center justify-center rounded-full text-sm font-medium transition-all ${disabledDay
               ? 'text-slate-300 cursor-not-allowed'
               : isSelected
                 ? 'bg-[#1f5dcc] text-white shadow-md'
                 : 'text-slate-700 hover:bg-slate-100'
-          }`}
+            }`}
         >
           {d}
         </button>
@@ -224,26 +223,38 @@ export default function CustomDateTimePicker({ value, onChange, min, max, disabl
     return date;
   })();
 
-  // Auto-open calendar when popover opens in dateOnly mode
+  // Navigate calendar to the most relevant month when opening
+  const navigateCalendarToRelevant = () => {
+    // Priority: valid current value > min date > today
+    if (date && (!minDateStr || date >= minDateStr) && (!maxDateStr || date <= maxDateStr)) {
+      // Current value is valid and selectable
+      const parts = date.split('-');
+      if (parts.length === 3) {
+        setCalMonth(parseInt(parts[1], 10) - 1);
+        setCalYear(parseInt(parts[0], 10));
+        return;
+      }
+    }
+    if (minDateStr) {
+      // Navigate to min date's month (earliest selectable)
+      const minParts = minDateStr.split('-');
+      if (minParts.length === 3) {
+        setCalMonth(parseInt(minParts[1], 10) - 1);
+        setCalYear(parseInt(minParts[0], 10));
+        return;
+      }
+    }
+    // Fallback: today's month
+    setCalMonth(today.getMonth());
+    setCalYear(today.getFullYear());
+  };
+
   const handleTriggerClick = () => {
     if (disabled) return;
     if (!isOpen) {
-      // Pre-select today if empty (but only if today is valid)
-      if (!date) {
-        const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
-        const clampedDate = minDateStr && todayStr < minDateStr ? minDateStr : (maxDateStr && todayStr > maxDateStr ? maxDateStr : todayStr);
-        const d = new Date(clampedDate);
-        setCalMonth(d.getMonth());
-        setCalYear(d.getFullYear());
-      } else {
-        const parts = date.split('-');
-        if (parts.length === 3) {
-          setCalMonth(parseInt(parts[1], 10) - 1);
-          setCalYear(parseInt(parts[0], 10));
-        }
-      }
+      navigateCalendarToRelevant();
       setIsOpen(true);
-      if (dateOnly) setShowCalendar(true);
+      setShowCalendar(true);
     } else {
       setIsOpen(false);
       setShowCalendar(false);
@@ -286,23 +297,7 @@ export default function CustomDateTimePicker({ value, onChange, min, max, disabl
                   className={`flex items-center justify-between w-full rounded-xl border px-4 py-3 cursor-pointer transition-colors ${showCalendar ? 'border-[#1f5dcc] ring-2 ring-[#eef6ff] bg-white' : 'border-[#dce8f5] bg-white hover:border-[#1f5dcc]'}`}
                   onClick={() => {
                     if (!showCalendar) {
-                      let targetMonth = calMonth;
-                      let targetYear = calYear;
-                      if (!date) {
-                        const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
-                        setDate(todayStr);
-                        emitChange(todayStr, hour, minute);
-                        targetMonth = today.getMonth();
-                        targetYear = today.getFullYear();
-                      } else {
-                        const parts = date.split('-');
-                        if (parts.length === 3) {
-                          targetMonth = parseInt(parts[1], 10) - 1;
-                          targetYear = parseInt(parts[0], 10);
-                        }
-                      }
-                      setCalMonth(targetMonth);
-                      setCalYear(targetYear);
+                      navigateCalendarToRelevant();
                     }
                     setShowCalendar(!showCalendar);
                   }}
@@ -332,7 +327,7 @@ export default function CustomDateTimePicker({ value, onChange, min, max, disabl
                       </button>
                     </div>
                     <div className="grid grid-cols-7 gap-1 mb-1 place-items-center">
-                      {['T2','T3','T4','T5','T6','T7','CN'].map(d => (
+                      {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(d => (
                         <div key={d} className="text-[10px] font-bold text-slate-400 w-8 text-center">{d}</div>
                       ))}
                     </div>
