@@ -432,29 +432,7 @@ export default function AdminEventApprovalPage() {
                           ))}
                         </div>
 
-                        {/* If decision is approve: Allow adjustment of actualStartDate / actualEndDate */}
-                        {decision === 'Duyệt' && (
-                          <div className="grid gap-3 sm:grid-cols-2 bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
-                            <label className="block">
-                              <span className="block text-[10px] font-bold text-slate-500 mb-1">Bắt đầu chính thức</span>
-                              <input 
-                                type="datetime-local" 
-                                value={actualStartDate}
-                                onChange={(e) => setActualStartDate(e.target.value)}
-                                className="w-full text-xs rounded border p-1"
-                              />
-                            </label>
-                            <label className="block">
-                              <span className="block text-[10px] font-bold text-slate-500 mb-1">Kết thúc chính thức</span>
-                              <input 
-                                type="datetime-local" 
-                                value={actualEndDate}
-                                onChange={(e) => setActualEndDate(e.target.value)}
-                                className="w-full text-xs rounded border p-1"
-                              />
-                            </label>
-                          </div>
-                        )}
+
 
                         {/* If decision is revision_required: MUST enter revision deadline */}
                         {decision === 'Yêu cầu chỉnh sửa' && (

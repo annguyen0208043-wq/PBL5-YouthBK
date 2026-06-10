@@ -58,6 +58,7 @@ function ProfileLayout({ children, title, subtitle, user }) {
   const navigate = useNavigate();
   const location = useLocation();
   const mainRef = useRef(null);
+  const userInitials = getUserInitials(user?.fullName || '');
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, left: 0 });
